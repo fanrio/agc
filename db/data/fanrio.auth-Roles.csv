@@ -1,0 +1,4 @@
+ID,name,type,description,orgNode_ID,createdAt,createdBy,modifiedAt,modifiedBy
+role-global,ROLE_ORG_GLOBAL,ORG_BASED,Auto-generated from Org Node: Global,node-global,2024-01-01T00:00:00Z,seed,2024-01-01T00:00:00Z,seed
+role-germany,ROLE_ORG_GERMANY,ORG_BASED,Auto-generated from Org Node: Germany,node-de,2024-01-01T00:00:00Z,seed,2024-01-01T00:00:00Z,seed
+role-finance,ROLE_ORG_FINANCE,ORG_BASED,Auto-generated from Org Node: Finance,node-de-fin,2024-01-01T00:00:00Z,seed,2024-01-01T00:00:00Z,seed

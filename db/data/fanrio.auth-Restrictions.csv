@@ -1,0 +1,4 @@
+ID,role_ID,field,filterType,value,sourceLabel
+res-global,role-global,Global,SINGLE_VALUE,Global,Global
+res-germany,role-germany,Country,SINGLE_VALUE,Germany,Germany
+res-finance,role-finance,Department,SINGLE_VALUE,Finance,Finance

@@ -1,0 +1,39 @@
+{
+  "name": "fanrio-auth",
+  "version": "1.0.0",
+  "description": "SAP BDC Authorization Wizard — CAP backend + React frontend",
+  "scripts": {
+    "dev:cap": "cds serve all --with-mocks",
+    "dev:ui": "npm run dev --prefix app",
+    "dev": "concurrently --names CAP,UI --prefix-colors cyan,magenta \"npm run dev:cap\" \"npm run dev:ui\"",
+    "build": "npm run build --prefix app && cds build",
+    "test": "node test_taskchain_action.js"
+  },
+  "dependencies": {
+    "@cap-js/sqlite": "^2.4.0",
+    "@sap/cds": "^9.9.1",
+    "@sap/hana-client": "^2.28.21",
+    "cors": "^2.8.6",
+    "hdb": "^2.27.1"
+  },
+  "devDependencies": {
+    "@sap/cds-dk": "^9.9.1",
+    "concurrently": "^10.0.3"
+  },
+  "cds": {
+    "requires": {
+      "db": {
+        "kind": "sqlite",
+        "credentials": {
+          "url": "sqlite.db"
+        }
+      },
+      "auth": {
+        "kind": "mocked"
+      }
+    },
+    "features": {
+      "in_memory_db": false
+    }
+  }
+}

@@ -1,0 +1,7 @@
+ID,node_ID,field,value
+attr-emea-region,node-emea,Region,EMEA
+attr-de-country,node-de,Country,Germany
+attr-fr-country,node-fr,Country,France
+attr-de01-plant,node-de01,Plant,DE01
+attr-de02-plant,node-de02,Plant,DE02
+attr-de-fin-dept,node-de-fin,Department,Finance

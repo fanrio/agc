@@ -1,0 +1,482 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Dashboard | RBAC Manager</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-container": "#57657b",
+                    "surface-container-high": "#e6e8ea",
+                    "on-secondary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed": "#0b1c30",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-container": "#75859d",
+                    "primary-container": "#131b2e",
+                    "on-primary-fixed": "#131b2e",
+                    "surface-container": "#eceef0",
+                    "on-error-container": "#93000a",
+                    "surface-container-low": "#f2f4f6",
+                    "on-tertiary-fixed-variant": "#38485d",
+                    "background": "#f7f9fb",
+                    "tertiary-fixed": "#d3e4fe",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "inverse-on-surface": "#eff1f3",
+                    "surface": "#f7f9fb",
+                    "on-background": "#191c1e",
+                    "primary-fixed-dim": "#bec6e0",
+                    "surface-container-highest": "#e0e3e5",
+                    "on-secondary-fixed": "#0d1c2f",
+                    "tertiary-container": "#0b1c30",
+                    "error-container": "#ffdad6",
+                    "on-surface": "#191c1e",
+                    "inverse-primary": "#bec6e0",
+                    "surface-bright": "#f7f9fb",
+                    "on-secondary-fixed-variant": "#3a485c",
+                    "secondary-fixed": "#d5e3fd",
+                    "secondary-container": "#d5e3fd",
+                    "primary": "#000000",
+                    "surface-variant": "#e0e3e5",
+                    "on-primary-container": "#7c839b",
+                    "outline-variant": "#c6c6cd",
+                    "tertiary": "#000000",
+                    "primary-fixed": "#dae2fd",
+                    "error": "#ba1a1a",
+                    "inverse-surface": "#2d3133",
+                    "outline": "#76777d",
+                    "on-surface-variant": "#45464d",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed-dim": "#b9c7e0",
+                    "surface-dim": "#d8dadc",
+                    "tertiary-fixed-dim": "#b7c8e1",
+                    "secondary": "#515f74",
+                    "surface-tint": "#565e74"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "unit": "4px",
+                    "stack-sm": "8px",
+                    "gutter": "16px",
+                    "stack-lg": "24px",
+                    "stack-md": "16px",
+                    "container-margin": "32px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "code-sm": ["JetBrains Mono"],
+                    "body-sm": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "title-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "display-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "code-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "title-sm": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<div class="flex min-h-screen">
+<!-- SideNavBar -->
+<aside class="w-64 h-screen sticky top-0 left-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col py-stack-md shrink-0">
+<div class="px-gutter mb-stack-lg">
+<div class="flex items-center gap-stack-sm mb-unit">
+<div class="w-8 h-8 bg-primary flex items-center justify-center rounded">
+<span class="material-symbols-outlined text-on-primary">security</span>
+</div>
+<span class="text-title-sm font-title-sm text-primary font-bold">RBAC Manager</span>
+</div>
+<p class="text-body-sm font-body-sm text-on-secondary-container">Enterprise Security</p>
+</div>
+<nav class="flex-grow space-y-unit px-stack-sm">
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-primary font-bold border-l-4 border-primary bg-surface-container-low transition-colors duration-200 cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-on-secondary-container hover:bg-surface-container-high transition-colors duration-200 cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-body-md text-body-md">Roles Management</span>
+</a>
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-on-secondary-container hover:bg-surface-container-high transition-colors duration-200 cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="group_add">group_add</span>
+<span class="font-body-md text-body-md">User Assignments</span>
+</a>
+<a class="flex items-center gap-stack-sm px-stack-md py-stack-sm text-on-secondary-container hover:bg-surface-container-high transition-colors duration-200 cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-body-md text-body-md">Audit Logs</span>
+</a>
+</nav>
+<div class="px-gutter mt-auto pt-stack-md">
+<button class="w-full bg-primary text-on-primary py-stack-sm rounded font-bold flex items-center justify-center gap-unit hover:opacity-90 active:opacity-80 transition-all">
+<span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+                    New Permission
+                </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-grow flex flex-col min-w-0">
+<!-- TopNavBar -->
+<header class="h-16 sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-container-margin w-full">
+<div class="flex items-center gap-stack-lg max-w-xl w-full">
+<div class="relative w-full max-w-sm focus-within:ring-2 focus-within:ring-primary rounded">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-secondary-container">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none focus:ring-0 text-body-md font-body-md rounded" placeholder="Search resources, roles..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="p-stack-sm text-on-secondary-container hover:text-primary hover:bg-surface-container-low transition-all rounded">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-stack-sm text-on-secondary-container hover:text-primary hover:bg-surface-container-low transition-all rounded">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<button class="p-stack-sm text-on-secondary-container hover:text-primary hover:bg-surface-container-low transition-all rounded">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant mx-unit"></div>
+<div class="flex items-center gap-stack-sm cursor-pointer hover:bg-surface-container-low p-unit rounded transition-all">
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-outline-variant object-cover" data-alt="A professional headshot of a senior system administrator in a high-tech corporate environment. The person has a focused expression, wearing a tailored dark suit. The background is a softly blurred office with clean minimalist white walls and subtle blue lighting, maintaining a sleek enterprise-level aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYuWOG7TPuruF-egn8wxl67n5ykeyWZoe0zgbXmwdly2CqJVGvQVGkCr4pfApfF3G9N_Cqd721eZN648wRvieQkVnM26T0qZ7kOBpbjTIEC4r-QcFpzrhViZ9WMGW_ukGWW4wtwFHu2xmSvlsCvtBi8FM4OoYpAI6YckDqGCYNWOii3x_T0IyOBwlUezjWic8nJeqX8Udz0ILFhsVB7cQaLlICUsviupL-8Ompu-ndw8ge9XfYLxCzdzGETl_dD3Pngfd9Df1A3A">
+<div class="hidden lg:block">
+<p class="font-body-sm text-body-sm font-bold text-primary">Alex Chen</p>
+<p class="font-code-sm text-code-sm text-on-secondary-container">Super Admin</p>
+</div>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-container-margin overflow-y-auto">
+<div class="mb-stack-lg flex justify-between items-end">
+<div>
+<h1 class="font-display-lg text-display-lg text-primary mb-unit">Security Overview</h1>
+<p class="font-body-md text-body-md text-on-secondary-container">Real-time status of your enterprise access control ecosystem.</p>
+</div>
+<div class="flex gap-stack-sm">
+<button class="px-stack-md py-stack-sm bg-surface-container-lowest border border-outline-variant text-on-secondary-container rounded font-bold hover:bg-surface-container-low transition-all flex items-center gap-unit">
+<span class="material-symbols-outlined" style="font-size: 18px;">download</span>
+                            Export Report
+                        </button>
+</div>
+</div>
+<!-- Metric Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-stack-lg">
+<!-- Total Roles -->
+<div class="bg-surface-container-lowest border border-outline-variant p-stack-lg rounded shadow-sm hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-stack-md">
+<span class="p-2 bg-surface-container-low rounded">
+<span class="material-symbols-outlined text-primary">shield</span>
+</span>
+<span class="text-success-container text-xs font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">+2 this week</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase mb-unit">Total Roles</p>
+<h2 class="font-headline-md text-headline-md text-primary">124</h2>
+</div>
+<!-- Active User Assignments -->
+<div class="bg-surface-container-lowest border border-outline-variant p-stack-lg rounded shadow-sm hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-stack-md">
+<span class="p-2 bg-surface-container-low rounded">
+<span class="material-symbols-outlined text-primary">group</span>
+</span>
+<span class="text-on-secondary-container text-xs font-bold bg-surface-container px-2 py-0.5 rounded-full">89% active</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase mb-unit">Active User Assignments</p>
+<h2 class="font-headline-md text-headline-md text-primary">2,842</h2>
+</div>
+<!-- Pending Approvals -->
+<div class="bg-surface-container-lowest border border-outline-variant p-stack-lg rounded shadow-sm hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-stack-md">
+<span class="p-2 bg-error-container rounded">
+<span class="material-symbols-outlined text-error">pending_actions</span>
+</span>
+<span class="text-error text-xs font-bold bg-error-container px-2 py-0.5 rounded-full">Priority</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase mb-unit">Pending Approvals</p>
+<h2 class="font-headline-md text-headline-md text-error">12</h2>
+</div>
+<!-- Security Score -->
+<div class="bg-surface-container-lowest border border-outline-variant p-stack-lg rounded shadow-sm hover:border-primary transition-colors">
+<div class="flex justify-between items-start mb-stack-md">
+<span class="p-2 bg-surface-container-low rounded">
+<span class="material-symbols-outlined text-primary">verified_user</span>
+</span>
+<div class="flex items-center gap-1 text-green-600 font-bold">
+<span class="material-symbols-outlined" style="font-size: 14px;">trending_up</span>
+<span class="text-xs">4%</span>
+</div>
+</div>
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase mb-unit">Security Score</p>
+<div class="flex items-baseline gap-unit">
+<h2 class="font-headline-md text-headline-md text-primary">94</h2>
+<span class="text-on-secondary-container font-body-sm">/ 100</span>
+</div>
+</div>
+<!-- Unrestricted Roles -->
+<div class="bg-surface-container-lowest border border-outline-variant p-stack-lg rounded shadow-sm hover:border-primary transition-colors lg:col-span-3">
+<div class="flex justify-between items-center mb-stack-md">
+<h3 class="font-title-sm text-title-sm text-primary">Role Health Overview</h3>
+<span class="p-2 bg-surface-container-low rounded">
+<span class="material-symbols-outlined text-primary">health_and_safety</span>
+</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<div class="flex flex-col gap-unit">
+<div class="flex justify-between items-center">
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase">Unrestricted</p>
+<span class="text-on-secondary-container text-xs font-bold bg-surface-container px-2 py-0.5 rounded-full">Review Needed</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-primary">8</h2>
+</div>
+<div class="flex flex-col gap-unit border-l border-outline-variant pl-gutter">
+<div class="flex justify-between items-center">
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase">No Users</p>
+<span class="text-on-secondary-container text-xs font-bold bg-surface-container px-2 py-0.5 rounded-full">Inactive</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-primary">15</h2>
+</div>
+<div class="flex flex-col gap-unit border-l border-outline-variant pl-gutter">
+<div class="flex justify-between items-center">
+<p class="font-label-caps text-label-caps text-on-secondary-container uppercase">No Approver</p>
+<span class="text-error text-xs font-bold bg-error-container px-2 py-0.5 rounded-full">Priority</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-error">3</h2>
+</div>
+</div>
+</div>
+<!-- Roles with No Users -->
+
+<!-- Roles with No Approver -->
+</div>
+<!-- Main Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Recent Activity Table -->
+<div class="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded shadow-sm flex flex-col">
+<div class="p-stack-md border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-title-sm text-title-sm text-primary">Recent Activity</h3>
+<button class="text-on-secondary-container hover:text-primary font-bold text-body-sm transition-all">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container-low text-on-secondary-container font-label-caps text-label-caps">
+<tr>
+<th class="px-stack-md py-stack-sm border-b border-outline-variant">Action</th>
+<th class="px-stack-md py-stack-sm border-b border-outline-variant">User</th>
+<th class="px-stack-md py-stack-sm border-b border-outline-variant">Target</th>
+<th class="px-stack-md py-stack-sm border-b border-outline-variant">Timestamp</th>
+<th class="px-stack-md py-stack-sm border-b border-outline-variant text-right">Status</th>
+</tr>
+</thead>
+<tbody class="text-body-md font-body-md divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container transition-colors group" style="transform: translateX(0px); transition: transform 0.2s ease-out;">
+<td class="px-stack-md py-stack-md">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-on-secondary-container group-hover:text-primary" style="font-size: 18px;">edit</span>
+                                                Updated Permissions
+                                            </div>
+</td>
+<td class="px-stack-md py-stack-md">Admin Alex</td>
+<td class="px-stack-md py-stack-md font-code-sm">Developer Role</td>
+<td class="px-stack-md py-stack-md text-on-secondary-container">2 mins ago</td>
+<td class="px-stack-md py-stack-md text-right">
+<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-unit"></span>
+<span class="text-xs font-bold text-on-secondary-container">Applied</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors group" style="transform: translateX(0px); transition: transform 0.2s ease-out;">
+<td class="px-stack-md py-stack-md">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-on-secondary-container group-hover:text-primary" style="font-size: 18px;">person_add</span>
+                                                Assigned Role
+                                            </div>
+</td>
+<td class="px-stack-md py-stack-md">Sarah Jenkins</td>
+<td class="px-stack-md py-stack-md font-code-sm">Cloud_Ops</td>
+<td class="px-stack-md py-stack-md text-on-secondary-container">45 mins ago</td>
+<td class="px-stack-md py-stack-md text-right">
+<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-unit"></span>
+<span class="text-xs font-bold text-on-secondary-container">Applied</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors group" style="transform: translateX(0px); transition: transform 0.2s ease-out;">
+<td class="px-stack-md py-stack-md">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-on-secondary-container group-hover:text-primary" style="font-size: 18px;">delete</span>
+                                                Revoked Access
+                                            </div>
+</td>
+<td class="px-stack-md py-stack-md">System Bot</td>
+<td class="px-stack-md py-stack-md font-code-sm">Contractor_Base</td>
+<td class="px-stack-md py-stack-md text-on-secondary-container">1 hour ago</td>
+<td class="px-stack-md py-stack-md text-right">
+<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-unit"></span>
+<span class="text-xs font-bold text-on-secondary-container">Applied</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors group" style="transform: translateX(0px); transition: transform 0.2s ease-out;">
+<td class="px-stack-md py-stack-md">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-on-secondary-container group-hover:text-primary" style="font-size: 18px;">add_box</span>
+                                                Created Role
+                                            </div>
+</td>
+<td class="px-stack-md py-stack-md">Admin Alex</td>
+<td class="px-stack-md py-stack-md font-code-sm">Security_Auditor</td>
+<td class="px-stack-md py-stack-md text-on-secondary-container">3 hours ago</td>
+<td class="px-stack-md py-stack-md text-right">
+<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-unit"></span>
+<span class="text-xs font-bold text-on-secondary-container">Applied</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors group" style="transform: translateX(0px); transition: transform 0.2s ease-out;">
+<td class="px-stack-md py-stack-md">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-on-secondary-container group-hover:text-primary" style="font-size: 18px;">warning</span>
+                                                Flagged Conflict
+                                            </div>
+</td>
+<td class="px-stack-md py-stack-md">Engine-V1</td>
+<td class="px-stack-md py-stack-md font-code-sm">HR_Finance_Merge</td>
+<td class="px-stack-md py-stack-md text-on-secondary-container">5 hours ago</td>
+<td class="px-stack-md py-stack-md text-right">
+<span class="inline-block w-2 h-2 bg-amber-500 rounded-full mr-unit"></span>
+<span class="text-xs font-bold text-on-secondary-container">Review Required</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- User Distribution Chart -->
+<div class="lg:col-span-4 space-y-gutter">
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-stack-lg shadow-sm">
+<h3 class="font-title-sm text-title-sm text-primary mb-stack-lg">User Distribution by Role</h3>
+<div class="space-y-stack-lg">
+<!-- Chart Item 1 -->
+<div>
+<div class="flex justify-between items-center mb-unit">
+<span class="font-body-md text-body-md font-bold text-primary">Developer</span>
+<span class="font-body-sm text-body-sm text-on-secondary-container">42%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 42%"></div>
+</div>
+</div>
+<!-- Chart Item 2 -->
+<div>
+<div class="flex justify-between items-center mb-unit">
+<span class="font-body-md text-body-md font-bold text-primary">Manager</span>
+<span class="font-body-sm text-body-sm text-on-secondary-container">24%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-secondary-container" style="width: 24%"></div>
+</div>
+</div>
+<!-- Chart Item 3 -->
+<div>
+<div class="flex justify-between items-center mb-unit">
+<span class="font-body-md text-body-md font-bold text-primary">Super Admin</span>
+<span class="font-body-sm text-body-sm text-on-secondary-container">8%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 8%"></div>
+</div>
+</div>
+<!-- Chart Item 4 -->
+<div>
+<div class="flex justify-between items-center mb-unit">
+<span class="font-body-md text-body-md font-bold text-primary">Marketing</span>
+<span class="font-body-sm text-body-sm text-on-secondary-container">15%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-secondary-container" style="width: 15%"></div>
+</div>
+</div>
+<!-- Chart Item 5 -->
+<div>
+<div class="flex justify-between items-center mb-unit">
+<span class="font-body-md text-body-md font-bold text-primary">Sales</span>
+<span class="font-body-sm text-body-sm text-on-secondary-container">11%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-on-secondary-container" style="width: 11%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Widget -->
+<div class="bg-primary text-on-primary rounded p-stack-lg shadow-sm relative overflow-hidden group">
+<div class="relative z-10">
+<h3 class="font-title-sm text-title-sm mb-unit">Ready for Compliance?</h3>
+<p class="font-body-sm text-body-sm opacity-80 mb-stack-lg">Your SOC2 readiness audit report is ready for generation.</p>
+<button class="bg-on-primary text-primary px-stack-md py-stack-sm rounded font-bold text-body-sm flex items-center gap-unit hover:bg-surface-container-lowest transition-all">
+                                    Generate Audit
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">arrow_forward</span>
+</button>
+</div>
+<!-- Subtle decorative element -->
+<div class="absolute -right-8 -bottom-8 w-32 h-32 bg-on-primary opacity-5 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700"></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Hover effect for table rows
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                row.addEventListener('mouseenter', () => {
+                    row.style.transform = 'translateX(4px)';
+                    row.style.transition = 'transform 0.2s ease-out';
+                });
+                row.addEventListener('mouseleave', () => {
+                    row.style.transform = 'translateX(0)';
+                });
+            });
+
+            // Active nav logic simulation
+            const navItems = document.querySelectorAll('aside nav a');
+            navItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    navItems.forEach(i => {
+                        i.classList.remove('text-primary', 'font-bold', 'border-l-4', 'border-primary', 'bg-surface-container-low');
+                        i.classList.add('text-on-secondary-container', 'hover:bg-surface-container-high');
+                    });
+                    item.classList.add('text-primary', 'font-bold', 'border-l-4', 'border-primary', 'bg-surface-container-low');
+                    item.classList.remove('text-on-secondary-container', 'hover:bg-surface-container-high');
+                });
+            });
+        });
+    </script>
+
+
+</body></html>

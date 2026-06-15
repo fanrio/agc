@@ -1,0 +1,20 @@
+{
+  "@odata.context": "https://cimt-ag-1.eu10.hcs.cloud.sap/api/v1/datasphere/consumption/relational/HH_SAP/Dim_CompanyCode/$metadata#Dim_CompanyCode",
+  "value": [
+    {
+      "ID": "DE01",
+      "Name": "Deutschland",
+      "Languange": "DE"
+    },
+    {
+      "ID": "DE01",
+      "Name": "Germany",
+      "Languange": "EN"
+    },
+    {
+      "ID": "DE01",
+      "Name": "Alemanie",
+      "Languange": "FR"
+    }
+  ]
+}
