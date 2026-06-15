@@ -1,8 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Stepper, Step, StepLabel, Button, TextField, FormControl, FormGroup, FormControlLabel, Checkbox, CircularProgress, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, IconButton, InputLabel, Select, MenuItem, OutlinedInput, ListItemText, Snackbar, Autocomplete } from '@mui/material';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import { Check, ChevronRight, ChevronLeft, Shield, Building2, PlayCircle, Zap, GitBranch, X } from 'lucide-react';
+import {
+  Wizard,
+  WizardStep,
+  Card,
+  CardHeader,
+  Button,
+  CheckBox,
+  Select,
+  Option,
+  MultiComboBox,
+  MultiComboBoxItem,
+  Input,
+  Label,
+  TextArea,
+  Table,
+  TableRow,
+  TableCell,
+  TableHeaderRow,
+  TableHeaderCell,
+  ComboBox,
+  ComboBoxItem,
+  FlexBox,
+  Title,
+  Text,
+  Tag,
+  Toast,
+  Icon,
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/AllIcons.js";
 import * as api from '../api';
 import RestrictionBuilder from './RestrictionBuilder';
 import { RestrictionDisplay } from './RestrictionBuilder';
@@ -42,7 +67,7 @@ function isCriticalRestriction(r, orgNodes) {
   return false;
 }
 
-export default function Wizard({ context = {}, onDone, permissions }) {
+export default function AuthorizationWizard({ context = {}, onDone, permissions }) {
   const [step, setStep]                   = useState(0);
   const [roleType, setRoleType]           = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
   const [selectedOrgNodeId, setOrgNode]   = useState(context.orgNodeId || '');
@@ -69,11 +94,6 @@ export default function Wizard({ context = {}, onDone, permissions }) {
   const [critical, setCritical]           = useState(false);
   const [assignUserId, setAssignUserId]   = useState('');
   const [assignUserName, setAssignUserName] = useState('');
-
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
 
   const handleRoleNameBlur = async () => {
     const name = roleName.trim();
@@ -184,14 +204,6 @@ export default function Wizard({ context = {}, onDone, permissions }) {
     }
   }, [roleType, selectedOrgNodeId, selectedParentIds, orgNodes, allRoles, isEditMode]);
 
-  function addApprover() {
-    const v = approverInput.trim();
-    if (v && !approvers.find(a => a.userId === v)) {
-      setApprovers(prev => [...prev, { userId: v, userName: v, ID: `temp-${Date.now()}` }]);
-    }
-    setApproverInput('');
-  }
-
   async function runSimulation() {
     let rows;
     try { rows = JSON.parse(simRows); } catch { setSnackbar({ open: true, message: 'Invalid JSON in sample data', severity: 'error' }); return; }
@@ -221,7 +233,6 @@ export default function Wizard({ context = {}, onDone, permissions }) {
 
       if (isEditMode) {
         roleId = context.roleId;
-        // Don't send name if it's read-only or hasn't changed. The description is safe to update.
         await api.updateRole(roleId, { 
           description, 
           critical,
@@ -283,7 +294,6 @@ export default function Wizard({ context = {}, onDone, permissions }) {
         await api.createRoleApprover({ role_ID: roleId, userId: a.userId, userName: a.userName });
       }
 
-      // Direct assignment on creation
       if (!isEditMode && assignUserId.trim()) {
         await api.createAssignment({
           userId: assignUserId.trim(),
@@ -297,429 +307,433 @@ export default function Wizard({ context = {}, onDone, permissions }) {
     setLoading(false);
   }
 
+  const handleStepChange = (e) => {
+    const stepEl = e.detail.step;
+    const idx = parseInt(stepEl.getAttribute('data-index'), 10);
+    if (!isNaN(idx)) {
+      setStep(idx);
+    }
+  };
+
   if (done) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 8, animation: 'fadeIn 0.3s' }}>
-        <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: 'rgba(16,185,129,0.12)', border: '2px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-          <Check size={28} color="#10b981" />
-        </Box>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>{isEditMode ? 'Role Updated' : 'Role Deployed'}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>The authorization role has been {isEditMode ? 'updated' : 'created'} successfully.</Typography>
-        <Button variant="contained" onClick={onDone} startIcon={<Shield size={15} />}>View All Roles</Button>
-      </Box>
+      <FlexBox direction="Column" alignItems="Center" style={{ paddingTop: '4rem', gap: '1rem' }}>
+        <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: 'rgba(16,185,129,0.12)', border: '2px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+          <Icon name="accept" style={{ color: '#10b981', fontSize: '28px' }} />
+        </div>
+        <Title level="H2" style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{isEditMode ? 'Role Updated' : 'Role Deployed'}</Title>
+        <Text style={{ color: 'var(--sapContent_LabelColor)', marginBottom: '1.5rem' }}>The authorization role has been {isEditMode ? 'updated' : 'created'} successfully.</Text>
+        <Button design="Emphasized" onClick={onDone} icon="shield">View All Roles</Button>
+      </FlexBox>
     );
   }
 
+  const isOrgDisabled = (permissions && !permissions.canManageOrgRoles) || isEditMode;
+  const isSingleDisabled = (permissions && !permissions.canManageSingleRoles) || isEditMode;
+
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s' }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Authorization Wizard</Typography>
-        <Typography variant="body2" color="text.secondary">Create a new Org-Based Role or Single Role step by step</Typography>
-      </Box>
+    <div style={{ animation: 'fadeIn 0.3s' }}>
+      <FlexBox direction="Column" style={{ marginBottom: '1.5rem' }}>
+        <Title level="H2" style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Authorization Wizard</Title>
+        <Text style={{ color: 'var(--sapContent_LabelColor)' }}>Create a new Org-Based Role or Single Role step by step</Text>
+      </FlexBox>
 
-      <Snackbar
+      <Toast
         open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        onAfterClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        duration={6000}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+        {snackbar.message}
+      </Toast>
 
-      {/* Stepper */}
-      <Box sx={{ mb: 4 }}>
-        <Stepper activeStep={step} alternativeLabel>
+      {/* Stepper / Wizard */}
+      <div style={{ marginBottom: '2rem' }}>
+        <Wizard onStepChange={handleStepChange}>
           {STEPS.map((s, i) => (
-            <Step key={s.id} onClick={() => setStep(i)} sx={{ cursor: 'pointer' }}>
-              <StepLabel>{s.label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-      </Box>
-
-      {/* Step Content */}
-      <Box sx={{ mb: 4 }}>
-        {/* STEP 0: Origin */}
-        {step === 0 && (
-          <Card sx={{ p: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Role Origin</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
-              {[
-                { type: 'ORG_BASED', icon: Zap, label: 'Org-Based Role', desc: 'Auto-generated from an Org Structure node', color: '#3b82f6', disabled: permissions && !permissions.canManageOrgRoles },
-                { type: 'SINGLE',    icon: Shield, label: 'Single Role', desc: 'A custom role containing specific restrictions', color: '#a78bfa', disabled: permissions && !permissions.canManageSingleRoles },
-              ].map(opt => {
-                const isSelected = roleType === opt.type;
-                const isDisabled = opt.disabled || isEditMode;
-                return (
-                  <Box
-                    key={opt.type}
-                    onClick={() => !isDisabled && setRoleType(opt.type)}
-                    sx={{
-                      p: 2,
-                      borderRadius: 1.5,
-                      border: '1px solid',
-                      borderColor: isSelected ? opt.color : 'rgba(255,255,255,0.08)',
-                      bgcolor: isSelected ? 'rgba(255,255,255,0.02)' : 'transparent',
-                      cursor: isDisabled ? 'not-allowed' : 'pointer',
-                      opacity: isDisabled && !isSelected ? 0.5 : 1,
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 0.5,
-                      '&:hover': {
-                        borderColor: isDisabled ? 'none' : isSelected ? opt.color : 'rgba(255,255,255,0.15)',
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <opt.icon size={18} color={opt.color} />
-                      <Typography variant="body1" sx={{ fontWeight: 700 }}>{opt.label}</Typography>
-                      {isSelected && <Check size={14} color="#10b981" style={{ marginLeft: 'auto' }} />}
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">{opt.desc}</Typography>
-                  </Box>
-                );
-              })}
-            </Box>
-
-            {roleType === 'ORG_BASED' && (
-              <Box sx={{ mb: 3 }}>
-                <FormControl size="small" fullWidth sx={{ maxWidth: 400 }}>
-                  <InputLabel id="origin-org-label">Select Org Node</InputLabel>
-                  <Select
-                    labelId="origin-org-label"
-                    label="Select Org Node"
-                    value={selectedOrgNodeId}
-                    onChange={e => setOrgNode(e.target.value)}
-                    disabled={isEditMode}
-                  >
-                    <MenuItem value=""><em>None</em></MenuItem>
-                    {orgNodes.map(n => (
-                      <MenuItem key={n.ID} value={n.ID}>{n.name} ({n.type?.name || ''})</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-
-            {roleType === 'SINGLE' && (
-              <Box sx={{ mb: 3 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel id="parent-roles-select-label">Inherit from Roles (Multiple Select)</InputLabel>
-                  <Select
-                    labelId="parent-roles-select-label"
-                    id="parent-roles-select"
-                    multiple
-                    value={selectedParentIds}
-                    onChange={e => setSelectedParentIds(e.target.value)}
-                    input={<OutlinedInput label="Inherit from Roles (Multiple Select)" />}
-                    renderValue={selected => {
-                      const names = selected.map(id => allRoles.find(r => r.ID === id)?.name).filter(Boolean);
-                      return names.join(', ');
-                    }}
-                  >
-                    {allRoles.filter(r => r.ID !== context.roleId).map(r => {
-                      const isChecked = selectedParentIds.includes(r.ID);
-                      const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-
-                      return (
-                        <MenuItem key={r.ID} value={r.ID}>
-                          <SelectionIcon
-                            fontSize="small"
-                            style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                          />
-                          <ListItemText primary={r.name} />
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <TextField
-                label="Role Name"
-                size="small"
-                fullWidth
-                placeholder="e.g. ROLE_DE_FINANCE"
-                value={roleName}
-                onChange={e => setRoleName(e.target.value)}
-                onBlur={handleRoleNameBlur}
-                disabled={isEditMode}
-              />
-              <TextField
-                label="Description"
-                size="small"
-                fullWidth
-                placeholder="Optional description"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={critical}
-                    onChange={e => setCritical(e.target.checked)}
-                    color="error"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Critical Status</Typography>
-                    <Typography variant="caption" color="text.secondary">Flag this role as high-risk/critical authorization</Typography>
-                  </Box>
-                }
-              />
-            </Box>
-          </Card>
-        )}
-
-        {/* STEP 1: Restrictions */}
-        {step === 1 && (
-          <Card sx={{ p: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Data Access Restrictions</Typography>
-            <RestrictionBuilder
-              restrictions={restrictions}
-              onChange={setRestrictions}
-              inheritedRestrictions={inherited}
-              orgNodes={orgNodes}
-              restrictionFields={restrictionFields}
-            />
-          </Card>
-        )}
-
-        {/* STEP 2: Approvers */}
-        {step === 2 && (
-          <Card sx={{ p: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Approvers List</Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 600 }}>
-              <Autocomplete
-                value={null}
-                onChange={(event, newValue) => {
-                  if (newValue && !approvers.find(a => a.userId === newValue.username)) {
-                    setApprovers(prev => [
-                      ...prev,
-                      {
-                        userId: newValue.username,
-                        userName: newValue.displayName,
-                        ID: `temp-${Date.now()}`
-                      }
-                    ]);
-                  }
-                  setApproverInput('');
-                }}
-                inputValue={approverInput}
-                onInputChange={(event, newInputValue) => {
-                  setApproverInput(newInputValue);
-                }}
-                options={ldapOptions}
-                loading={ldapLoading}
-                getOptionLabel={(option) => `${option.displayName} (${option.username}) - ${option.department}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search Approver (LDAP)"
-                    size="small"
-                    placeholder="Type name, department, or username..."
-                    InputProps={{
-                      ...(params.InputProps || {}),
-                      endAdornment: (
-                        <>
-                          {ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                          {params.InputProps?.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => {
-                  const { key, ...optionProps } = props;
-                  return (
-                    <li key={key || option.username} {...optionProps}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName} ({option.username})</Typography>
-                        <Typography variant="caption" color="text.secondary">{option.email} | {option.department}</Typography>
-                      </Box>
-                    </li>
-                  );
-                }}
-                sx={{ flex: 1 }}
-              />
-            </Box>
-
-            {approvers.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 500 }}>
-                {approvers.map(a => (
-                  <Card key={a.ID} sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, background: 'rgba(255,255,255,0.01)', '&:hover': { borderColor: 'rgba(255,255,255,0.1)' } }}>
-                    <Shield size={14} color="#a78bfa" />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{a.userName}</Typography>
-                    <IconButton size="small" color="error" onClick={() => setApprovers(as => as.filter(x => x.ID !== a.ID))} sx={{ ml: 'auto' }}>
-                      <X size={14} />
-                    </IconButton>
-                  </Card>
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">No approvers assigned yet.</Typography>
-            )}
-          </Card>
-        )}
-
-        {/* STEP 3: Review */}
-        {step === 3 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Summary */}
-            <Card sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Role Summary</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Name</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 700, fontFamily: 'monospace', color: 'primary.light' }}>{roleName || '—'}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Type</Typography>
-                  <Chip
-                    label={roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
-                    size="small"
-                    color={roleType === 'ORG_BASED' ? 'primary' : 'secondary'}
-                    variant="outlined"
-                    sx={{ height: 20, fontSize: 10 }}
-                  />
-                </Box>
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Approvers</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {approvers.map(a => a.userName).join(', ') || 'None'}
-                </Typography>
-              </Box>
-              {description && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Description</Typography>
-                  <Typography variant="body2" color="text.secondary">{description}</Typography>
-                </Box>
-              )}
-            </Card>
-
-            {/* All Restrictions */}
-            <Card sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-                Effective Restrictions ({inherited.length + restrictions.length})
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {inherited.map((r, i) => <RestrictionDisplay key={i} restriction={r} isOwn={false} />)}
-                {restrictions.map(r => <RestrictionDisplay key={r.ID} restriction={{ ...r, sourceRoleName: 'This Role' }} isOwn={true} />)}
-                {inherited.length + restrictions.length === 0 && <Typography variant="body2" color="text.secondary">No restrictions defined.</Typography>}
-              </Box>
-            </Card>
-
-            {/* Access Simulation */}
-            <Card sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Access Simulation</Typography>
-              <TextField
-                label="Sample Data Rows (JSON Array)"
-                multiline
-                rows={4}
-                fullWidth
-                value={simRows}
-                onChange={e => setSimRows(e.target.value)}
-                sx={{ mb: 2, '& textarea': { fontFamily: 'monospace', fontSize: 13 } }}
-              />
-              <Button variant="outlined" color="primary" onClick={runSimulation} disabled={loading} startIcon={<PlayCircle size={14} />} sx={{ mb: 2 }}>
-                Run Simulation
-              </Button>
-
-              {simResults && (
-                <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell style={{ fontWeight: 600 }}>Row</TableCell>
-                        <TableCell style={{ fontWeight: 600 }}>Result</TableCell>
-                        <TableCell style={{ fontWeight: 600 }}>Reason</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {simResults.map(r => (
-                        <TableRow key={r.rowIndex} hover>
-                          <TableCell>#{r.rowIndex + 1}</TableCell>
-                          <TableCell sx={{ color: r.passed ? '#10b981' : '#ba1a1a', fontWeight: 600 }}>
-                            {r.passed ? '✓ Pass' : '✗ Fail'}
-                          </TableCell>
-                          <TableCell sx={{ color: 'text.secondary' }}>{r.reason}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-
-                  </Table>
-                </TableContainer>
-              )}
-            </Card>
-
-            {/* Immediate Assignment (Optional) */}
-            {!isEditMode && (
-              <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Direct Assignment (Optional)</Typography>
-                  <Typography variant="body2" color="text.secondary">Assign this newly created role to a user or group immediately upon deployment.</Typography>
-                </Box>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <TextField
-                    label="User ID / Group ID"
-                    size="small"
-                    placeholder="e.g. US12345"
-                    value={assignUserId}
-                    onChange={e => setAssignUserId(e.target.value)}
-                  />
-                  <TextField
-                    label="User Name"
-                    size="small"
-                    placeholder="e.g. John Doe"
-                    value={assignUserName}
-                    onChange={e => setAssignUserName(e.target.value)}
-                  />
-                </Box>
-              </Card>
-            )}
-
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleDeploy}
-              disabled={loading || !roleName || (permissions && (
-                roleType === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-                (selectedParentIds.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
-              ))}
-              sx={{ alignSelf: 'flex-end', px: 4, py: 1.25 }}
+            <WizardStep
+              key={s.id}
+              data-index={i}
+              titleText={s.label}
+              selected={step === i}
+              disabled={step < i}
+              style={{ display: step === i ? 'block' : 'none' }}
             >
-              {loading ? 'Saving…' : (isEditMode ? 'Save Changes' : 'Deploy Role')}
-            </Button>
-          </Box>
-        )}
-      </Box>
+              {/* Step Content Rendered Inside WizardStep */}
+              {step === i && (
+                <div style={{ padding: '1.5rem 0' }}>
+                  {i === 0 && (
+                  <Card header={<CardHeader titleText="Role Origin" />}>
+                    <div style={{ padding: '1.5rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <div
+                          onClick={() => !isOrgDisabled && setRoleType('ORG_BASED')}
+                          style={{
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            border: `1px solid ${roleType === 'ORG_BASED' ? '#3b82f6' : 'rgba(255,255,255,0.08)'}`,
+                            backgroundColor: roleType === 'ORG_BASED' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
+                            cursor: isOrgDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isOrgDisabled && roleType !== 'ORG_BASED' ? 0.5 : 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                            <Icon name="energy" style={{ color: '#3b82f6' }} />
+                            <Label style={{ fontWeight: 700 }}>Org-Based Role</Label>
+                            {roleType === 'ORG_BASED' && <Icon name="accept" style={{ color: '#10b981', marginLeft: 'auto' }} />}
+                          </FlexBox>
+                          <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>Auto-generated from an Org Structure node</Text>
+                        </div>
+
+                        <div
+                          onClick={() => !isSingleDisabled && setRoleType('SINGLE')}
+                          style={{
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            border: `1px solid ${roleType === 'SINGLE' ? '#a78bfa' : 'rgba(255,255,255,0.08)'}`,
+                            backgroundColor: roleType === 'SINGLE' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
+                            cursor: isSingleDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isSingleDisabled && roleType !== 'SINGLE' ? 0.5 : 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                            <Icon name="shield" style={{ color: '#a78bfa' }} />
+                            <Label style={{ fontWeight: 700 }}>Single Role</Label>
+                            {roleType === 'SINGLE' && <Icon name="accept" style={{ color: '#10b981', marginLeft: 'auto' }} />}
+                          </FlexBox>
+                          <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>A custom role containing specific restrictions</Text>
+                        </div>
+                      </div>
+
+                      {roleType === 'ORG_BASED' && (
+                        <FlexBox direction="Column" style={{ gap: '0.25rem', marginBottom: '1.5rem', maxWidth: '400px' }}>
+                          <Label showColon>Select Org Node</Label>
+                          <Select
+                            onChange={e => setOrgNode(e.detail.selectedOption.value)}
+                            disabled={isEditMode}
+                            style={{ width: '100%' }}
+                          >
+                            <Option value="" selected={selectedOrgNodeId === ''}>None</Option>
+                            {orgNodes.map(n => (
+                              <Option key={n.ID} value={n.ID} selected={selectedOrgNodeId === n.ID}>
+                                {n.name} ({n.type?.name || ''})
+                              </Option>
+                            ))}
+                          </Select>
+                        </FlexBox>
+                      )}
+
+                      {roleType === 'SINGLE' && (
+                        <FlexBox direction="Column" style={{ gap: '0.25rem', marginBottom: '1.5rem' }}>
+                          <Label showColon>Inherit from Roles (Multiple Select)</Label>
+                          <MultiComboBox
+                            onSelectionChange={(e) => {
+                              const ids = e.detail.items.map(item => item.getAttribute('data-id'));
+                              setSelectedParentIds(ids);
+                            }}
+                            placeholder="Select parent roles..."
+                            style={{ width: '100%' }}
+                          >
+                            {allRoles.filter(r => r.ID !== context.roleId).map(r => (
+                              <MultiComboBoxItem
+                                key={r.ID}
+                                data-id={r.ID}
+                                text={r.name}
+                                selected={selectedParentIds.includes(r.ID)}
+                              />
+                            ))}
+                          </MultiComboBox>
+                        </FlexBox>
+                      )}
+
+                      <FlexBox direction="Column" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1.5rem', gap: '1.25rem' }}>
+                        <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                          <Label showColon>Role Name</Label>
+                          <Input
+                            value={roleName}
+                            onInput={e => setRoleName(e.target.value)}
+                            onBlur={handleRoleNameBlur}
+                            disabled={isEditMode}
+                            placeholder="e.g. ROLE_DE_FINANCE"
+                            style={{ width: '100%' }}
+                          />
+                        </FlexBox>
+
+                        <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                          <Label showColon>Description</Label>
+                          <Input
+                            value={description}
+                            onInput={e => setDescription(e.target.value)}
+                            placeholder="Optional description"
+                            style={{ width: '100%' }}
+                          />
+                        </FlexBox>
+
+                        <FlexBox direction="Row" alignItems="Center" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <CheckBox
+                            checked={critical}
+                            onChange={e => setCritical(e.target.checked)}
+                          />
+                          <FlexBox direction="Column">
+                            <Label style={{ fontWeight: 600 }}>Critical Status</Label>
+                            <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>Flag this role as high-risk/critical authorization</Text>
+                          </FlexBox>
+                        </FlexBox>
+                      </FlexBox>
+                    </div>
+                  </Card>
+                )}
+
+                {i === 1 && (
+                  <Card header={<CardHeader titleText="Data Access Restrictions" />}>
+                    <div style={{ padding: '1.5rem' }}>
+                      <RestrictionBuilder
+                        restrictions={restrictions}
+                        onChange={setRestrictions}
+                        inheritedRestrictions={inherited}
+                        orgNodes={orgNodes}
+                        restrictionFields={restrictionFields}
+                      />
+                    </div>
+                  </Card>
+                )}
+
+                {i === 2 && (
+                  <Card header={<CardHeader titleText="Approvers List" />}>
+                    <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      <FlexBox direction="Column" style={{ gap: '0.25rem', maxWidth: '600px' }}>
+                        <Label showColon>Search Approver (LDAP)</Label>
+                        <ComboBox
+                          value={approverInput}
+                          onInput={(e) => {
+                            setApproverInput(e.target.value);
+                          }}
+                          onSelectionChange={(e) => {
+                            const selectedItem = e.detail.item;
+                            if (selectedItem) {
+                              const username = selectedItem.getAttribute('data-username');
+                              const displayName = selectedItem.getAttribute('data-displayname');
+                              if (username && !approvers.find(a => a.userId === username)) {
+                                setApprovers(prev => [
+                                  ...prev,
+                                  {
+                                    userId: username,
+                                    userName: displayName || username,
+                                    ID: `temp-${Date.now()}`
+                                  }
+                                ]);
+                              }
+                              setApproverInput('');
+                            }
+                          }}
+                          placeholder="Type name, department, or username..."
+                          style={{ width: '100%' }}
+                          loading={ldapLoading}
+                        >
+                          {ldapOptions.map(option => (
+                            <ComboBoxItem
+                              key={option.username}
+                              text={`${option.displayName} (${option.username})`}
+                              additionalText={option.department}
+                              data-username={option.username}
+                              data-displayname={option.displayName}
+                            />
+                          ))}
+                        </ComboBox>
+                      </FlexBox>
+
+                      {approvers.length > 0 ? (
+                        <FlexBox direction="Column" style={{ gap: '0.5rem', maxWidth: '500px' }}>
+                          {approvers.map(a => (
+                            <Card
+                              key={a.ID}
+                              header={
+                                <CardHeader
+                                  titleText={a.userName}
+                                  avatar={<Icon name="private" style={{ color: '#a78bfa' }} />}
+                                  action={
+                                    <Button
+                                      design="Transparent"
+                                      icon="decline"
+                                      onClick={() => setApprovers(as => as.filter(x => x.ID !== a.ID))}
+                                    />
+                                  }
+                                />
+                              }
+                            />
+                          ))}
+                        </FlexBox>
+                      ) : (
+                        <Text style={{ color: 'var(--sapContent_LabelColor)' }}>No approvers assigned yet.</Text>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                {i === 3 && (
+                  <FlexBox direction="Column" style={{ gap: '1.5rem' }}>
+                    {/* Summary */}
+                    <Card header={<CardHeader titleText="Role Summary" />}>
+                      <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                          <FlexBox direction="Column">
+                            <Label style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>Name</Label>
+                            <Text style={{ fontWeight: 700, fontFamily: 'monospace' }}>{roleName || '—'}</Text>
+                          </FlexBox>
+                          <FlexBox direction="Column">
+                            <Label style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>Type</Label>
+                            <Tag style={{ width: 'fit-content' }}>
+                              {roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
+                            </Tag>
+                          </FlexBox>
+                        </div>
+                        <FlexBox direction="Column">
+                          <Label style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>Approvers</Label>
+                          <Text style={{ fontWeight: 500 }}>
+                            {approvers.map(a => a.userName).join(', ') || 'None'}
+                          </Text>
+                        </FlexBox>
+                        {description && (
+                          <FlexBox direction="Column">
+                            <Label style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>Description</Label>
+                            <Text style={{ color: 'var(--sapContent_LabelColor)' }}>{description}</Text>
+                          </FlexBox>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* All Restrictions */}
+                    <Card header={<CardHeader titleText={`Effective Restrictions (${inherited.length + restrictions.length})`} />}>
+                      <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {inherited.map((r, i) => <RestrictionDisplay key={i} restriction={r} isOwn={false} />)}
+                        {restrictions.map(r => <RestrictionDisplay key={r.ID} restriction={{ ...r, sourceRoleName: 'This Role' }} isOwn={true} />)}
+                        {inherited.length + restrictions.length === 0 && <Text style={{ color: 'var(--sapContent_LabelColor)' }}>No restrictions defined.</Text>}
+                      </div>
+                    </Card>
+
+                    {/* Access Simulation */}
+                    <Card header={<CardHeader titleText="Access Simulation" />}>
+                      <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                          <Label showColon>Sample Data Rows (JSON Array)</Label>
+                          <TextArea
+                            rows={4}
+                            value={simRows}
+                            onInput={e => setSimRows(e.target.value)}
+                            style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
+                          />
+                        </FlexBox>
+                        
+                        <Button
+                          design="Default"
+                          icon="play"
+                          onClick={runSimulation}
+                          disabled={loading}
+                          style={{ alignSelf: 'flex-start' }}
+                        >
+                          Run Simulation
+                        </Button>
+
+                        {simResults && (
+                          <Table
+                            headerRow={
+                              <TableHeaderRow>
+                                <TableHeaderCell style={{ fontWeight: 600 }}>Row</TableHeaderCell>
+                                <TableHeaderCell style={{ fontWeight: 600 }}>Result</TableHeaderCell>
+                                <TableHeaderCell style={{ fontWeight: 600 }}>Reason</TableHeaderCell>
+                              </TableHeaderRow>
+                            }
+                          >
+                            {simResults.map(r => (
+                              <TableRow key={r.rowIndex}>
+                                <TableCell>#{r.rowIndex + 1}</TableCell>
+                                <TableCell style={{ color: r.passed ? '#10b981' : '#ba1a1a', fontWeight: 600 }}>
+                                  {r.passed ? '✓ Pass' : '✗ Fail'}
+                                </TableCell>
+                                <TableCell style={{ color: 'var(--sapContent_LabelColor)' }}>{r.reason}</TableCell>
+                              </TableRow>
+                            ))}
+                          </Table>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* Immediate Assignment (Optional) */}
+                    {!isEditMode && (
+                      <Card header={<CardHeader titleText="Direct Assignment (Optional)" subtitleText="Assign this newly created role to a user or group immediately upon deployment." />}>
+                        <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                          <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                            <Label showColon>User ID / Group ID</Label>
+                            <Input
+                              value={assignUserId}
+                              onInput={e => setAssignUserId(e.target.value)}
+                              placeholder="e.g. US12345"
+                              style={{ width: '100%' }}
+                            />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                            <Label showColon>User Name</Label>
+                            <Input
+                              value={assignUserName}
+                              onInput={e => setAssignUserName(e.target.value)}
+                              placeholder="e.g. John Doe"
+                              style={{ width: '100%' }}
+                            />
+                          </FlexBox>
+                        </div>
+                      </Card>
+                    )}
+
+                    <Button
+                      design="Emphasized"
+                      onClick={handleDeploy}
+                      disabled={loading || !roleName || (permissions && (
+                        roleType === 'ORG_BASED' ? !permissions.canManageOrgRoles :
+                        (selectedParentIds.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
+                      ))}
+                      style={{ alignSelf: 'flex-end', padding: '0.5rem 2rem' }}
+                    >
+                      {loading ? 'Saving…' : (isEditMode ? 'Save Changes' : 'Deploy Role')}
+                    </Button>
+                  </FlexBox>
+                )}
+                </div>
+              )}
+            </WizardStep>
+          ))}
+        </Wizard>
+      </div>
 
       {/* Navigation Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-        {step > 0 && (
-          <Button variant="text" color="inherit" onClick={() => setStep(s => s - 1)} startIcon={<ChevronLeft size={15} />}>
+      <FlexBox justifyContent="SpaceBetween" style={{ marginTop: '1.5rem' }}>
+        {step > 0 ? (
+          <Button
+            design="Transparent"
+            icon="navigation-left-arrow"
+            onClick={() => setStep(s => s - 1)}
+          >
             Back
           </Button>
+        ) : (
+          <div />
         )}
         {step < 3 && (
           <Button
-            variant="contained"
+            design="Emphasized"
+            icon="navigation-right-arrow"
+            iconEnd
             onClick={() => setStep(s => s + 1)}
             disabled={step === 0 && roleType === 'ORG_BASED' && !selectedOrgNodeId}
-            endIcon={<ChevronRight size={15} />}
-            sx={{ ml: 'auto' }}
           >
             Next
           </Button>
         )}
-      </Box>
-    </Box>
+      </FlexBox>
+    </div>
   );
 }

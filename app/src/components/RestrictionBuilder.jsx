@@ -1,9 +1,26 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, Typography, IconButton, Chip, FormControlLabel, Checkbox, OutlinedInput, ListItemText, ListSubheader, Alert, Snackbar } from '@mui/material';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  FlexBox, 
+  Card, 
+  CardHeader, 
+  Title, 
+  Label, 
+  Button, 
+  Input, 
+  Select, 
+  Option, 
+  MultiComboBox, 
+  MultiComboBoxItem, 
+  Tag, 
+  Icon, 
+  Toast 
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/locked.js";
+import "@ui5/webcomponents-icons/dist/unlocked.js";
+import "@ui5/webcomponents-icons/dist/decline.js";
+import "@ui5/webcomponents-icons/dist/add.js";
+import "@ui5/webcomponents-icons/dist/filter.js";
 import * as api from '../api';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import { Filter, Lock, Unlock, X, Plus, Globe, Building2, MapPin, Factory, Briefcase } from 'lucide-react';
 
 // Helper to structure flat list into hierarchical select options with indentation
 function getHierarchyOptions(flatNodes) {
@@ -35,12 +52,12 @@ function getHierarchyOptions(flatNodes) {
 
 const FILTER_TYPES = ['SINGLE_VALUE', 'MULTI_VALUE', 'RANGE', 'HIERARCHY', 'PATTERN'];
 
-const TYPE_COLOR = {
-  SINGLE_VALUE: 'primary',
-  MULTI_VALUE:  'secondary',
-  RANGE:        'warning',
-  HIERARCHY:    'success',
-  PATTERN:      'info',
+const TYPE_COLOR_SCHEME = {
+  SINGLE_VALUE: 1,
+  MULTI_VALUE:  2,
+  RANGE:        3,
+  HIERARCHY:    5,
+  PATTERN:      8,
 };
 const TYPE_LABEL = {
   SINGLE_VALUE: 'Equals',
@@ -58,28 +75,27 @@ function TagInput({ values, onChange }) {
     setInput('');
   }
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+    <FlexBox direction="Column" style={{ gap: '0.5rem', width: '100%' }}>
+      <FlexBox style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
         {values.map(v => (
-          <Chip
+          <Tag
             key={v}
-            label={v}
-            size="small"
-            onDelete={() => onChange(values.filter(x => x !== v))}
-            color="primary"
-            variant="outlined"
-          />
+            style={{ cursor: 'pointer' }}
+            interactive
+            onClick={() => onChange(values.filter(x => x !== v))}
+          >
+            {v} ✕
+          </Tag>
         ))}
-      </Box>
-      <TextField
-        size="small"
+      </FlexBox>
+      <Input
         placeholder="Type and press Enter…"
         value={input}
-        onChange={e => setInput(e.target.value)}
+        onInput={e => setInput(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && addTag()}
-        fullWidth
+        style={{ width: '100%' }}
       />
-    </Box>
+    </FlexBox>
   );
 }
 
@@ -125,218 +141,160 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
 
   if (filterType === 'SINGLE_VALUE' || filterType === 'PATTERN') {
     if (loadingBdc) {
-      return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
+      return <Input disabled value="Loading values from Datasphere..." style={{ width: '100%' }} />;
     }
     if (hasBdcOptions) {
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-bdc-label">Select {field}</InputLabel>
-          <Select
-            labelId="restriction-bdc-label"
-            label={`Select ${field}`}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {bdcValues.map(v => (
-              <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Select
+          onChange={e => onChange(e.detail.selectedOption.value)}
+          style={{ width: '100%' }}
+        >
+          <Option value="">None</Option>
+          {bdcValues.map(v => (
+            <Option key={v.id} value={v.id} selected={v.id === value}>{v.text}</Option>
+          ))}
+        </Select>
       );
     }
     if (hasOrgOptions) {
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-org-label">Select {field}</InputLabel>
-          <Select
-            labelId="restriction-org-label"
-            label={`Select ${field}`}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {matchingNodes.map(n => (
-              <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Select
+          onChange={e => onChange(e.detail.selectedOption.value)}
+          style={{ width: '100%' }}
+        >
+          <Option value="">None</Option>
+          {matchingNodes.map(n => (
+            <Option key={n.ID} value={n.name} selected={n.name === value}>{n.name}</Option>
+          ))}
+        </Select>
       );
     }
     return (
-      <TextField
-        size="small"
-        fullWidth
+      <Input
         placeholder={filterType === 'PATTERN' ? 'e.g. CC1% or DE_' : 'e.g. Germany'}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onInput={e => onChange(e.target.value)}
+        style={{ width: '100%' }}
       />
     );
   }
+  
   if (filterType === 'MULTI_VALUE') {
     if (loadingBdc) {
-      return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
+      return <Input disabled value="Loading values from Datasphere..." style={{ width: '100%' }} />;
     }
     if (hasBdcOptions) {
       const selectedIds = value ? JSON.parse(value) : [];
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-multivalue-bdc-label">Select {field} (Multiple)</InputLabel>
-          <Select
-            labelId="restriction-multivalue-bdc-label"
-            multiple
-            value={selectedIds}
-            onChange={e => onChange(JSON.stringify(e.target.value))}
-            input={<OutlinedInput label={`Select ${field} (Multiple)`} />}
-            renderValue={selected => selected.map(id => bdcValues.find(x => x.id === id)?.text || id).join(', ')}
-          >
-            {bdcValues.map(v => {
-              const selected = selectedIds.includes(v.id);
-              const SelectionIcon = selected ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-              return (
-                <MenuItem key={v.id} value={v.id}>
-                  <SelectionIcon
-                    fontSize="small"
-                    style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                  />
-                  <ListItemText primary={v.text} />
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </FormControl>
+        <MultiComboBox
+          onSelectionChange={e => {
+            const selectedKeys = e.detail.items.map(item => item.getAttribute('value') || item.text);
+            onChange(JSON.stringify(selectedKeys));
+          }}
+          style={{ width: '100%' }}
+        >
+          {bdcValues.map(v => (
+            <MultiComboBoxItem key={v.id} value={v.id} text={v.text} selected={selectedIds.includes(v.id)} />
+          ))}
+        </MultiComboBox>
       );
     }
     if (hasOrgOptions) {
       const selectedNames = value ? JSON.parse(value) : [];
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-multivalue-label">Select {field} (Multiple)</InputLabel>
-          <Select
-            labelId="restriction-multivalue-label"
-            id="restriction-multivalue-select"
-            multiple
-            value={selectedNames}
-            onChange={e => onChange(JSON.stringify(e.target.value))}
-            input={<OutlinedInput label={`Select ${field} (Multiple)`} />}
-            renderValue={selected => selected.join(', ')}
-          >
-            {matchingNodes.map(n => {
-              const selected = selectedNames.includes(n.name);
-              const SelectionIcon = selected ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-
-              return (
-                <MenuItem key={n.ID} value={n.name}>
-                  <SelectionIcon
-                    fontSize="small"
-                    style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                  />
-                  <ListItemText primary={n.name} />
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </FormControl>
+        <MultiComboBox
+          onSelectionChange={e => {
+            const selectedKeys = e.detail.items.map(item => item.getAttribute('value') || item.text);
+            onChange(JSON.stringify(selectedKeys));
+          }}
+          style={{ width: '100%' }}
+        >
+          {matchingNodes.map(n => (
+            <MultiComboBoxItem key={n.ID} value={n.name} text={n.name} selected={selectedNames.includes(n.name)} />
+          ))}
+        </MultiComboBox>
       );
     }
     const tags = value ? JSON.parse(value) : [];
     return <TagInput values={tags} onChange={arr => onChange(JSON.stringify(arr))} />;
   }
+
   if (filterType === 'RANGE') {
     const range = value ? JSON.parse(value) : { from: '', to: '' };
     if (loadingBdc) {
-      return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
+      return <Input disabled value="Loading values from Datasphere..." style={{ width: '100%' }} />;
     }
     if (hasBdcOptions) {
       return (
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-from-label">From</InputLabel>
-            <Select
-              labelId="restriction-range-from-label"
-              label="From"
-              value={range.from}
-              onChange={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {bdcValues.map(v => (
-                <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Typography variant="body2" color="text.secondary">-</Typography>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-to-label">To</InputLabel>
-            <Select
-              labelId="restriction-range-to-label"
-              label="To"
-              value={range.to}
-              onChange={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {bdcValues.map(v => (
-                <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <FlexBox style={{ gap: '0.5rem', alignItems: 'center', width: '100%' }}>
+          <Select
+            onChange={e => onChange(JSON.stringify({ ...range, from: e.detail.selectedOption.value }))}
+            style={{ flexGrow: 1 }}
+          >
+            <Option value="">None</Option>
+            {bdcValues.map(v => (
+              <Option key={v.id} value={v.id} selected={v.id === range.from}>{v.text}</Option>
+            ))}
+          </Select>
+          <Label>-</Label>
+          <Select
+            onChange={e => onChange(JSON.stringify({ ...range, to: e.detail.selectedOption.value }))}
+            style={{ flexGrow: 1 }}
+          >
+            <Option value="">None</Option>
+            {bdcValues.map(v => (
+              <Option key={v.id} value={v.id} selected={v.id === range.to}>{v.text}</Option>
+            ))}
+          </Select>
+        </FlexBox>
       );
     }
     if (hasOrgOptions) {
       return (
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-from-label">From</InputLabel>
-            <Select
-              labelId="restriction-range-from-label"
-              label="From"
-              value={range.from}
-              onChange={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {matchingNodes.map(n => (
-                <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Typography variant="body2" color="text.secondary">-</Typography>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-to-label">To</InputLabel>
-            <Select
-              labelId="restriction-range-to-label"
-              label="To"
-              value={range.to}
-              onChange={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {matchingNodes.map(n => (
-                <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <FlexBox style={{ gap: '0.5rem', alignItems: 'center', width: '100%' }}>
+          <Select
+            onChange={e => onChange(JSON.stringify({ ...range, from: e.detail.selectedOption.value }))}
+            style={{ flexGrow: 1 }}
+          >
+            <Option value="">None</Option>
+            {matchingNodes.map(n => (
+              <Option key={n.ID} value={n.name} selected={n.name === range.from}>{n.name}</Option>
+            ))}
+          </Select>
+          <Label>-</Label>
+          <Select
+            onChange={e => onChange(JSON.stringify({ ...range, to: e.detail.selectedOption.value }))}
+            style={{ flexGrow: 1 }}
+          >
+            <Option value="">None</Option>
+            {matchingNodes.map(n => (
+              <Option key={n.ID} value={n.name} selected={n.name === range.to}>{n.name}</Option>
+            ))}
+          </Select>
+        </FlexBox>
       );
     }
     return (
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: '100%' }}>
-        <TextField
-          size="small"
-          type="number"
+      <FlexBox style={{ gap: '0.5rem', alignItems: 'center', width: '100%' }}>
+        <Input
+          type="Number"
           placeholder="From"
           value={range.from}
-          onChange={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
+          onInput={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
+          style={{ flexGrow: 1 }}
         />
-        <Typography variant="body2" color="text.secondary">-</Typography>
-        <TextField
-          size="small"
-          type="number"
+        <Label>-</Label>
+        <Input
+          type="Number"
           placeholder="To"
           value={range.to}
-          onChange={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
+          onInput={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
+          style={{ flexGrow: 1 }}
         />
-      </Box>
+      </FlexBox>
     );
   }
+
   if (filterType === 'HIERARCHY') {
     const sortedNodes = getHierarchyOptions(orgNodes);
     const selectedIds = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
@@ -353,76 +311,45 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     };
 
     return (
-      <FormControl size="small" fullWidth>
-        <InputLabel id="restriction-hierarchy-label">Select Hierarchy Nodes</InputLabel>
-        <Select
-          labelId="restriction-hierarchy-label"
-          id="restriction-hierarchy-select"
-          multiple
-          value={selectedIds}
-          onChange={e => {
-            const nextSelected = e.target.value;
-            // Clean up: remove children/descendants if their parent/ancestor is in the selection
-            const filtered = nextSelected.filter(id => !isAncestorSelected(id, nextSelected));
-            onChange(JSON.stringify(filtered));
-          }}
-          input={<OutlinedInput label="Select Hierarchy Nodes" />}
-          renderValue={(selected) => {
-            const names = selected.map(id => orgNodes.find(n => n.ID === id)?.name).filter(Boolean);
-            return names.join(', ');
-          }}
-        >
-          {sortedNodes.map(n => {
-            const isChecked = selectedIds.includes(n.ID);
-            const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-            const isDisabled = isAncestorSelected(n.ID, selectedIds);
-
-            // Choose icon based on node type
-            let TypeIcon = Building2;
-            if (n.type === 'GLOBAL') TypeIcon = Globe;
-            else if (n.type === 'REGION') TypeIcon = Building2;
-            else if (n.type === 'COUNTRY') TypeIcon = MapPin;
-            else if (n.type === 'PLANT') TypeIcon = Factory;
-            else if (n.type === 'DEPARTMENT') TypeIcon = Briefcase;
-
-            return (
-              <MenuItem
-                key={n.ID}
-                value={n.ID}
-                disabled={isDisabled}
-                sx={{
-                  pl: 2 + n.depth * 3, // Indent based on depth hierarchy
-                  py: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                <SelectionIcon
-                  fontSize="small"
-                  style={{ marginRight: 8, boxSizing: 'content-box' }}
-                />
-                <TypeIcon size={16} color={isDisabled ? "text.disabled" : "#3b82f6"} />
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: isDisabled ? 'text.disabled' : 'text.primary' }}>
-                    {n.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, textTransform: 'uppercase', lineHeight: 1.2 }}>
-                    {n.type?.name || ''}
-                  </Typography>
-                </Box>
-              </MenuItem>
-            );
-          })}
-        </Select>
-      </FormControl>
+      <MultiComboBox
+        onSelectionChange={e => {
+          const nextSelected = e.detail.items.map(item => item.getAttribute('value') || item.text);
+          const filtered = nextSelected.filter(id => !isAncestorSelected(id, nextSelected));
+          onChange(JSON.stringify(filtered));
+        }}
+        style={{ width: '100%' }}
+      >
+        {sortedNodes.map(n => {
+          const isChecked = selectedIds.includes(n.ID);
+          const isDisabled = isAncestorSelected(n.ID, selectedIds);
+          
+          return (
+            <MultiComboBoxItem
+              key={n.ID}
+              value={n.ID}
+              text={`${"  ".repeat(n.depth)}${n.name}`}
+              additionalText={n.type?.name || ''}
+              selected={isChecked}
+              disabled={isDisabled}
+            />
+          );
+        })}
+      </MultiComboBox>
     );
   }
   return null;
 }
 
+const TYPE_DESIGN = {
+  SINGLE_VALUE: "Set1",
+  MULTI_VALUE:  "Set2",
+  RANGE:        "Set3",
+  HIERARCHY:    "Set5",
+  PATTERN:      "Set8",
+};
+
 export function RestrictionDisplay({ restriction, isOwn = true }) {
-  const color = TYPE_COLOR[restriction.filterType] || 'primary';
+  const design = TYPE_DESIGN[restriction.filterType] || "Set1";
   const label = TYPE_LABEL[restriction.filterType] || restriction.filterType;
 
   let display = restriction.value;
@@ -439,42 +366,47 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
   }
 
   return (
-    <Box sx={{
-      display: 'flex',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 1.5,
-      p: '8px 16px',
-      bgcolor: isOwn ? 'rgba(59, 130, 246, 0.04)' : 'rgba(255, 255, 255, 0.02)',
-      border: '1px solid',
-      borderColor: isOwn ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.06)',
-      borderRadius: 1.5,
-      width: '100%',
-    }}>
-      {isOwn ? <Unlock size={14} color="#3b82f6" /> : <Lock size={14} color="#94a3b8" />}
-      <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.light' : 'text.secondary', fontFamily: 'monospace' }}>
+    <FlexBox
+      alignItems="Center"
+      style={{
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+        padding: '0.5rem 1rem',
+        backgroundColor: isOwn ? 'var(--sapList_SelectionBackgroundColor)' : 'var(--sapGroup_ContentBackground)',
+        border: isOwn ? '1px solid var(--sapList_SelectionBorderColor)' : '1px solid var(--sapList_BorderColor)',
+        borderRadius: '8px',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}
+    >
+      <Icon 
+        name={isOwn ? "unlocked" : "locked"} 
+        style={{ color: isOwn ? 'var(--sapContent_NonInteractiveIconColor)' : 'var(--sapContent_DisabledTextColor)' }} 
+      />
+      <span style={{ fontWeight: 'bold', minWidth: '90px', color: 'var(--sapContent_LabelColor)', fontFamily: 'var(--sapFontFamily)' }}>
         {restriction.field}
-      </Typography>
-      <Chip label={label} size="small" color={color} sx={{ fontSize: 9, height: 18 }} />
-      <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: 'monospace', flexGrow: 1 }}>
+      </span>
+      <Tag design={design}>{label}</Tag>
+      <span style={{ fontFamily: 'var(--sapFontHeaderFamily)', color: 'var(--sapContent_TextColor)', flexGrow: 1 }}>
         {display}
-      </Typography>
+      </span>
       {restriction.sourceRoleName && (
-        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontStyle: 'italic' }}>
+        <span style={{ fontStyle: 'italic', fontSize: '0.8rem', color: 'var(--sapContent_LabelColor)' }}>
           from: {restriction.sourceRoleName}
-        </Typography>
+        </span>
       )}
-    </Box>
+    </FlexBox>
   );
 }
 
 export default function RestrictionBuilder({ restrictions, onChange, inheritedRestrictions = [], orgNodes = [], restrictionFields = [] }) {
   const [draft, setDraft] = useState({ field: '', filterType: 'SINGLE_VALUE', value: '' });
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [toastMessage, setToastMessage] = useState('');
+  const toastRef = useRef(null);
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    toastRef.current?.show();
   };
 
   function addRestriction() {
@@ -484,7 +416,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
       try {
         const range = JSON.parse(draft.value);
         if (!range.from || !range.to) {
-          setSnackbar({ open: true, message: "Both 'From' and 'To' values must be specified.", severity: 'error' });
+          showToast("Both 'From' and 'To' values must be specified.");
           return;
         }
 
@@ -493,17 +425,17 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
 
         if (!isNaN(fromNum) && !isNaN(toNum)) {
           if (fromNum >= toNum) {
-            setSnackbar({ open: true, message: "'From' value must be lower than 'To' value.", severity: 'error' });
+            showToast("'From' value must be lower than 'To' value.");
             return;
           }
         } else {
           if (String(range.from).localeCompare(String(range.to)) >= 0) {
-            setSnackbar({ open: true, message: "'From' value must be lower than 'To' value.", severity: 'error' });
+            showToast("'From' value must be lower than 'To' value.");
             return;
           }
         }
       } catch (e) {
-        setSnackbar({ open: true, message: "Invalid range values.", severity: 'error' });
+        showToast("Invalid range values.");
         return;
       }
     }
@@ -517,102 +449,94 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+    <FlexBox direction="Column" style={{ width: '100%', gap: '1.5rem' }}>
+      <Toast ref={toastRef}>{toastMessage}</Toast>
 
       {/* Inherited */}
       {inheritedRestrictions.length > 0 && (
-        <Box>
-          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-            <Lock size={12} /> Inherited from parent chain
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <FlexBox direction="Column" style={{ gap: '0.5rem', width: '100%' }}>
+          <FlexBox alignItems="Center" style={{ gap: '0.4rem' }}>
+            <Icon name="locked" style={{ fontSize: '0.9rem' }} />
+            <Label style={{ fontWeight: 'bold' }}>Inherited from parent chain</Label>
+          </FlexBox>
+          <FlexBox direction="Column" style={{ gap: '0.5rem', width: '100%' }}>
             {inheritedRestrictions.map(r => (
               <RestrictionDisplay key={r.restrictionId || r.ID} restriction={{ ...r, field: r.field, filterType: r.filterType, value: r.value, sourceRoleName: r.sourceRoleName }} isOwn={false} />
             ))}
-          </Box>
-        </Box>
+          </FlexBox>
+        </FlexBox>
       )}
 
       {/* Own restrictions */}
       {restrictions.length > 0 && (
-        <Box>
-          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-            <Unlock size={12} /> Own restrictions
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <FlexBox direction="Column" style={{ gap: '0.5rem', width: '100%' }}>
+          <FlexBox alignItems="Center" style={{ gap: '0.4rem' }}>
+            <Icon name="unlocked" style={{ fontSize: '0.9rem' }} />
+            <Label style={{ fontWeight: 'bold' }}>Own restrictions</Label>
+          </FlexBox>
+          <FlexBox direction="Column" style={{ gap: '0.5rem', width: '100%' }}>
             {restrictions.map(r => (
-              <Box key={r.ID} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+              <FlexBox key={r.ID} alignItems="Center" style={{ gap: '0.5rem', width: '100%' }}>
                 <RestrictionDisplay restriction={r} isOwn={true} />
-                <IconButton color="error" onClick={() => removeRestriction(r.ID)} size="small">
-                  <X size={15} />
-                </IconButton>
-              </Box>
+                <Button design="Transparent" icon="decline" onClick={() => removeRestriction(r.ID)} />
+              </FlexBox>
             ))}
-          </Box>
-        </Box>
+          </FlexBox>
+        </FlexBox>
       )}
 
       {/* Add new restriction */}
-      <Card sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Plus size={12} /> Add restriction
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 2fr auto' }, gap: 2, alignItems: 'end' }}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="builder-field-label">Field</InputLabel>
-            <Select
-              labelId="builder-field-label"
-              label="Field"
-              value={draft.field}
-              onChange={e => setDraft(d => ({ ...d, field: e.target.value }))}
-            >
-              <MenuItem value=""><em>Select Field</em></MenuItem>
-              {restrictionFields.map(f => (
-                <MenuItem key={f.ID} value={f.name}>{f.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+      <Card style={{ padding: '1.5rem' }}>
+        <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+          <FlexBox alignItems="Center" style={{ gap: '0.4rem' }}>
+            <Icon name="filter" />
+            <Title level="H5">Add restriction</Title>
+          </FlexBox>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end', width: '100%' }}>
+            <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+              <Label showColon>Field</Label>
+              <Select
+                onChange={e => setDraft(d => ({ ...d, field: e.detail.selectedOption.value }))}
+                style={{ width: '100%' }}
+              >
+                <Option value="">Select Field</Option>
+                {restrictionFields.map(f => (
+                  <Option key={f.ID} value={f.name} selected={f.name === draft.field}>{f.name}</Option>
+                ))}
+              </Select>
+            </FlexBox>
 
-          <FormControl size="small" fullWidth>
-            <InputLabel id="builder-type-label">Type</InputLabel>
-            <Select
-              labelId="builder-type-label"
-              label="Type"
-              value={draft.filterType}
-              onChange={e => setDraft(d => ({ ...d, filterType: e.target.value, value: '' }))}
-            >
-              {FILTER_TYPES.map(t => (
-                <MenuItem key={t} value={t}>{TYPE_LABEL[t]}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+            <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+              <Label showColon>Type</Label>
+              <Select
+                onChange={e => setDraft(d => ({ ...d, filterType: e.detail.selectedOption.value, value: '' }))}
+                style={{ width: '100%' }}
+              >
+                {FILTER_TYPES.map(t => (
+                  <Option key={t} value={t} selected={t === draft.filterType}>{TYPE_LABEL[t]}</Option>
+                ))}
+              </Select>
+            </FlexBox>
 
-          <Box sx={{ width: '100%' }}>
-            <RestrictionInput
-              field={draft.field}
-              filterType={draft.filterType}
-              value={draft.value}
-              onChange={v => setDraft(d => ({ ...d, value: v }))}
-              orgNodes={orgNodes}
-              restrictionFields={restrictionFields}
-            />
-          </Box>
+            <FlexBox direction="Column" style={{ gap: '0.4rem', flexGrow: 2 }}>
+              <Label showColon>Value</Label>
+              <RestrictionInput
+                field={draft.field}
+                filterType={draft.filterType}
+                value={draft.value}
+                onChange={v => setDraft(d => ({ ...d, value: v }))}
+                orgNodes={orgNodes}
+                restrictionFields={restrictionFields}
+              />
+            </FlexBox>
 
-          <Button variant="contained" onClick={addRestriction} startIcon={<Plus size={14} />} sx={{ minHeight: 40 }}>
-            Add
-          </Button>
-        </Box>
+            <Button design="Emphasized" icon="add" onClick={addRestriction}>
+              Add
+            </Button>
+          </div>
+        </FlexBox>
       </Card>
-    </Box>
+    </FlexBox>
   );
 }

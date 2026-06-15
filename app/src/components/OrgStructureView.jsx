@@ -1,17 +1,32 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
-import { Globe, Building2, MapPin, Factory, Briefcase, Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight } from 'lucide-react';
+import {
+  Card,
+  Text,
+  Title,
+  Button,
+  Input,
+  Select,
+  Option,
+  Dialog,
+  FlexBox,
+  BusyIndicator,
+  MessageStrip,
+  Label,
+  Icon,
+  Tag
+} from '@ui5/webcomponents-react';
+import '@ui5/webcomponents-icons/dist/AllIcons.js';
 import * as api from '../api';
 
 const TYPE_ICONS = {
-  Global:     Globe,
-  Region:     Building2,
-  Country:    MapPin,
-  Plant:      Factory,
-  Department: Briefcase,
+  Global:     'globe',
+  Region:     'building',
+  Country:    'map-pin',
+  Plant:      'factory',
+  Department: 'business-card',
 };
 
-// ─── Move Dialog (MUI replace for Modal) ──────────────────────────────────────
+// ─── Move Dialog (UI5 replace for Modal) ──────────────────────────────────────
 function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
   const [selectedParentId, setSelectedParentId] = useState('');
 
@@ -23,40 +38,36 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
   const validParents = allNodes.filter(n => !forbidden.has(n.ID));
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Move Node</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Moving: <Box component="span" color="primary.light" sx={{ fontWeight: 600 }}>{node.name}</Box>
-          </Typography>
-        </Box>
-        <IconButton onClick={onClose} size="small"><X size={16} /></IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ pt: 2 }}>
-        <FormControl size="small" fullWidth sx={{ mt: 1 }}>
-          <InputLabel id="move-parent-select-label">New Parent Node</InputLabel>
+    <Dialog
+      open={open}
+      headerText="Move Node"
+      onAfterClose={onClose}
+      style={{ width: '400px' }}
+    >
+      <FlexBox direction="Column" style={{ padding: '16px', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
+        <Text>
+          Moving: <span style={{ fontWeight: 600, color: '#3b82f6' }}>{node.name}</span>
+        </Text>
+        
+        <FlexBox direction="Column" style={{ gap: '4px', width: '100%' }}>
+          <Label>New Parent Node</Label>
           <Select
-            labelId="move-parent-select-label"
-            label="New Parent Node"
-            value={selectedParentId}
-            onChange={e => setSelectedParentId(e.target.value)}
+            style={{ width: '100%' }}
+            onChange={e => setSelectedParentId(e.detail.selectedOption.value)}
           >
-            <MenuItem value=""><em>— Make root node (no parent) —</em></MenuItem>
+            <Option value="" selected={selectedParentId === ''}>— Make root node (no parent) —</Option>
             {validParents.map(n => (
-              <MenuItem key={n.ID} value={n.ID}>
+              <Option key={n.ID} value={n.ID} selected={selectedParentId === n.ID}>
                 {n.name} ({n.type?.name || ''})
-              </MenuItem>
+              </Option>
             ))}
           </Select>
-        </FormControl>
-      </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} color="inherit">Cancel</Button>
-        <Button variant="contained" onClick={() => onConfirm(selectedParentId || null)} startIcon={<MoveRight size={14} />}>
-          Move
-        </Button>
-      </DialogActions>
+        </FlexBox>
+      </FlexBox>
+      <div slot="footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '12px', width: '100%', boxSizing: 'border-box' }}>
+        <Button design="Transparent" onClick={onClose}>Cancel</Button>
+        <Button design="Emphasized" onClick={() => onConfirm(selectedParentId || null)}>Move</Button>
+      </div>
     </Dialog>
   );
 }
@@ -73,7 +84,7 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
   const [newAttr, setNewAttr]          = useState({ field: '', value: '' });
   const [loading, setLoading]          = useState(false);
 
-  const Icon = (node.type && TYPE_ICONS[node.type.name]) || Building2;
+  const IconName = (node.type && TYPE_ICONS[node.type.name]) || 'building';
   const hasChildren = node.children && node.children.length > 0;
 
   async function handleAddChild() {
@@ -147,7 +158,7 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: '100%' }}>
+    <FlexBox direction="Column" style={{ gap: '4px', width: '100%' }}>
       {showMove && (
         <MoveDialog
           open={showMove}
@@ -158,125 +169,124 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
         />
       )}
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-        <Box sx={{
+      <FlexBox direction="Column" style={{ width: '100%' }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1.5,
-          p: '10px 14px',
-          bgcolor: 'rgba(255, 255, 255, 0.02)',
+          gap: '12px',
+          padding: '10px 14px',
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
           border: '1px solid rgba(255, 255, 255, 0.06)',
-          borderRadius: 1,
-          ml: depth * 3,
+          borderRadius: '4px',
+          marginLeft: `${depth * 24}px`,
           position: 'relative',
           transition: 'all 0.2s',
-          '&:hover': {
-            borderColor: 'rgba(59, 130, 246, 0.2)',
-            bgcolor: 'rgba(255, 255, 255, 0.03)',
-          }
         }}>
           {/* Expand toggle */}
-          <IconButton
-            onClick={() => setExpanded(e => !e)}
-            disabled={!hasChildren}
-            size="small"
-            sx={{ p: 0, color: 'text.secondary', opacity: hasChildren ? 1 : 0.3 }}
-          >
-            {hasChildren ? (expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <Box sx={{ width: 14 }} />}
-          </IconButton>
+          {hasChildren ? (
+            <Button
+              onClick={() => setExpanded(e => !e)}
+              design="Transparent"
+              icon={expanded ? "navigation-down-arrow" : "navigation-right-arrow"}
+              style={{ width: '24px', height: '24px' }}
+            />
+          ) : (
+            <div style={{ width: '24px' }} />
+          )}
 
-          <Icon size={16} color="#3b82f6" />
+          <Icon name={IconName} style={{ color: '#3b82f6', width: '16px', height: '16px' }} />
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          <FlexBox direction="Column" style={{ flexGrow: 1 }}>
             {editing ? (
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <TextField
-                  size="small"
+              <FlexBox alignItems="Center" style={{ gap: '8px' }}>
+                <Input
                   value={editName}
-                  onChange={e => setEditName(e.target.value)}
+                  onInput={e => setEditName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleRename()}
-                  autoFocus
-                  sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 } }}
+                  style={{ width: '200px' }}
                 />
-                <IconButton color="primary" onClick={handleRename} disabled={loading} size="small"><Check size={14} /></IconButton>
-                <IconButton onClick={() => setEditing(false)} size="small"><X size={14} /></IconButton>
-              </Box>
+                <Button design="Positive" onClick={handleRename} disabled={loading} icon="accept" />
+                <Button design="Transparent" onClick={() => setEditing(false)} icon="decline" />
+              </FlexBox>
             ) : (
               <>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{node.name}</Typography>
-                <Typography variant="caption" color="text.secondary">{node.type?.name || ''}</Typography>
+                <Text style={{ fontWeight: 700 }}>{node.name}</Text>
+                <Text style={{ color: 'var(--sapContent_LabelColor, #888)', fontSize: '11px' }}>{node.type?.name || ''}</Text>
               </>
             )}
-          </Box>
+          </FlexBox>
 
           {/* Attributes */}
           {node.attributes && node.attributes.length > 0 && (
-            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            <FlexBox style={{ gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
               {node.attributes.map(a => (
-                <Chip
-                  key={a.ID}
-                  label={`${a.field}: ${a.value}`}
-                  size="small"
-                  onDelete={permissions && !permissions.canManageOrgRoles ? undefined : () => handleDeleteAttr(a.ID)}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ height: 20, fontSize: 9 }}
-                />
+                <FlexBox key={a.ID} alignItems="Center" style={{ gap: '4px' }}>
+                  <Tag design="Set3">{`${a.field}: ${a.value}`}</Tag>
+                  {(!permissions || permissions.canManageOrgRoles) && (
+                    <Button
+                      icon="decline"
+                      design="Transparent"
+                      style={{ height: '16px', width: '16px', minWidth: '16px', padding: 0 }}
+                      onClick={() => handleDeleteAttr(a.ID)}
+                    />
+                  )}
+                </FlexBox>
               ))}
-            </Box>
+            </FlexBox>
           )}
 
           {/* Action Row */}
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <FlexBox style={{ gap: '4px' }}>
             <Button 
-              size="small" 
-              variant="text" 
-              color="primary" 
+              design="Transparent" 
               onClick={() => onGenerate(node.ID)} 
               disabled={permissions && !permissions.canManageOrgRoles}
-              startIcon={<Zap size={12} />}
+              icon="flash"
             >
               Role
             </Button>
-            <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Attribute"><Plus size={13} /></IconButton>
-            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); }} disabled={permissions && !permissions.canManageOrgRoles} title="Rename"><Edit3 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Child Node"><Building2 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || (permissions && !permissions.canManageOrgRoles)}><MoveRight size={13} /></IconButton>
-            <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || (permissions && !permissions.canManageOrgRoles)} title={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
-          </Box>
-        </Box>
+            <Button design="Transparent" icon="add" onClick={() => setShowAddAttr(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Attribute" />
+            <Button design="Transparent" icon="edit" onClick={() => { setEditing(true); setEditName(node.name); }} disabled={permissions && !permissions.canManageOrgRoles} title="Rename" />
+            <Button design="Transparent" icon="building" onClick={() => setShowAddChild(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Child Node" />
+            <Button design="Transparent" icon="arrow-right" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || (permissions && !permissions.canManageOrgRoles)} />
+            <Button design="Transparent" icon="delete" onClick={handleDelete} disabled={loading || hasChildren || (permissions && !permissions.canManageOrgRoles)} title={hasChildren ? 'Remove all children first' : 'Delete node'} style={{ color: 'var(--sapNegativeElementColor)' }} />
+          </FlexBox>
+        </div>
 
         {/* Inline forms */}
-        <Collapse in={showAddAttr}>
-          <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}>
-            <TextField size="small" label="Field (e.g. Country)" value={newAttr.field} onChange={e => setNewAttr(a => ({ ...a, field: e.target.value }))} sx={{ flex: 1 }} />
-            <TextField size="small" label="Value (e.g. Germany)" value={newAttr.value} onChange={e => setNewAttr(a => ({ ...a, value: e.target.value }))} sx={{ flex: 1 }} />
-            <Button variant="contained" size="small" onClick={handleAddAttr} disabled={loading}>Add</Button>
-            <IconButton size="small" onClick={() => setShowAddAttr(false)}><X size={15} /></IconButton>
+        {showAddAttr && (
+          <Card style={{ marginLeft: `${depth * 24 + 8}px`, marginTop: '8px', padding: '12px' }}>
+            <FlexBox alignItems="Center" style={{ gap: '8px' }}>
+              <Input placeholder="Field (e.g. Country)" value={newAttr.field} onInput={e => setNewAttr(a => ({ ...a, field: e.target.value }))} style={{ flex: 1 }} />
+              <Input placeholder="Value (e.g. Germany)" value={newAttr.value} onInput={e => setNewAttr(a => ({ ...a, value: e.target.value }))} style={{ flex: 1 }} />
+              <Button design="Emphasized" onClick={handleAddAttr} disabled={loading}>Add</Button>
+              <Button icon="decline" design="Transparent" onClick={() => setShowAddAttr(false)} />
+            </FlexBox>
           </Card>
-        </Collapse>
+        )}
 
-        <Collapse in={showAddChild}>
-          <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}>
-            <TextField size="small" label="Node Name" value={newChild.name} onChange={e => setNewChild(c => ({ ...c, name: e.target.value }))} sx={{ flex: 1 }} />
-            <FormControl size="small" sx={{ width: 140 }}>
-              <InputLabel id="child-type-label">Type</InputLabel>
-              <Select
-                labelId="child-type-label"
-                label="Type"
-                value={newChild.type || (nodeTypes[0]?.ID || '')}
-                onChange={e => setNewChild(c => ({ ...c, type: e.target.value }))}
-              >
-                {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Button variant="contained" size="small" onClick={handleAddChild} disabled={loading}>Add</Button>
-            <IconButton size="small" onClick={() => setShowAddChild(false)}><X size={15} /></IconButton>
+        {showAddChild && (
+          <Card style={{ marginLeft: `${depth * 24 + 8}px`, marginTop: '8px', padding: '12px' }}>
+            <FlexBox alignItems="Center" style={{ gap: '8px' }}>
+              <Input placeholder="Node Name" value={newChild.name} onInput={e => setNewChild(c => ({ ...c, name: e.target.value }))} style={{ flex: 1 }} />
+              <div style={{ width: '140px' }}>
+                <Select
+                  onChange={e => setNewChild(c => ({ ...c, type: e.detail.selectedOption.value }))}
+                >
+                  {nodeTypes.map(t => (
+                    <Option key={t.ID} value={t.ID} selected={newChild.type === t.ID || (!newChild.type && nodeTypes[0]?.ID === t.ID)}>
+                      {t.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <Button design="Emphasized" onClick={handleAddChild} disabled={loading}>Add</Button>
+              <Button icon="decline" design="Transparent" onClick={() => setShowAddChild(false)} />
+            </FlexBox>
           </Card>
-        </Collapse>
+        )}
 
         {/* Children Row Rendering */}
-        {/* Render children row recursive call */}
         {expanded && hasChildren && node.children.map(child => (
           <OrgNodeRow
             key={child.ID}
@@ -290,8 +300,8 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
             permissions={permissions}
           />
         ))}
-      </Box>
-    </Box>
+      </FlexBox>
+    </FlexBox>
   );
 }
 
@@ -324,8 +334,7 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
   const [newRoot, setNewRoot]     = useState({ name: '', type: '' });
   const [snackbar, setSnackbar]   = useState({ open: false, message: '', severity: 'error' });
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
+  const handleCloseSnackbar = () => {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
@@ -367,81 +376,81 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
   }
 
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Organizational Structure</Typography>
-          <Typography variant="body2" color="text.secondary">Maintain your business hierarchy — roles are generated from this structure</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+    <div style={{ animation: 'fadeIn 0.3s' }}>
+      <FlexBox justifyContent="SpaceBetween" alignItems="Center" wrap="Wrap" style={{ gap: '16px', marginBottom: '24px' }}>
+        <div>
+          <Title level="H3" style={{ marginBottom: '4px' }}>Organizational Structure</Title>
+          <Text style={{ color: 'var(--sapContent_LabelColor, #888)' }}>Maintain your business hierarchy — roles are generated from this structure</Text>
+        </div>
+        <FlexBox style={{ gap: '12px' }}>
           <Button 
-            variant="outlined" 
-            color="primary" 
+            design="Default" 
             onClick={handleGenerateAll} 
             disabled={loading || (permissions && !permissions.canManageOrgRoles)} 
-            startIcon={<Zap size={15} />}
+            icon="flash"
           >
             Generate All Roles
           </Button>
           <Button 
-            variant="contained" 
-            color="primary" 
+            design="Emphasized" 
             onClick={() => { setShowAdd(s => !s); setSnackbar({ open: false, message: '', severity: 'error' }); }} 
             disabled={permissions && !permissions.canManageOrgRoles}
-            startIcon={<Plus size={15} />}
+            icon="add"
           >
             Add Node
           </Button>
-        </Box>
-      </Box>
+        </FlexBox>
+      </FlexBox>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+      {snackbar.open && (
+        <MessageStrip
+          design={snackbar.severity === 'success' ? 'Positive' : 'Negative'}
+          onClose={handleCloseSnackbar}
+          style={{ marginBottom: '16px' }}
+        >
           {snackbar.message}
-        </Alert>
-      </Snackbar>
+        </MessageStrip>
+      )}
 
-      <Collapse in={showAdd}>
-        <Card sx={{ p: 2, mb: 3, display: 'flex', gap: 1.5, alignItems: 'center' }}>
-          <TextField
-            size="small"
-            placeholder="Node name (e.g. Asia Pacific)"
-            value={newRoot.name}
-            onChange={e => setNewRoot(r => ({ ...r, name: e.target.value }))}
-            sx={{ flex: 1 }}
-          />
-          <FormControl size="small" sx={{ width: 160 }}>
-            <InputLabel id="root-type-label">Type</InputLabel>
-            <Select
-              labelId="root-type-label"
-              label="Type"
-              value={newRoot.type || (nodeTypes[0]?.ID || '')}
-              onChange={e => setNewRoot(r => ({ ...r, type: e.target.value }))}
-            >
-              {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={handleAddRoot}>Add</Button>
-          <IconButton onClick={() => setShowAdd(false)} size="small"><X size={16} /></IconButton>
+      {showAdd && (
+        <Card style={{ padding: '16px', marginBottom: '24px' }}>
+          <FlexBox alignItems="Center" style={{ gap: '12px' }}>
+            <Input
+              placeholder="Node name (e.g. Asia Pacific)"
+              value={newRoot.name}
+              onInput={e => setNewRoot(r => ({ ...r, name: e.target.value }))}
+              style={{ flex: 1 }}
+            />
+            <div style={{ width: '160px' }}>
+              <Select
+                onChange={e => setNewRoot(r => ({ ...r, type: e.detail.selectedOption.value }))}
+              >
+                {nodeTypes.map(t => (
+                  <Option key={t.ID} value={t.ID} selected={newRoot.type === t.ID || (!newRoot.type && nodeTypes[0]?.ID === t.ID)}>
+                    {t.name}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+            <Button design="Emphasized" onClick={handleAddRoot}>Add</Button>
+            <Button icon="decline" design="Transparent" onClick={() => setShowAdd(false)} />
+          </FlexBox>
         </Card>
-      </Collapse>
+      )}
 
-      <Card sx={{ p: 2 }}>
+      <Card style={{ padding: '16px' }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={30} /></Box>
+          <FlexBox justifyContent="Center" style={{ padding: '40px 0' }}>
+            <BusyIndicator active size="Medium" />
+          </FlexBox>
         ) : roots.length === 0 ? (
-          <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <Box sx={{ opacity: 0.5, mb: 2 }}><Building2 size={40} /></Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No organizational nodes yet</Typography>
-            <Typography variant="body2" color="text.secondary">Add a root node to get started (e.g. Global).</Typography>
-          </Box>
+          <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ padding: '48px 0', textAlign: 'center', gap: '16px' }}>
+            <Icon name="building" style={{ fontSize: '40px', opacity: 0.5 }} />
+            <Title level="H6">No organizational nodes yet</Title>
+            <Text style={{ color: 'var(--sapContent_LabelColor, #888)' }}>Add a root node to get started (e.g. Global).</Text>
+          </FlexBox>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <FlexBox direction="Column" style={{ gap: '8px' }}>
             {roots.map(n => (
               <OrgNodeRow
                 key={n.ID}
@@ -455,9 +464,9 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
                 permissions={permissions}
               />
             ))}
-          </Box>
+          </FlexBox>
         )}
       </Card>
-    </Box>
+    </div>
   );
 }

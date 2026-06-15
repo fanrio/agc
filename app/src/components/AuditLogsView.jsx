@@ -1,39 +1,30 @@
 import { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Card, 
-  CardContent, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
-  Chip, 
-  IconButton, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  Button, 
-  TextField, 
-  MenuItem, 
-  Select, 
-  FormControl, 
-  InputLabel, 
-  TablePagination, 
-  CircularProgress,
-  InputAdornment,
-  FormControlLabel,
-  Checkbox
-} from '@mui/material';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import {
+  FlexBox,
+  Card,
+  CardHeader,
+  Title,
+  Text,
+  Label,
+  Table,
+  TableHeaderRow,
+  TableHeaderCell,
+  TableRow,
+  TableCell,
+  Button,
+  Input,
+  Select,
+  Option,
+  CheckBox,
+  Dialog,
+  Bar,
+  BusyIndicator,
+  Icon,
+  Tag
+} from '@ui5/webcomponents-react';
+import '@ui5/webcomponents-icons/dist/AllIcons.js';
 import dayjs from 'dayjs';
-import { Eye, Search, RefreshCw, AlertCircle } from 'lucide-react';
+import { DatePicker } from '@ui5/webcomponents-react';
 import { getAuditLogs, getRoles } from '../api';
 
 export default function AuditLogsView() {
@@ -159,15 +150,6 @@ export default function AuditLogsView() {
     loadLogs();
   }, []);
 
-  const handlePageChange = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleRowsPerPageChange = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
   // Get unique list of actors from all logs
   const actorsList = [...new Set(logs.map(log => log.createdBy).filter(Boolean))].sort();
 
@@ -250,22 +232,13 @@ export default function AuditLogsView() {
   const getActionChip = (action) => {
     switch (action) {
       case 'CREATE':
-        return <Chip label="CREATE" size="small" sx={{ bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 600 }} />;
+        return <Tag design="Positive">CREATE</Tag>;
       case 'UPDATE':
-        return <Chip label="UPDATE" size="small" sx={{ bgcolor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)', fontWeight: 600 }} />;
+        return <Tag design="Information">UPDATE</Tag>;
       case 'DELETE':
-        return <Chip label="DELETE" size="small" sx={{ bgcolor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 600 }} />;
+        return <Tag design="Negative">DELETE</Tag>;
       default:
-        return <Chip label={action} size="small" />;
-    }
-  };
-
-  const formatJSON = (jsonStr) => {
-    try {
-      const obj = JSON.parse(jsonStr);
-      return JSON.stringify(obj, null, 2);
-    } catch {
-      return jsonStr;
+        return <Tag>{action}</Tag>;
     }
   };
 
@@ -358,79 +331,85 @@ export default function AuditLogsView() {
         }
         
         const renderSectionTable = (title, rows, emptyMessage, isRestriction = false) => (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Title level="H6" style={{ fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', color: 'var(--sapContent_LabelColor)' }}>
               {title}
-            </Typography>
+            </Title>
             {rows.length > 0 ? (
-              <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <Table size="small">
-                  <TableHead sx={{ bgcolor: '#f7f9fb' }}>
-                    <TableRow>
-                      {isRestriction ? (
-                        <>
-                          <TableCell sx={{ fontWeight: 600 }}>Restriction Field</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
-                        </>
-                      ) : (
-                        <>
-                          <TableCell sx={{ fontWeight: 600 }}>Property</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
-                        </>
-                      )}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map((row, index) => (
-                      <TableRow key={isRestriction ? index : row.field} hover>
-                        {isRestriction ? (
-                          <>
-                            <TableCell sx={{ fontWeight: 500 }}>{row.fieldName}</TableCell>
-                            <TableCell>
-                              <Chip 
-                                label={row.action} 
-                                size="small"
-                                sx={{
-                                  fontWeight: 600,
-                                  fontSize: 10,
-                                  height: 20,
-                                  bgcolor: row.action === 'Added' ? 'rgba(16, 185, 129, 0.12)' : row.action === 'Deleted' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                                  color: row.action === 'Added' ? '#10b981' : row.action === 'Deleted' ? '#f87171' : '#60a5fa',
-                                  border: `1px solid ${row.action === 'Added' ? 'rgba(16, 185, 129, 0.3)' : row.action === 'Deleted' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ color: '#ba1a1a', textDecoration: row.action === 'Changed' ? 'line-through' : 'none' }}>{row.oldVal}</TableCell>
-                            <TableCell sx={{ color: '#10b981' }}>{row.newVal}</TableCell>
-                          </>
-                        ) : (
-                          <>
-                            <TableCell sx={{ fontWeight: 500 }}>{row.field}</TableCell>
-                            <TableCell sx={{ color: '#ba1a1a', textDecoration: 'line-through' }}>{row.oldVal || '—'}</TableCell>
-                            <TableCell sx={{ color: '#10b981' }}>{row.newVal || '—'}</TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Table
+                headerRow={
+                  <TableHeaderRow>
+                    {isRestriction ? (
+                      <>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>Restriction Field</Text></TableHeaderCell>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>Action</Text></TableHeaderCell>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>Old Value</Text></TableHeaderCell>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>New Value</Text></TableHeaderCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>Property</Text></TableHeaderCell>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>Old Value</Text></TableHeaderCell>
+                        <TableHeaderCell><Text style={{ fontWeight: 600 }}>New Value</Text></TableHeaderCell>
+                      </>
+                    )}
+                  </TableHeaderRow>
+                }
+              >
+                {rows.map((row, index) => (
+                  <TableRow key={isRestriction ? index : row.field}>
+                    {isRestriction ? (
+                      <>
+                        <TableCell><Text style={{ fontWeight: 500 }}>{row.fieldName}</Text></TableCell>
+                        <TableCell>
+                          <Tag
+                            design={row.action === 'Added' ? 'Positive' : row.action === 'Deleted' ? 'Negative' : 'Information'}
+                          >
+                            {row.action}
+                          </Tag>
+                        </TableCell>
+                        <TableCell>
+                          <Text style={{ color: 'var(--sapNegativeColor)', textDecoration: row.action === 'Changed' ? 'line-through' : 'none' }}>
+                            {row.oldVal}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text style={{ color: 'var(--sapPositiveColor)' }}>
+                            {row.newVal}
+                          </Text>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell><Text style={{ fontWeight: 500 }}>{row.field}</Text></TableCell>
+                        <TableCell>
+                          <Text style={{ color: 'var(--sapNegativeColor)', textDecoration: 'line-through' }}>
+                            {row.oldVal || '—'}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text style={{ color: 'var(--sapPositiveColor)' }}>
+                            {row.newVal || '—'}
+                          </Text>
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </Table>
             ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
+              <Text style={{ fontStyle: 'italic', color: 'var(--sapContent_LabelColor)', paddingLeft: '4px' }}>
                 {emptyMessage}
-              </Typography>
+              </Text>
             )}
-          </Box>
+          </div>
         );
 
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {renderSectionTable("General Information", generalRows, "No general information changes.", false)}
             {renderSectionTable("Restriction", restrictionRows, "No restriction changes.", true)}
-          </Box>
+          </div>
         );
       } else {
         const rows = Object.entries(parsed).map(([field, val]) => ({
@@ -439,317 +418,320 @@ export default function AuditLogsView() {
         }));
         
         return (
-          <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: '#f7f9fb' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Property</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.field} hover>
-                    <TableCell sx={{ fontWeight: 500, width: '30%' }}>{row.field}</TableCell>
-                    <TableCell sx={{ color: 'text.primary', wordBreak: 'break-all' }}>{row.value}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Table
+            headerRow={
+              <TableHeaderRow>
+                <TableHeaderCell><Text style={{ fontWeight: 600 }}>Property</Text></TableHeaderCell>
+                <TableHeaderCell><Text style={{ fontWeight: 600 }}>Value</Text></TableHeaderCell>
+              </TableHeaderRow>
+            }
+          >
+            {rows.map((row) => (
+              <TableRow key={row.field}>
+                <TableCell><Text style={{ fontWeight: 500 }}>{row.field}</Text></TableCell>
+                <TableCell><Text style={{ wordBreak: 'break-all' }}>{row.value}</Text></TableCell>
+              </TableRow>
+            ))}
+          </Table>
         );
       }
     } catch {
       return (
-        <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f2f4f6', borderColor: 'divider', backgroundImage: 'none' }}>
-          <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.8125rem', color: '#191c1e', whiteSpace: 'pre-wrap' }}>
+        <div style={{ padding: '1rem', backgroundColor: 'var(--sapGroup_ContentBackground)', border: '1px solid var(--sapGroup_BorderColor)', borderRadius: '4px' }}>
+          <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}>
             {log.details}
           </pre>
-        </Paper>
+        </div>
       );
     }
-
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
-              System Audit Logs
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Review security compliance logs and lifecycle changes for roles and assignments.
-            </Typography>
-          </Box>
-          <Button 
-            variant="outlined" 
-            onClick={loadLogs} 
-            startIcon={<RefreshCw size={16} />}
-            disabled={loading}
-            sx={{ borderColor: 'rgba(255,255,255,0.12)', color: 'text.secondary', '&:hover': { borderColor: '#3b82f6', color: '#60a5fa' } }}
-          >
-            Refresh
-          </Button>
-        </Box>
-
-        {/* Filter Toolbar Card */}
-        <Card sx={{ bgcolor: 'background.paper', border: '1px solid rgba(255,255,255,0.08)', backgroundImage: 'none' }}>
-          <CardContent sx={{ p: '20px !important' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-                <TextField
-                  placeholder="Search by Target, User, details..."
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                  size="small"
-                  sx={{ flexGrow: 1, minWidth: 260 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start" sx={{ color: 'text.secondary' }}>
-                          <Search size={18} />
-                        </InputAdornment>
-                      ),
-                    }
-                  }}
-                />
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Time Range</InputLabel>
-                  <Select
-                    value={dateFilter}
-                    label="Time Range"
-                    onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Time</MenuItem>
-                    <MenuItem value="TODAY">Today</MenuItem>
-                    <MenuItem value="WEEK">Past 7 Days</MenuItem>
-                    <MenuItem value="MONTH">Past 30 Days</MenuItem>
-                    <MenuItem value="CUSTOM">Custom Range...</MenuItem>
-                  </Select>
-                </FormControl>
-
-                {dateFilter === 'CUSTOM' && (
-                  <>
-                    <DatePicker
-                      label="Start Date"
-                      value={startDate}
-                      onChange={(val) => { setStartDate(val); setPage(0); }}
-                      slotProps={{ textField: { size: 'small', sx: { minWidth: 150 } } }}
-                    />
-                    <DatePicker
-                      label="End Date"
-                      value={endDate}
-                      onChange={(val) => { setEndDate(val); setPage(0); }}
-                      slotProps={{ textField: { size: 'small', sx: { minWidth: 150 } } }}
-                    />
-                  </>
-                )}
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Action</InputLabel>
-                  <Select
-                    value={actionFilter}
-                    label="Action"
-                    onChange={(e) => { setActionFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Actions</MenuItem>
-                    <MenuItem value="CREATE">CREATE</MenuItem>
-                    <MenuItem value="UPDATE">UPDATE</MenuItem>
-                    <MenuItem value="DELETE">DELETE</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select
-                    value={entityFilter}
-                    label="Entity Type"
-                    onChange={(e) => { setEntityFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Entities</MenuItem>
-                    <MenuItem value="Roles">Roles</MenuItem>
-                    <MenuItem value="RoleAssignments">Role Assignments</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', flexGrow: 1 }}>
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>Performed By</InputLabel>
-                    <Select
-                      value={actorFilter}
-                      label="Performed By"
-                      onChange={(e) => { setActorFilter(e.target.value); setPage(0); }}
-                    >
-                      <MenuItem value="ALL">All Performers</MenuItem>
-                      {actorsList.map(actor => (
-                        <MenuItem key={actor} value={actor}>{actor}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Box>
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={criticalFilter}
-                      onChange={(e) => { setCriticalFilter(e.target.checked); setPage(0); }}
-                      sx={{
-                        color: 'rgba(255,255,255,0.3)',
-                        '&.Mui-checked': {
-                          color: '#f87171',
-                        },
-                      }}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: criticalFilter ? '#f87171' : 'text.secondary' }}>
-                      Critical Roles Only
-                    </Typography>
-                  }
-                />
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* Main Table Card */}
-        <Card>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={40} />
-            </Box>
-          ) : error ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, gap: 1 }}>
-              <AlertCircle size={40} color="#f87171" />
-              <Typography color="error">{error}</Typography>
-              <Button size="small" onClick={loadLogs} sx={{ mt: 1 }}>Try Again</Button>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell style={{ fontWeight: 600 }}>Entity</TableCell>
-                      <TableCell style={{ fontWeight: 600 }}>Subject Identity</TableCell>
-                      <TableCell style={{ fontWeight: 600 }}>Action</TableCell>
-                      <TableCell style={{ fontWeight: 600 }}>Performed By</TableCell>
-                      <TableCell style={{ fontWeight: 600 }}>Timestamp</TableCell>
-                      <TableCell align="right" style={{ width: 120, fontWeight: 600 }}>Details</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {paginatedLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                          No audit logs found matching the filters.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      paginatedLogs.map((log) => (
-                        <TableRow key={log.ID} hover>
-                          <TableCell sx={{ color: 'text.primary', fontSize: '0.875rem', fontWeight: 500 }}>
-                            {log.entityName}
-                          </TableCell>
-                          <TableCell sx={{ 
-                            color: log.targetName ? 'text.primary' : 'text.secondary', 
-                            fontFamily: log.targetName ? 'inherit' : 'monospace',
-                            fontSize: log.targetName ? '0.875rem' : '0.8125rem',
-                            fontWeight: log.targetName ? 500 : 'inherit'
-                          }}>
-                            {log.targetName || log.recordId}
-                          </TableCell>
-                          <TableCell>
-                            {getActionChip(log.action)}
-                          </TableCell>
-                          <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                            {log.createdBy}
-                          </TableCell>
-                          <TableCell sx={{ color: 'text.primary', fontSize: '0.875rem' }}>
-                            {new Date(log.createdAt).toLocaleString()}
-                          </TableCell>
-                          <TableCell align="right">
-                            <IconButton 
-                              onClick={() => setSelectedLog(log)}
-                              size="small"
-                              sx={{ color: '#60a5fa', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.12)' } }}
-                            >
-                              <Eye size={16} />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              <TablePagination
-                rowsPerPageOptions={[5, 10, 25, 50]}
-                component="div"
-                count={filteredLogs.length}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handlePageChange}
-                onRowsPerPageChange={handleRowsPerPageChange}
-                sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', color: 'text.secondary' }}
-              />
-            </Box>
-          )}
-        </Card>
-
-        {/* JSON Details Dialog */}
-        <Dialog 
-          open={Boolean(selectedLog)} 
-          onClose={() => setSelectedLog(null)}
-          maxWidth="md"
-          fullWidth
-          PaperProps={{
-            sx: {
-              bgcolor: 'background.paper',
-              backgroundImage: 'none',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 2
-            }
-          }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Header */}
+      <FlexBox justifyContent="SpaceBetween" alignItems="Center">
+        <div>
+          <Title level="H3" style={{ fontWeight: 700 }}>
+            System Audit Logs
+          </Title>
+          <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+            Review security compliance logs and lifecycle changes for roles and assignments.
+          </Text>
+        </div>
+        <Button 
+          onClick={loadLogs} 
+          icon="refresh"
+          disabled={loading}
         >
-          {selectedLog && (
-            <>
-              <DialogTitle sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)', pb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Audit Details
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {selectedLog.entityName} · {selectedLog.action} · {new Date(selectedLog.createdAt).toLocaleString()}
-                  </Typography>
-                </Box>
-              </DialogTitle>
-              <DialogContent sx={{ mt: 2 }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-                  Audit details for target record ID: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{selectedLog.recordId}</Box>
-                </Typography>
-                {renderDetailsTable(selectedLog)}
-              </DialogContent>
-              <DialogActions sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', px: 3, py: 2 }}>
-                <Button 
-                  onClick={() => setSelectedLog(null)} 
-                  variant="contained"
-                  sx={{ bgcolor: '#3b82f6', '&:hover': { bgcolor: '#2563eb' } }}
+          Refresh
+        </Button>
+      </FlexBox>
+
+      {/* Filter Toolbar Card */}
+      <Card>
+        <div style={{ padding: '1.25rem' }}>
+          <FlexBox direction="Column" style={{ gap: '1rem' }}>
+            <FlexBox alignItems="Center" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+              <Input
+                placeholder="Search by Target, User, details..."
+                value={search}
+                onInput={(e) => { setSearch(e.target.value); setPage(0); }}
+                icon={<Icon name="search" />}
+                style={{ flexGrow: 1, minWidth: '260px' }}
+              />
+
+              <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                <Label>Time Range</Label>
+                <Select
+                  onChange={(e) => { setDateFilter(e.detail.selectedOption.value); setPage(0); }}
+                  style={{ minWidth: '150px' }}
                 >
+                  <Option selected={dateFilter === 'ALL'} value="ALL">All Time</Option>
+                  <Option selected={dateFilter === 'TODAY'} value="TODAY">Today</Option>
+                  <Option selected={dateFilter === 'WEEK'} value="WEEK">Past 7 Days</Option>
+                  <Option selected={dateFilter === 'MONTH'} value="MONTH">Past 30 Days</Option>
+                  <Option selected={dateFilter === 'CUSTOM'} value="CUSTOM">Custom Range...</Option>
+                </Select>
+              </FlexBox>
+
+              {dateFilter === 'CUSTOM' && (
+                <FlexBox style={{ gap: '1rem', alignItems: 'center' }}>
+                  <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                    <Label>Start Date</Label>
+                    <DatePicker
+                      value={startDate ? dayjs(startDate).format('YYYY-MM-DD') : ''}
+                      formatPattern="yyyy-MM-dd"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStartDate(val ? dayjs(val) : null);
+                        setPage(0);
+                      }}
+                      style={{ minWidth: '150px' }}
+                    />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                    <Label>End Date</Label>
+                    <DatePicker
+                      value={endDate ? dayjs(endDate).format('YYYY-MM-DD') : ''}
+                      formatPattern="yyyy-MM-dd"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEndDate(val ? dayjs(val) : null);
+                        setPage(0);
+                      }}
+                      style={{ minWidth: '150px' }}
+                    />
+                  </FlexBox>
+                </FlexBox>
+              )}
+
+              <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                <Label>Action</Label>
+                <Select
+                  onChange={(e) => { setActionFilter(e.detail.selectedOption.value); setPage(0); }}
+                  style={{ minWidth: '150px' }}
+                >
+                  <Option selected={actionFilter === 'ALL'} value="ALL">All Actions</Option>
+                  <Option selected={actionFilter === 'CREATE'} value="CREATE">CREATE</Option>
+                  <Option selected={actionFilter === 'UPDATE'} value="UPDATE">UPDATE</Option>
+                  <Option selected={actionFilter === 'DELETE'} value="DELETE">DELETE</Option>
+                </Select>
+              </FlexBox>
+
+              <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                <Label>Entity Type</Label>
+                <Select
+                  onChange={(e) => { setEntityFilter(e.detail.selectedOption.value); setPage(0); }}
+                  style={{ minWidth: '180px' }}
+                >
+                  <Option selected={entityFilter === 'ALL'} value="ALL">All Entities</Option>
+                  <Option selected={entityFilter === 'Roles'} value="Roles">Roles</Option>
+                  <Option selected={entityFilter === 'RoleAssignments'} value="RoleAssignments">Role Assignments</Option>
+                </Select>
+              </FlexBox>
+            </FlexBox>
+
+            <FlexBox alignItems="Center" justifyContent="SpaceBetween" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+              <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+                <Label>Performed By</Label>
+                <Select
+                  onChange={(e) => { setActorFilter(e.detail.selectedOption.value); setPage(0); }}
+                  style={{ minWidth: '180px' }}
+                >
+                  <Option selected={actorFilter === 'ALL'} value="ALL">All Performers</Option>
+                  {actorsList.map(actor => (
+                    <Option key={actor} selected={actorFilter === actor} value={actor}>{actor}</Option>
+                  ))}
+                </Select>
+              </FlexBox>
+
+              <CheckBox
+                text="Critical Roles Only"
+                checked={criticalFilter}
+                onChange={(e) => { setCriticalFilter(e.target.checked); setPage(0); }}
+              />
+            </FlexBox>
+          </FlexBox>
+        </div>
+      </Card>
+
+      {/* Main Table Card */}
+      <Card>
+        {loading ? (
+          <FlexBox justifyContent="Center" alignItems="Center" style={{ padding: '4rem 0' }}>
+            <BusyIndicator active size="Large" />
+          </FlexBox>
+        ) : error ? (
+          <FlexBox direction="Column" alignItems="Center" style={{ padding: '4rem 0', gap: '1rem' }}>
+            <Icon name="alert" style={{ fontSize: '3rem', color: 'var(--sapNegativeColor)' }} />
+            <Text style={{ color: 'var(--sapNegativeColor)' }}>{error}</Text>
+            <Button onClick={loadLogs}>Try Again</Button>
+          </FlexBox>
+        ) : (
+          <FlexBox direction="Column">
+            <Table
+              headerRow={
+                <TableHeaderRow>
+                  <TableHeaderCell><Text style={{ fontWeight: 600 }}>Entity</Text></TableHeaderCell>
+                  <TableHeaderCell><Text style={{ fontWeight: 600 }}>Subject Identity</Text></TableHeaderCell>
+                  <TableHeaderCell><Text style={{ fontWeight: 600 }}>Action</Text></TableHeaderCell>
+                  <TableHeaderCell><Text style={{ fontWeight: 600 }}>Performed By</Text></TableHeaderCell>
+                  <TableHeaderCell><Text style={{ fontWeight: 600 }}>Timestamp</Text></TableHeaderCell>
+                  <TableHeaderCell style={{ width: '120px', textAlign: 'end' }}><Text style={{ fontWeight: 600 }}>Details</Text></TableHeaderCell>
+                </TableHeaderRow>
+              }
+            >
+              {paginatedLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell style={{ textAlign: 'center' }} colSpan={6}>
+                    <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+                      No audit logs found matching the filters.
+                    </Text>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedLogs.map((log) => (
+                  <TableRow key={log.ID}>
+                    <TableCell>
+                      <Text style={{ fontWeight: 500 }}>
+                        {log.entityName}
+                      </Text>
+                    </TableCell>
+                    <TableCell>
+                      <Text style={{ 
+                        fontFamily: log.targetName ? 'inherit' : 'monospace',
+                        fontWeight: log.targetName ? 500 : 'normal'
+                      }}>
+                        {log.targetName || log.recordId}
+                      </Text>
+                    </TableCell>
+                    <TableCell>
+                      {getActionChip(log.action)}
+                    </TableCell>
+                    <TableCell>
+                      <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+                        {log.createdBy}
+                      </Text>
+                    </TableCell>
+                    <TableCell>
+                      <Text>
+                        {new Date(log.createdAt).toLocaleString()}
+                      </Text>
+                    </TableCell>
+                    <TableCell style={{ textAlign: 'end' }}>
+                      <Button
+                        icon="show"
+                        design="Transparent"
+                        onClick={() => setSelectedLog(log)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </Table>
+
+            <FlexBox
+              alignItems="Center"
+              justifyContent="End"
+              style={{
+                padding: '0.75rem 1rem',
+                gap: '1.5rem',
+                borderTop: '1px solid var(--sapGroup_BorderColor)',
+                flexWrap: 'wrap'
+              }}
+            >
+              <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                <Label>Rows per page:</Label>
+                <Select
+                  onChange={(e) => {
+                    setRowsPerPage(parseInt(e.detail.selectedOption.value, 10));
+                    setPage(0);
+                  }}
+                >
+                  <Option selected={rowsPerPage === 5} value="5">5</Option>
+                  <Option selected={rowsPerPage === 10} value="10">10</Option>
+                  <Option selected={rowsPerPage === 25} value="25">25</Option>
+                  <Option selected={rowsPerPage === 50} value="50">50</Option>
+                </Select>
+              </FlexBox>
+
+              <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
+                {`${page * rowsPerPage + 1}-${Math.min((page + 1) * rowsPerPage, filteredLogs.length)} of ${filteredLogs.length}`}
+              </Text>
+
+              <FlexBox style={{ gap: '0.25rem' }}>
+                <Button
+                  icon="navigation-left-arrow"
+                  design="Transparent"
+                  disabled={page === 0}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                />
+                <Button
+                  icon="navigation-right-arrow"
+                  design="Transparent"
+                  disabled={(page + 1) * rowsPerPage >= filteredLogs.length}
+                  onClick={() => setPage(p => p + 1)}
+                />
+              </FlexBox>
+            </FlexBox>
+          </FlexBox>
+        )}
+      </Card>
+
+      {/* JSON Details Dialog */}
+      <Dialog 
+        open={Boolean(selectedLog)} 
+        onAfterClose={() => setSelectedLog(null)}
+        headerText="Audit Details"
+        style={{ width: '80%', maxWidth: '800px' }}
+      >
+        {selectedLog && (
+          <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <FlexBox direction="Column" style={{ gap: '0.25rem' }}>
+              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)' }}>
+                {selectedLog.entityName} · {selectedLog.action} · {new Date(selectedLog.createdAt).toLocaleString()}
+              </Text>
+              <Text style={{ fontSize: '0.875rem' }}>
+                Audit details for target record ID: <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{selectedLog.recordId}</span>
+              </Text>
+            </FlexBox>
+            
+            <div>
+              {renderDetailsTable(selectedLog)}
+            </div>
+
+            <Bar 
+              design="Footer"
+              endContent={
+                <Button onClick={() => setSelectedLog(null)} design="Emphasized">
                   Close
                 </Button>
-              </DialogActions>
-            </>
-          )}
-        </Dialog>
-      </Box>
-    </LocalizationProvider>
+              }
+              style={{ marginTop: '1rem' }}
+            />
+          </div>
+        )}
+      </Dialog>
+    </div>
   );
 }

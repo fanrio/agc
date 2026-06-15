@@ -1,6 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, CircularProgress, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox } from '@mui/material';
-import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  Card,
+  CardHeader,
+  Text,
+  Button,
+  Input,
+  Dialog,
+  Tag,
+  FlexBox,
+  Icon,
+  Label,
+  BusyIndicator,
+  SegmentedButton,
+  SegmentedButtonItem,
+  Toast
+} from '@ui5/webcomponents-react';
+import '@ui5/webcomponents-icons/dist/AllIcons.js';
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 
@@ -118,152 +133,144 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Card sx={{ ml: depth * 3, p: 2.5, position: 'relative' }}>
-        {/* Card Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: isCompact ? 1.5 : 1.5 }}>
-          {children.length > 0 && !isSearchActive && (
-            <IconButton onClick={() => setExpanded(e => !e)} size="small" sx={{ p: 0, color: 'text.secondary' }}>
-              {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </IconButton>
-          )}
-          <Shield size={16} color={role.type === 'ORG_BASED' ? '#3b82f6' : '#a78bfa'} />
-          <Typography variant="body1" sx={{ fontWeight: 700, fontFamily: 'monospace', flexGrow: 1 }} noWrap>
-            {role.name}
-          </Typography>
-          <Chip
-            label={role.type === 'ORG_BASED' ? 'Org Role' : (role.parentRoles && role.parentRoles.length > 0 ? 'Derived' : 'Single')}
-            size="small"
-            color={role.type === 'ORG_BASED' ? 'primary' : 'secondary'}
-            variant="outlined"
-            sx={{ height: 20, fontSize: 10 }}
+    <FlexBox direction="Column" style={{ gap: '8px' }}>
+      <Card
+        header={
+          <CardHeader
+            titleText={role.name}
+            subtitleText={!isCompact && role.description ? role.description : undefined}
+            avatar={
+              <FlexBox alignItems="Center" style={{ gap: '8px' }}>
+                {children.length > 0 && !isSearchActive && (
+                  <Button
+                    icon={expanded ? "navigation-down-arrow" : "navigation-right-arrow"}
+                    design="Transparent"
+                    onClick={() => setExpanded(e => !e)}
+                    style={{ minWidth: '24px', height: '24px' }}
+                  />
+                )}
+                <Icon name="shield" style={{ color: role.type === 'ORG_BASED' ? 'var(--sapContent_NonInteractiveIconColor)' : '#a78bfa' }} />
+              </FlexBox>
+            }
+            action={
+              <FlexBox style={{ gap: '6px' }}>
+                <Tag design={role.type === 'ORG_BASED' ? "Set8" : (role.parentRoles && role.parentRoles.length > 0 ? "Set6" : "Set1")}>
+                  {role.type === 'ORG_BASED' ? 'Org Role' : (role.parentRoles && role.parentRoles.length > 0 ? 'Derived' : 'Single')}
+                </Tag>
+                {role.critical && (
+                  <Tag design="Set2">
+                    Critical
+                  </Tag>
+                )}
+                {depth > 0 && (
+                  <Tag design="Set1">
+                    {`L${depth}`}
+                  </Tag>
+                )}
+              </FlexBox>
+            }
           />
-          {role.critical && (
-            <Chip
-              label="Critical"
-              size="small"
-              color="error"
-              sx={{ height: 20, fontSize: 10, fontWeight: 600 }}
-            />
+        }
+        style={{
+          marginLeft: `${depth * 24}px`,
+          width: 'auto'
+        }}
+      >
+        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* Own restrictions */}
+          {!isCompact && role.ownRestrictions && role.ownRestrictions.length > 0 && (
+            <FlexBox direction="Column" style={{ gap: '6px' }}>
+              {role.ownRestrictions.map(r => (
+                <RestrictionDisplay key={r.ID} restriction={r} isOwn={true} />
+              ))}
+            </FlexBox>
           )}
-          {depth > 0 && (
-            <Chip
-              label={`L${depth}`}
-              size="small"
-              sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(255,255,255,0.05)', color: 'text.secondary' }}
-            />
+
+          {/* Assigned users */}
+          {!isCompact && role.assignments && role.assignments.length > 0 && (
+            <FlexBox alignItems="Center" style={{ gap: '6px' }}>
+              <Icon name="group" style={{ width: '14px', height: '14px', color: '#94a3b8' }} />
+              <Text style={{ fontSize: '12px', color: 'var(--sapContent_LabelColor)' }}>
+                Assigned: {role.assignments.map(a => a.userName || a.userId).join(', ')}
+              </Text>
+            </FlexBox>
           )}
-        </Box>
 
-        {!isCompact && role.description && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {role.description}
-          </Typography>
-        )}
+          {/* Approvers */}
+          {!isCompact && role.approvers && role.approvers.length > 0 && (
+            <FlexBox alignItems="Center" style={{ gap: '6px' }}>
+              <Icon name="shield" style={{ width: '14px', height: '14px', color: '#a78bfa' }} />
+              <Text style={{ fontSize: '12px', color: '#a78bfa' }}>
+                Approvers: {role.approvers.map(a => a.userName || a.userId).join(', ')}
+              </Text>
+            </FlexBox>
+          )}
 
-        {/* Own restrictions */}
-        {!isCompact && role.ownRestrictions && role.ownRestrictions.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 2 }}>
-            {role.ownRestrictions.map(r => (
-              <RestrictionDisplay key={r.ID} restriction={r} isOwn={true} />
-            ))}
-          </Box>
-        )}
+          {/* Managed Metadata */}
+          {!isCompact && (
+            <FlexBox style={{ gap: '12px', flexWrap: 'wrap', fontSize: '10px', color: 'var(--sapContent_LabelColor)', opacity: 0.8 }}>
+              <div>
+                Created: <span style={{ color: 'var(--sapContent_TextColor)' }}>{formatDateTime(role.createdAt)}</span> by <span style={{ color: 'var(--sapContent_TextColor)' }}>{role.createdBy || 'seed'}</span>
+              </div>
+              {role.modifiedAt && role.modifiedAt !== role.createdAt && (
+                <div>
+                  · Modified: <span style={{ color: 'var(--sapContent_TextColor)' }}>{formatDateTime(role.modifiedAt)}</span> by <span style={{ color: 'var(--sapContent_TextColor)' }}>{role.modifiedBy || 'seed'}</span>
+                </div>
+              )}
+            </FlexBox>
+          )}
 
-        {/* Assigned users */}
-        {!isCompact && role.assignments && role.assignments.length > 0 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Users size={14} color="#94a3b8" />
-            <Typography variant="caption" color="text.secondary">
-              Assigned: {role.assignments.map(a => a.userName || a.userId).join(', ')}
-            </Typography>
-          </Box>
-        )}
+          {/* Action Buttons */}
+          <FlexBox style={{ gap: '8px', flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
+            <Button design="Transparent" onClick={loadEffective} disabled={loading} icon="show">
+              {showEffective ? 'Hide' : 'View'} Effective
+            </Button>
+            <Button 
+              design="Transparent" 
+              onClick={() => onEdit(role.ID)} 
+              disabled={permissions && (
+                role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
+                (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
+              )}
+              icon="edit"
+            >
+              Edit
+            </Button>
+            <Button 
+              design="Transparent" 
+              onClick={() => onDerive(role.ID)} 
+              disabled={permissions && !permissions.canManageDerivedRoles}
+              icon="org-chart"
+            >
+              Derive Child Role
+            </Button>
+            <Button
+              design="Emphasized"
+              onClick={() => onAssign(role)}
+              disabled={(permissions && !permissions.canAssignRoles) || !hasAnyRestrictions(role, allRoles)}
+              icon="group"
+            >
+              Assign User
+            </Button>
+            <Button 
+              design="Transparent"
+              onClick={handleDelete} 
+              disabled={loading || (permissions && (
+                role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
+                (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
+              ))} 
+              icon="delete"
+              style={{ marginLeft: 'auto', color: 'var(--sapNegativeElementColor)' }}
+            />
+          </FlexBox>
 
-        {/* Approvers */}
-        {!isCompact && role.approvers && role.approvers.length > 0 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Shield size={14} color="#a78bfa" />
-            <Typography variant="caption" sx={{ color: '#a78bfa' }}>
-              Approvers: {role.approvers.map(a => a.userName || a.userId).join(', ')}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Managed Metadata */}
-        {!isCompact && (
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2, fontSize: 10, color: 'text.secondary', opacity: 0.8 }}>
-            <Box>
-              Created: <Box component="span" sx={{ color: 'text.primary' }}>{formatDateTime(role.createdAt)}</Box> by <Box component="span" sx={{ color: 'text.primary' }}>{role.createdBy || 'seed'}</Box>
-            </Box>
-            {role.modifiedAt && role.modifiedAt !== role.createdAt && (
-              <Box>
-                · Modified: <Box component="span" sx={{ color: 'text.primary' }}>{formatDateTime(role.modifiedAt)}</Box> by <Box component="span" sx={{ color: 'text.primary' }}>{role.modifiedBy || 'seed'}</Box>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {/* Action Buttons */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Button size="small" variant="text" color="inherit" onClick={loadEffective} disabled={loading} startIcon={<Eye size={13} />}>
-            {showEffective ? 'Hide' : 'View'} Effective
-          </Button>
-          <Button 
-            size="small" 
-            variant="text" 
-            color="primary" 
-            onClick={() => onEdit(role.ID)} 
-            disabled={permissions && (
-              role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-              (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
-            )}
-            startIcon={<Edit3 size={13} />}
-          >
-            Edit
-          </Button>
-          <Button 
-            size="small" 
-            variant="outlined" 
-            color="secondary" 
-            onClick={() => onDerive(role.ID)} 
-            disabled={permissions && !permissions.canManageDerivedRoles}
-            startIcon={<GitBranch size={13} />}
-          >
-            Derive Child Role
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            onClick={() => onAssign(role)}
-            disabled={(permissions && !permissions.canAssignRoles) || !hasAnyRestrictions(role, allRoles)}
-            startIcon={<Users size={13} />}
-          >
-            Assign User
-          </Button>
-          <IconButton 
-            size="small" 
-            color="error" 
-            onClick={handleDelete} 
-            disabled={loading || (permissions && (
-              role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-              (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
-            ))} 
-            sx={{ ml: 'auto' }}
-          >
-            <Trash2 size={15} />
-          </IconButton>
-        </Box>
-
-        {/* Effective Restrictions Collapse */}
-        <Collapse in={showEffective}>
-          {effective && (
-            <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', mb: 1.5, color: 'text.secondary' }}>
+          {/* Effective Restrictions Collapse (conditional rendering) */}
+          {showEffective && effective && (
+            <div style={{ marginTop: '8px', paddingTop: '12px', borderTop: '1px solid var(--sapGroup_TitleBorderColor)' }}>
+              <Text style={{ textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: '8px', color: 'var(--sapContent_LabelColor)', fontSize: '11px' }}>
                 Effective Restriction Chain ({effective.length} total)
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+              </Text>
+              <FlexBox direction="Column" style={{ gap: '6px' }}>
                 {effective.map((r, i) => (
                   <RestrictionDisplay
                     key={i}
@@ -271,10 +278,10 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
                     isOwn={r.isOwn}
                   />
                 ))}
-              </Box>
-            </Box>
+              </FlexBox>
+            </div>
           )}
-        </Collapse>
+        </div>
       </Card>
 
       {/* Children */}
@@ -296,10 +303,9 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
           permissions={permissions}
         />
       ))}
-    </Box>
+    </FlexBox>
   );
 }
-
 
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter, permissions }) {
   const [roles, setRoles]     = useState([]);
@@ -307,12 +313,14 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
+  const toastRef = useRef(null);
 
   useEffect(() => {
     if (initialFilter) {
       setHealthFilter(initialFilter);
     }
   }, [initialFilter]);
+
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
   // Toggle representation states ('compact' or 'detailed')
@@ -323,9 +331,18 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [assignForm, setAssignForm] = useState({ userId: '', userName: '' });
   const [assigningLoading, setAssigningLoading] = useState(false);
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
+  useEffect(() => {
+    if (snackbar.open && toastRef.current) {
+      toastRef.current.show();
+      const timer = setTimeout(() => {
+        setSnackbar(prev => ({ ...prev, open: false }));
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [snackbar.open]);
+
+  const showNotification = (msg, severity = 'error') => {
+    setSnackbar({ open: true, message: msg, severity });
   };
 
   async function load() {
@@ -352,12 +369,12 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         userName: assignForm.userName.trim() || assignForm.userId.trim(),
         role_ID: assigningRole.ID
       });
-      setSnackbar({ open: true, message: `Successfully assigned role "${assigningRole.name}" to ${assignForm.userId}`, severity: 'success' });
+      showNotification(`Successfully assigned role "${assigningRole.name}" to ${assignForm.userId}`, 'success');
       setAssigningRole(null);
       setAssignForm({ userId: '', userName: '' });
       await load();
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showNotification(e.message, 'error');
     }
     setAssigningLoading(false);
   }
@@ -397,87 +414,83 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const rootRoles = roles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
 
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Roles & Authorizations</Typography>
-          <Typography variant="body2" color="text.secondary">Visual inheritance tree of all Org-Based, Single, and Derived roles</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ animation: 'fadeIn 0.3s', padding: '16px' }}>
+      <FlexBox justifyContent="SpaceBetween" alignItems="Center" style={{ flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+        <div>
+          <Text style={{ fontSize: '24px', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Roles & Authorizations</Text>
+          <Text style={{ color: 'var(--sapContent_LabelColor)' }}>Visual inheritance tree of all Org-Based, Single, and Derived roles</Text>
+        </div>
+        <FlexBox alignItems="Center" style={{ gap: '12px', flexWrap: 'wrap' }}>
           {healthFilter && (
-            <Chip
-              label={
-                healthFilter === 'unrestricted' ? 'Unrestricted Roles' :
-                healthFilter === 'no-users' ? 'Roles with No Users' :
-                healthFilter === 'no-approver' ? 'Roles with No Approver' : 
-                healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'
-              }
-              onDelete={() => {
-                setHealthFilter(null);
-                if (setInitialFilter) setInitialFilter(null);
-              }}
-              color="primary"
-              variant="outlined"
-            />
+            <Tag design="Set8" style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px' }}>
+              {healthFilter === 'unrestricted' ? 'Unrestricted Roles' :
+               healthFilter === 'no-users' ? 'Roles with No Users' :
+               healthFilter === 'no-approver' ? 'Roles with No Approver' : 
+               healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'}
+              <Icon 
+                name="decline" 
+                style={{ cursor: 'pointer', width: '12px', height: '12px' }} 
+                onClick={() => {
+                  setHealthFilter(null);
+                  if (setInitialFilter) setInitialFilter(null);
+                }}
+              />
+            </Tag>
           )}
-          <TextField
-            size="small"
+          <Input
             placeholder="Search roles or restrictions…"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            sx={{ width: 260 }}
+            onInput={e => setSearchQuery(e.target.value)}
+            style={{ width: '260px' }}
+            icon={<Icon name="search" />}
           />
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={(e, val) => { if (val !== null) setViewMode(val); }}
-            size="small"
-            sx={{ height: 38 }}
+          <SegmentedButton
+            onSelectionChange={(e) => {
+              const selectedItem = e.detail.selectedItem;
+              const val = selectedItem.getAttribute('data-value');
+              if (val) setViewMode(val);
+            }}
           >
-            <ToggleButton value="compact" sx={{ textTransform: 'none', fontWeight: 600, px: 2 }}>
+            <SegmentedButtonItem data-value="compact" selected={viewMode === 'compact'}>
               Compact
-            </ToggleButton>
-            <ToggleButton value="detailed" sx={{ textTransform: 'none', fontWeight: 600, px: 2 }}>
+            </SegmentedButtonItem>
+            <SegmentedButtonItem data-value="detailed" selected={viewMode === 'detailed'}>
               Detailed
-            </ToggleButton>
-          </ToggleButtonGroup>
+            </SegmentedButtonItem>
+          </SegmentedButton>
           <Button 
-            variant="contained" 
-            color="primary" 
+            design="Emphasized" 
             onClick={onCreateRole} 
             disabled={permissions && !permissions.canManageSingleRoles && !permissions.canManageOrgRoles}
-            startIcon={<Plus size={15} />}
+            icon="add"
           >
             Create Role
           </Button>
-        </Box>
-      </Box>
+        </FlexBox>
+      </FlexBox>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+      <Toast ref={toastRef} duration={6000}>
+        {snackbar.severity === 'error' ? 'Error: ' : ''}{snackbar.message}
+      </Toast>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={40} /></Box>
+        <FlexBox justifyContent="Center" style={{ padding: '64px' }}>
+          <BusyIndicator active size="Large" />
+        </FlexBox>
       ) : rootRoles.length === 0 ? (
-        <Card sx={{ py: 8, textAlign: 'center' }}>
-          <Box sx={{ opacity: 0.5, mb: 2 }}><Shield size={40} /></Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No roles yet</Typography>
-          <Typography variant="body2" color="text.secondary">Generate an Org Role from the Org Structure view, or create a new role in the wizard.</Typography>
+        <Card style={{ padding: '64px', textAlign: 'center' }}>
+          <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ gap: '16px' }}>
+            <Icon name="shield" style={{ width: '40px', height: '40px', opacity: 0.5 }} />
+            <Text style={{ fontWeight: 'bold', fontSize: '16px' }}>No roles yet</Text>
+            <Text style={{ color: 'var(--sapContent_LabelColor)' }}>Generate an Org Role from the Org Structure view, or create a new role in the wizard.</Text>
+          </FlexBox>
         </Card>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <FlexBox direction="Column" style={{ gap: '20px' }}>
           {isFilterActive ? (
             filteredRoles.length === 0 ? (
-              <Card sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No matching roles or restrictions found.</Typography>
+              <Card style={{ padding: '32px', textAlign: 'center' }}>
+                <Text style={{ color: 'var(--sapContent_LabelColor)' }}>No matching roles or restrictions found.</Text>
               </Card>
             ) : (
               filteredRoles.map(r => (
@@ -491,7 +504,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                   onEdit={onEditRole}
                   onRefresh={load}
                   isSearchActive={true}
-                  onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
+                  onError={msg => showNotification(msg, 'error')}
                   onAssign={setAssigningRole}
                   isCompact={viewMode === 'compact'}
                   permissions={permissions}
@@ -509,53 +522,55 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                 onDerive={onDeriveRole}
                 onEdit={onEditRole}
                 onRefresh={load}
-                onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
+                onError={msg => showNotification(msg, 'error')}
                 onAssign={setAssigningRole}
                 isCompact={viewMode === 'compact'}
                 permissions={permissions}
               />
             ))
           )}
-        </Box>
+        </FlexBox>
       )}
 
       {/* Assign User Dialog */}
-      <Dialog open={Boolean(assigningRole)} onClose={() => { if (!assigningLoading) setAssigningRole(null); }} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 700 }}>Assign User to Role</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+      <Dialog 
+        open={Boolean(assigningRole)} 
+        headerText="Assign User to Role"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', width: '100%', padding: '12px 16px' }}>
+            <Button design="Transparent" onClick={() => setAssigningRole(null)} disabled={assigningLoading}>
+              Cancel
+            </Button>
+            <Button design="Emphasized" onClick={handleAssignSubmit} disabled={assigningLoading || !assignForm.userId.trim()}>
+              {assigningLoading ? 'Assigning...' : 'Assign'}
+            </Button>
+          </div>
+        }
+      >
+        <FlexBox direction="Column" style={{ gap: '16px', padding: '16px', minWidth: '320px' }}>
+          <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
             Assign role <strong>{assigningRole?.name}</strong> to a user or group.
-          </Typography>
-          <TextField
-            label="User ID / Group ID"
-            fullWidth
-            required
-            size="small"
-            placeholder="e.g. US12345"
-            value={assignForm.userId}
-            onChange={e => setAssignForm(prev => ({ ...prev, userId: e.target.value }))}
-            disabled={assigningLoading}
-            sx={{ mt: 1 }}
-          />
-          <TextField
-            label="User Name"
-            fullWidth
-            size="small"
-            placeholder="e.g. John Doe"
-            value={assignForm.userName}
-            onChange={e => setAssignForm(prev => ({ ...prev, userName: e.target.value }))}
-            disabled={assigningLoading}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
-          <Button onClick={() => setAssigningRole(null)} disabled={assigningLoading} color="inherit">
-            Cancel
-          </Button>
-          <Button onClick={handleAssignSubmit} disabled={assigningLoading || !assignForm.userId.trim()} variant="contained" color="primary">
-            {assigningLoading ? 'Assigning...' : 'Assign'}
-          </Button>
-        </DialogActions>
+          </Text>
+          <FlexBox direction="Column" style={{ gap: '4px' }}>
+            <Label required>User ID / Group ID</Label>
+            <Input
+              placeholder="e.g. US12345"
+              value={assignForm.userId}
+              onInput={e => setAssignForm(prev => ({ ...prev, userId: e.target.value }))}
+              disabled={assigningLoading}
+            />
+          </FlexBox>
+          <FlexBox direction="Column" style={{ gap: '4px' }}>
+            <Label>User Name</Label>
+            <Input
+              placeholder="e.g. John Doe"
+              value={assignForm.userName}
+              onInput={e => setAssignForm(prev => ({ ...prev, userName: e.target.value }))}
+              disabled={assigningLoading}
+            />
+          </FlexBox>
+        </FlexBox>
       </Dialog>
-    </Box>
+    </div>
   );
 }

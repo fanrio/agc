@@ -1,6 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Box, Card, Typography, FormControl, InputLabel, Select, MenuItem, TextField, Button, CircularProgress, Alert, Grid, Paper, Tooltip, IconButton } from '@mui/material';
-import { Play, Copy, Check, Terminal, Server, ShieldCheck } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  FlexBox, 
+  Card, 
+  CardHeader, 
+  Title, 
+  Label, 
+  Select, 
+  Option, 
+  Input, 
+  Button, 
+  BusyIndicator, 
+  MessageStrip, 
+  Icon,
+  Toast 
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/play.js";
+import "@ui5/webcomponents-icons/dist/copy.js";
+import "@ui5/webcomponents-icons/dist/accept.js";
+import "@ui5/webcomponents-icons/dist/database.js";
+import "@ui5/webcomponents-icons/dist/shield.js";
+import "@ui5/webcomponents-icons/dist/sys-help.js";
+import "@ui5/webcomponents-icons/dist/message-information.js";
+import "@ui5/webcomponents-icons/dist/action-settings.js";
 import * as api from '../api';
 
 export default function BdcApiTesterView() {
@@ -18,7 +39,8 @@ export default function BdcApiTesterView() {
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState('');
-  const [copied, setCopied] = useState(false);
+
+  const toastRef = useRef(null);
 
   useEffect(() => {
     api.getBdcSettings()
@@ -60,8 +82,7 @@ export default function BdcApiTesterView() {
   const handleCopy = () => {
     if (!output) return;
     navigator.clipboard.writeText(output);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    toastRef.current?.show();
   };
 
   const handleExecute = async () => {
@@ -118,181 +139,200 @@ export default function BdcApiTesterView() {
   const showTaskChainFields = selectedApi === 'RUN_TASK_CHAIN';
 
   return (
-    <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Terminal size={14} color="#3b82f6" />
+    <FlexBox direction="Column" style={{ width: '100%', padding: '1rem', boxSizing: 'border-box' }}>
+      <Toast ref={toastRef}>Raw Payload Copied to Clipboard!</Toast>
+      
+      <FlexBox alignItems="Center" style={{ gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <Icon name="message-information" style={{ color: '#3b82f6' }} />
+        <Label style={{ fontSize: '0.9rem' }}>
           Test SAP Datasphere APIs and view raw payloads without any filtering or transformations.
-        </Typography>
-      </Box>
+        </Label>
+      </FlexBox>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3, border: '1px solid rgba(239, 68, 68, 0.2)', bgcolor: 'rgba(239, 68, 68, 0.05)' }}>
+        <MessageStrip design="Negative" style={{ marginBottom: '1.5rem', width: '100%' }}>
           {error}
-        </Alert>
+        </MessageStrip>
       )}
 
-      <Grid container spacing={3}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', width: '100%' }}>
+        
         {/* API Selection Panel */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <Server size={15} color="#a78bfa" />
-              API Test Suite Settings
-            </Typography>
-
+        <Card 
+          header={
+            <CardHeader 
+              titleText="API Test Suite Settings" 
+              avatar={<Icon name="database" style={{ color: '#a78bfa' }} />} 
+            />
+          }
+          style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}
+        >
+          <FlexBox direction="Column" style={{ gap: '1.2rem', width: '100%', boxSizing: 'border-box' }}>
             {loadingConns ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                <CircularProgress size={20} />
-              </Box>
+              <FlexBox style={{ width: '100%', justifyContent: 'center', padding: '1rem 0' }}>
+                <BusyIndicator active size="S" />
+              </FlexBox>
             ) : (
-              <FormControl size="small" fullWidth>
-                <InputLabel id="tester-conn-label">Target BDC Connection</InputLabel>
+              <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+                <Label showColon>Target BDC Connection</Label>
                 <Select
-                  labelId="tester-conn-label"
-                  label="Target BDC Connection"
-                  value={selectedConnId}
-                  onChange={e => setSelectedConnId(e.target.value)}
+                  onChange={e => setSelectedConnId(e.detail.selectedOption.value)}
+                  style={{ width: '100%' }}
                 >
                   {connections.map(c => (
-                    <MenuItem key={c.ID} value={c.ID}>
+                    <Option key={c.ID} value={c.ID} selected={c.ID === selectedConnId}>
                       {c.systemName}
-                    </MenuItem>
+                    </Option>
                   ))}
                   {connections.length === 0 && (
-                    <MenuItem value="" disabled>No connections configured</MenuItem>
+                    <Option value="" disabled selected>No connections configured</Option>
                   )}
                 </Select>
-              </FormControl>
+              </FlexBox>
             )}
 
-            <FormControl size="small" fullWidth>
-              <InputLabel id="tester-api-label">Select API Endpoint</InputLabel>
+            <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+              <Label showColon>Select API Endpoint</Label>
               <Select
-                labelId="tester-api-label"
-                label="Select API Endpoint"
-                value={selectedApi}
-                onChange={e => setSelectedApi(e.target.value)}
+                onChange={e => setSelectedApi(e.detail.selectedOption.value)}
+                style={{ width: '100%' }}
               >
                 {isHana ? (
-                  <MenuItem value="HANA_VIEWS">fetchRawHanaViews (List Database Views)</MenuItem>
+                  <Option value="HANA_VIEWS" selected={selectedApi === 'HANA_VIEWS'}>
+                    fetchRawHanaViews (List Database Views)
+                  </Option>
                 ) : (
                   [
-                    <MenuItem key="SPACES" value="SPACES">fetchRawBdcSpaces (Spaces Catalog)</MenuItem>,
-                    <MenuItem key="ASSETS" value="ASSETS">fetchRawBdcAssets (Assets Catalog)</MenuItem>,
-                    <MenuItem key="VALUES" value="VALUES">fetchRawBdcRelationalValues (Relational Data)</MenuItem>,
-                    <MenuItem key="COLUMNS" value="COLUMNS">fetchRawBdcAssetColumns ($metadata XML Schema)</MenuItem>,
-                    <MenuItem key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN">runBdcTaskChain (Start Task Chain Run)</MenuItem>
+                    <Option key="SPACES" value="SPACES" selected={selectedApi === 'SPACES'}>
+                      fetchRawBdcSpaces (Spaces Catalog)
+                    </Option>,
+                    <Option key="ASSETS" value="ASSETS" selected={selectedApi === 'ASSETS'}>
+                      fetchRawBdcAssets (Assets Catalog)
+                    </Option>,
+                    <Option key="VALUES" value="VALUES" selected={selectedApi === 'VALUES'}>
+                      fetchRawBdcRelationalValues (Relational Data)
+                    </Option>,
+                    <Option key="COLUMNS" value="COLUMNS" selected={selectedApi === 'COLUMNS'}>
+                      fetchRawBdcAssetColumns ($metadata XML Schema)
+                    </Option>,
+                    <Option key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN" selected={selectedApi === 'RUN_TASK_CHAIN'}>
+                      runBdcTaskChain (Start Task Chain Run)
+                    </Option>
                   ]
                 )}
               </Select>
-            </FormControl>
+            </FlexBox>
 
             {showSpaceAssetFields && (
               <>
-                <TextField
-                  label="Space ID"
-                  size="small"
-                  fullWidth
-                  placeholder="e.g. HH_SAP"
-                  value={spaceInput}
-                  onChange={e => setSpaceInput(e.target.value)}
-                />
-                <TextField
-                  label="Asset ID (View/Table)"
-                  size="small"
-                  fullWidth
-                  placeholder="e.g. VDIM_Place"
-                  value={assetInput}
-                  onChange={e => setAssetInput(e.target.value)}
-                />
+                <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+                  <Label showColon>Space ID</Label>
+                  <Input
+                    placeholder="e.g. HH_SAP"
+                    value={spaceInput}
+                    onInput={e => setSpaceInput(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </FlexBox>
+                <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+                  <Label showColon>Asset ID (View/Table)</Label>
+                  <Input
+                    placeholder="e.g. VDIM_Place"
+                    value={assetInput}
+                    onInput={e => setAssetInput(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </FlexBox>
               </>
             )}
 
             {showTaskChainFields && (
               <>
-                <TextField
-                  label="Space ID"
-                  size="small"
-                  fullWidth
-                  placeholder="e.g. HH_SAP"
-                  value={spaceInput}
-                  onChange={e => setSpaceInput(e.target.value)}
-                />
-                <TextField
-                  label="Task Chain ID"
-                  size="small"
-                  fullWidth
-                  placeholder="e.g. df_authorization_flat"
-                  value={taskChainInput}
-                  onChange={e => setTaskChainInput(e.target.value)}
-                />
+                <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+                  <Label showColon>Space ID</Label>
+                  <Input
+                    placeholder="e.g. HH_SAP"
+                    value={spaceInput}
+                    onInput={e => setSpaceInput(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </FlexBox>
+                <FlexBox direction="Column" style={{ gap: '0.4rem', width: '100%' }}>
+                  <Label showColon>Task Chain ID</Label>
+                  <Input
+                    placeholder="e.g. df_authorization_flat"
+                    value={taskChainInput}
+                    onInput={e => setTaskChainInput(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </FlexBox>
               </>
             )}
 
             <Button
-              variant="contained"
+              design="Emphasized"
               onClick={handleExecute}
               disabled={executing || loadingConns || connections.length === 0}
-              startIcon={executing ? <CircularProgress size={14} color="inherit" /> : <Play size={14} />}
-              fullWidth
-              sx={{ mt: 1 }}
+              icon={executing ? undefined : "play"}
+              style={{ width: '100%', marginTop: '0.5rem' }}
             >
               {executing ? 'Requesting...' : 'Execute API Request'}
             </Button>
-          </Card>
-        </Grid>
+          </FlexBox>
+        </Card>
 
         {/* Live Payload Output Panel */}
-        <Grid item xs={12} md={8}>
-          <Card sx={{ p: 3, minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShieldCheck size={15} color="#10b981" />
-                Raw Datasphere Response Payload
-              </Typography>
-              {output && (
-                <Tooltip title={copied ? "Copied!" : "Copy Raw Payload"}>
-                  <IconButton size="small" onClick={handleCopy} color={copied ? "success" : "inherit"}>
-                    {copied ? <Check size={15} /> : <Copy size={15} />}
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-
-            <Paper
-              sx={{
-                flexGrow: 1,
-                bgcolor: '#060913',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                p: 2,
-                overflow: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                maxHeight: 500
-              }}
-            >
-              {executing ? (
-                <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 1.5, opacity: 0.7 }}>
-                  <CircularProgress size={30} />
-                  <Typography variant="caption" color="text.secondary">Fetching live payload from Datasphere Cloud Gateway...</Typography>
-                </Box>
-              ) : output ? (
-                <pre style={{ margin: 0, fontFamily: 'Consolas, monospace', fontSize: 13, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                  {output}
-                </pre>
-              ) : (
-                <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', opacity: 0.4, py: 4 }}>
-                  <Terminal size={35} />
-                  <Typography variant="caption" sx={{ mt: 1 }}>Execute an API request to view raw response payload.</Typography>
-                </Box>
-              )}
-            </Paper>
-          </Card>
-        </Grid>
-      </Grid>
-    </Box>
+        <Card
+          header={
+            <CardHeader 
+              titleText="Raw Datasphere Response Payload" 
+              avatar={<Icon name="shield" style={{ color: '#10b981' }} />}
+              action={
+                output ? (
+                  <Button 
+                    icon="copy" 
+                    design="Transparent"
+                    onClick={handleCopy} 
+                    tooltip="Copy Raw Payload" 
+                  />
+                ) : null
+              }
+            />
+          }
+          style={{ padding: '1.5rem', minHeight: '400px', display: 'flex', flexDirection: 'column' }}
+        >
+          <div
+            style={{
+              flexGrow: 1,
+              backgroundColor: '#060913',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              padding: '1rem',
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: '500px',
+              boxSizing: 'border-box'
+            }}
+          >
+            {executing ? (
+              <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ flexGrow: 1, gap: '1rem', opacity: 0.7, padding: '2rem 0' }}>
+                <BusyIndicator active size="M" />
+                <Label style={{ color: '#e2e8f0' }}>Fetching live payload from Datasphere Cloud Gateway...</Label>
+              </FlexBox>
+            ) : output ? (
+              <pre style={{ margin: 0, fontFamily: 'Consolas, monospace', fontSize: '13px', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {output}
+              </pre>
+            ) : (
+              <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ flexGrow: 1, opacity: 0.4, padding: '4rem 0', gap: '0.5rem' }}>
+                <Icon name="action-settings" style={{ fontSize: '2rem', color: '#e2e8f0' }} />
+                <Label style={{ color: '#e2e8f0' }}>Execute an API request to view raw response payload.</Label>
+              </FlexBox>
+            )}
+          </div>
+        </Card>
+      </div>
+    </FlexBox>
   );
 }

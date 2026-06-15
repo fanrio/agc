@@ -1,6 +1,28 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip } from '@mui/material';
-import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  FlexBox, 
+  Card, 
+  CardHeader, 
+  Title, 
+  Label, 
+  Button, 
+  Input, 
+  Select, 
+  Option, 
+  CheckBox, 
+  Tag, 
+  BusyIndicator, 
+  MessageStrip, 
+  Icon, 
+  Toast 
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/add.js";
+import "@ui5/webcomponents-icons/dist/delete.js";
+import "@ui5/webcomponents-icons/dist/edit.js";
+import "@ui5/webcomponents-icons/dist/accept.js";
+import "@ui5/webcomponents-icons/dist/decline.js";
+import "@ui5/webcomponents-icons/dist/cloud.js";
+import "@ui5/webcomponents-icons/dist/connected.js";
 import * as api from '../api';
 
 export default function BdcSettingsView() {
@@ -10,7 +32,13 @@ export default function BdcSettingsView() {
   const [editingId, setEditingId] = useState(null);
   
   // State for Toast Notifications
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [toastMessage, setToastMessage] = useState('');
+  const toastRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    toastRef.current?.show();
+  };
 
   const [fetchedSpaces, setFetchedSpaces] = useState([]);
   const [fetchingSpaces, setFetchingSpaces] = useState(false);
@@ -52,18 +80,13 @@ export default function BdcSettingsView() {
     isActive: true
   });
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
-
   async function load() {
     setLoading(true);
     try {
       const data = await api.getBdcSettings();
       setSettings(data);
     } catch (e) {
-      setSnackbar({ open: true, message: `Failed to load settings: ${e.message}`, severity: 'error' });
+      showToast(`Failed to load settings: ${e.message}`);
     }
     setLoading(false);
   }
@@ -112,7 +135,7 @@ export default function BdcSettingsView() {
     const f = isEdit ? editForm : form;
     if (!f.url.trim() || !f.tokenUrl.trim() || !f.clientId.trim() || !f.clientSecret.trim()) {
       if (!isAuto) {
-        setSnackbar({ open: true, message: 'Please fill out Basis URL, Token URL, Client ID, and Client Secret first.', severity: 'warning' });
+        showToast('Please fill out Basis URL, Token URL, Client ID, and Client Secret first.');
       }
       return;
     }
@@ -121,11 +144,11 @@ export default function BdcSettingsView() {
       const spaces = await api.fetchBdcSpaces(f.url, f.tokenUrl, f.clientId, f.clientSecret);
       setFetchedSpaces(spaces);
       if (!isAuto) {
-        setSnackbar({ open: true, message: `Successfully loaded ${spaces.length} spaces.`, severity: 'success' });
+        showToast(`Successfully loaded ${spaces.length} spaces.`);
       }
     } catch (e) {
       if (!isAuto) {
-        setSnackbar({ open: true, message: `Failed to load spaces: ${e.message}`, severity: 'error' });
+        showToast(`Failed to load spaces: ${e.message}`);
       }
     }
     setFetchingSpaces(false);
@@ -134,7 +157,7 @@ export default function BdcSettingsView() {
   async function handleCreate() {
     const err = validate(form);
     if (err) {
-      setSnackbar({ open: true, message: err, severity: 'error' });
+      showToast(err);
       return;
     }
 
@@ -183,15 +206,15 @@ export default function BdcSettingsView() {
       if (payload.connectionType === 'SAP Hana' && created && created.ID) {
         const testRes = await api.testBdcConnection(created.ID);
         if (testRes && testRes.success) {
-          setSnackbar({ open: true, message: `HANA connection saved and verified successfully: ${testRes.message}`, severity: 'success' });
+          showToast(`HANA connection saved and verified successfully: ${testRes.message}`);
         } else {
-          setSnackbar({ open: true, message: `HANA connection saved, but verification failed: ${testRes ? testRes.message : 'Unknown error'}`, severity: 'warning' });
+          showToast(`HANA connection saved, but verification failed: ${testRes ? testRes.message : 'Unknown error'}`);
         }
       } else {
-        setSnackbar({ open: true, message: 'BDC Connection setting created successfully!', severity: 'success' });
+        showToast('BDC Connection setting created successfully!');
       }
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
@@ -199,7 +222,7 @@ export default function BdcSettingsView() {
   async function handleUpdate(id) {
     const err = validate(editForm);
     if (err) {
-      setSnackbar({ open: true, message: err, severity: 'error' });
+      showToast(err);
       return;
     }
 
@@ -230,15 +253,15 @@ export default function BdcSettingsView() {
       if (payload.connectionType === 'SAP Hana') {
         const testRes = await api.testBdcConnection(id);
         if (testRes && testRes.success) {
-          setSnackbar({ open: true, message: `HANA connection updated and verified successfully: ${testRes.message}`, severity: 'success' });
+          showToast(`HANA connection updated and verified successfully: ${testRes.message}`);
         } else {
-          setSnackbar({ open: true, message: `HANA connection updated, but verification failed: ${testRes ? testRes.message : 'Unknown error'}`, severity: 'warning' });
+          showToast(`HANA connection updated, but verification failed: ${testRes ? testRes.message : 'Unknown error'}`);
         }
       } else {
-        setSnackbar({ open: true, message: 'BDC Connection setting updated successfully!', severity: 'success' });
+        showToast('BDC Connection setting updated successfully!');
       }
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
@@ -249,24 +272,24 @@ export default function BdcSettingsView() {
     try {
       await api.deleteBdcSetting(id);
       await load();
-      setSnackbar({ open: true, message: 'Connection setting deleted.', severity: 'info' });
+      showToast('Connection setting deleted.');
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
 
   async function handleTestConnection(id) {
-    setSnackbar({ open: true, message: 'Testing connection...', severity: 'info' });
+    showToast('Testing connection...');
     try {
       const res = await api.testBdcConnection(id);
       if (res.success) {
-        setSnackbar({ open: true, message: res.message, severity: 'success' });
+        showToast(res.message);
       } else {
-        setSnackbar({ open: true, message: res.message, severity: 'error' });
+        showToast(res.message);
       }
     } catch (e) {
-      setSnackbar({ open: true, message: `Connection test failed: ${e.message}`, severity: 'error' });
+      showToast(`Connection test failed: ${e.message}`);
     }
   }
 
@@ -297,365 +320,325 @@ export default function BdcSettingsView() {
   }
 
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s' }}>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+    <FlexBox direction="Column" style={{ width: '100%', gap: '1rem', padding: '1rem', boxSizing: 'border-box' }}>
+      <Toast ref={toastRef}>{toastMessage}</Toast>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Business Data Cloud Connections</Typography>
-          <Typography variant="body2" color="text.secondary">Configure BDC system connection parameters, credentials, and catalog space integrations</Typography>
-        </Box>
-        <Button variant="contained" onClick={() => { setShowAdd(s => !s); }} startIcon={<Plus size={15} />}>
+      <FlexBox justifySelf="Spread" alignItems="Center" style={{ width: '100%', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <FlexBox direction="Column">
+          <Title level="H3">Business Data Cloud Connections</Title>
+          <Label>Configure BDC system connection parameters, credentials, and catalog space integrations</Label>
+        </FlexBox>
+        <Button design="Emphasized" icon="add" onClick={() => { setShowAdd(s => !s); }}>
           Add Connection
         </Button>
-      </Box>
+      </FlexBox>
 
       {/* Add New Connection Form */}
-      <Collapse in={showAdd}>
-        <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New System Connection</Typography>
-          <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6}>
-              <TextField label="System Connection Name" size="small" fullWidth placeholder="e.g. Datasphere Production" value={form.systemName} onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl size="small" fullWidth>
-                <InputLabel id="add-conn-type-label">Connection Type</InputLabel>
-                <Select
-                  labelId="add-conn-type-label"
-                  label="Connection Type"
-                  value={form.connectionType}
-                  onChange={e => setForm(f => ({ ...f, connectionType: e.target.value }))}
-                >
-                  <MenuItem value="OData">OData (REST Catalog)</MenuItem>
-                  <MenuItem value="SAP Hana">SAP Hana (Direct DB)</MenuItem>
+      {showAdd && (
+        <Card style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+          <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+            <Title level="H5">New System Connection</Title>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', width: '100%' }}>
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>System Connection Name</Label>
+                <Input placeholder="e.g. Datasphere Production" value={form.systemName} onInput={e => setForm(f => ({ ...f, systemName: e.target.value }))} style={{ width: '100%' }} />
+              </FlexBox>
+              
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>Connection Type</Label>
+                <Select onChange={e => setForm(f => ({ ...f, connectionType: e.detail.selectedOption.value }))} style={{ width: '100%' }}>
+                  <Option value="OData" selected={form.connectionType === 'OData'}>OData (REST Catalog)</Option>
+                  <Option value="SAP Hana" selected={form.connectionType === 'SAP Hana'}>SAP Hana (Direct DB)</Option>
                 </Select>
-              </FormControl>
-            </Grid>
+              </FlexBox>
 
-            {form.connectionType === 'SAP Hana' ? (
-              /* HANA FIELDS */
-              <>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Hostname" size="small" fullWidth placeholder="e.g. host.company.com" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Port" type="number" size="small" fullWidth value={form.port} onChange={e => setForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="User" size="small" fullWidth value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Password" type="password" size="small" fullWidth value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-                </Grid>
-              </>
-            ) : (
-              /* ODATA FIELDS */
-              <>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Basis URL" size="small" fullWidth placeholder="https://port-xxxx.datasphere.cloud.sap" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Token URL" size="small" fullWidth placeholder="https://oauth.datasphere.cloud.sap/oauth/token" value={form.tokenUrl} onChange={e => setForm(f => ({ ...f, tokenUrl: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Client ID" size="small" fullWidth value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Client Secret" type="password" size="small" fullWidth value={form.clientSecret} onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={8}>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="add-space-label">Space</InputLabel>
-                    <Select
-                      labelId="add-space-label"
-                      label="Space"
-                      value={form.space}
-                      onChange={e => setForm(f => ({ ...f, space: e.target.value }))}
-                      disabled={fetchingSpaces}
-                    >
-                      {Array.from(new Set([...fetchedSpaces, form.space])).filter(Boolean).map(sp => (
-                        <MenuItem key={sp} value={sp}>{sp}</MenuItem>
-                      ))}
-                      {fetchedSpaces.length === 0 && !form.space && (
-                        <MenuItem value="" disabled>Please fetch spaces first</MenuItem>
-                      )}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={4} sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    size="small"
-                    fullWidth
-                    onClick={() => handleLoadSpaces(false)}
-                    disabled={fetchingSpaces}
-                    sx={{ height: 40 }}
-                  >
-                    {fetchingSpaces ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
-                    Fetch Spaces
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Task chain: Flat authorization" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={form.taskChainFlat} onChange={e => setForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Task chain: Hierarchy authorization" size="small" fullWidth placeholder="e.g. TC_HIER_AUTH" value={form.taskChainHierarchy} onChange={e => setForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} />
-                </Grid>
-              </>
-            )}
-          </Grid>
+              {form.connectionType === 'SAP Hana' ? (
+                <>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Hostname</Label>
+                    <Input placeholder="e.g. host.company.com" value={form.host} onInput={e => setForm(f => ({ ...f, host: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Port</Label>
+                    <Input type="Number" value={form.port} onInput={e => setForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>User</Label>
+                    <Input value={form.username} onInput={e => setForm(f => ({ ...f, username: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Password</Label>
+                    <Input type="Password" value={form.password} onInput={e => setForm(f => ({ ...f, password: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                </>
+              ) : (
+                <>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Basis URL</Label>
+                    <Input placeholder="https://port-xxxx.datasphere.cloud.sap" value={form.url} onInput={e => setForm(f => ({ ...f, url: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Token URL</Label>
+                    <Input placeholder="https://oauth.datasphere.cloud.sap/oauth/token" value={form.tokenUrl} onInput={e => setForm(f => ({ ...f, tokenUrl: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Client ID</Label>
+                    <Input value={form.clientId} onInput={e => setForm(f => ({ ...f, clientId: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Client Secret</Label>
+                    <Input type="Password" value={form.clientSecret} onInput={e => setForm(f => ({ ...f, clientSecret: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Space</Label>
+                    <FlexBox style={{ gap: '0.5rem', width: '100%' }}>
+                      <Select 
+                        disabled={fetchingSpaces}
+                        onChange={e => setForm(f => ({ ...f, space: e.detail.selectedOption.value }))}
+                        style={{ flexGrow: 1 }}
+                      >
+                        {Array.from(new Set([...fetchedSpaces, form.space])).filter(Boolean).map(sp => (
+                          <Option key={sp} value={sp} selected={sp === form.space}>{sp}</Option>
+                        ))}
+                        {fetchedSpaces.length === 0 && !form.space && (
+                          <Option value="" disabled selected>Please fetch spaces first</Option>
+                        )}
+                      </Select>
+                      <Button 
+                        onClick={() => handleLoadSpaces(false)}
+                        disabled={fetchingSpaces}
+                      >
+                        {fetchingSpaces ? <BusyIndicator active size="S" /> : 'Fetch Spaces'}
+                      </Button>
+                    </FlexBox>
+                  </FlexBox>
 
-          <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-            <Button variant="outlined" color="inherit" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleCreate} disabled={loading} startIcon={<Check size={14} />}>Save Connection</Button>
-          </Box>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Task chain: Flat authorization</Label>
+                    <Input placeholder="e.g. TC_FLAT_AUTH" value={form.taskChainFlat} onInput={e => setForm(f => ({ ...f, taskChainFlat: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Task chain: Hierarchy authorization</Label>
+                    <Input placeholder="e.g. TC_HIER_AUTH" value={form.taskChainHierarchy} onInput={e => setForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} style={{ width: '100%' }} />
+                  </FlexBox>
+                </>
+              )}
+            </div>
+
+            <FlexBox style={{ gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <Button design="Transparent" onClick={() => setShowAdd(false)}>Cancel</Button>
+              <Button design="Emphasized" icon="accept" onClick={handleCreate} disabled={loading}>Save Connection</Button>
+            </FlexBox>
+          </FlexBox>
         </Card>
-      </Collapse>
+      )}
 
       {/* Connection Configurations List */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      <FlexBox direction="Column" style={{ gap: '1.5rem', width: '100%' }}>
         {loading && settings.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={30} /></Box>
+          <FlexBox justifySelf="Center" style={{ width: '100%', justifyContent: 'center', padding: '3rem 0' }}>
+            <BusyIndicator active size="M" />
+          </FlexBox>
         ) : settings.length === 0 ? (
-          <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <Box sx={{ opacity: 0.5, mb: 2 }}><Cloud size={40} /></Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No BDC integrations configured</Typography>
-            <Typography variant="body2" color="text.secondary">Configure a BDC integration connection to fetch catalog spaces.</Typography>
-          </Box>
+          <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ padding: '4rem 0', opacity: 0.5, gap: '1rem' }}>
+            <Icon name="cloud" style={{ fontSize: '3rem' }} />
+            <Title level="H4">No BDC integrations configured</Title>
+            <Label>Configure a BDC integration connection to fetch catalog spaces.</Label>
+          </FlexBox>
         ) : (
           settings.map(s => {
             const isEditing = editingId === s.ID;
             const currentType = s.connectionType || 'OData';
             return (
-              <Card key={s.ID} sx={{ p: 3, border: '1px solid', borderColor: s.isActive ? 'rgba(59, 130, 246, 0.15)' : 'divider' }}>
+              <Card key={s.ID} style={{ padding: '1.5rem', border: s.isActive ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid #dee2e6' }}>
                 {isEditing ? (
                   /* EDIT MODE FORM */
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Edit Connection: {s.systemName}</Typography>
-                    <Grid container spacing={2.5}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField label="System Connection Name" size="small" fullWidth value={editForm.systemName} onChange={e => setEditForm(f => ({ ...f, systemName: e.target.value }))} />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl size="small" fullWidth>
-                          <InputLabel id="edit-conn-type-label">Connection Type</InputLabel>
-                          <Select
-                            labelId="edit-conn-type-label"
-                            label="Connection Type"
-                            value={editForm.connectionType}
-                            onChange={e => setEditForm(f => ({ ...f, connectionType: e.target.value }))}
-                          >
-                            <MenuItem value="OData">OData (REST Catalog)</MenuItem>
-                            <MenuItem value="SAP Hana">SAP Hana (Direct DB)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
+                  <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+                    <Title level="H5">Edit Connection: {s.systemName}</Title>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', width: '100%' }}>
+                      <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                        <Label showColon>System Connection Name</Label>
+                        <Input value={editForm.systemName} onInput={e => setEditForm(f => ({ ...f, systemName: e.target.value }))} style={{ width: '100%' }} />
+                      </FlexBox>
+                      
+                      <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                        <Label showColon>Connection Type</Label>
+                        <Select onChange={e => setEditForm(f => ({ ...f, connectionType: e.detail.selectedOption.value }))} style={{ width: '100%' }}>
+                          <Option value="OData" selected={editForm.connectionType === 'OData'}>OData (REST Catalog)</Option>
+                          <Option value="SAP Hana" selected={editForm.connectionType === 'SAP Hana'}>SAP Hana (Direct DB)</Option>
+                        </Select>
+                      </FlexBox>
 
                       {editForm.connectionType === 'SAP Hana' ? (
-                        /* HANA EDIT FIELDS */
                         <>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Hostname" size="small" fullWidth placeholder="e.g. host.company.com" value={editForm.host} onChange={e => setEditForm(f => ({ ...f, host: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Port" type="number" size="small" fullWidth value={editForm.port} onChange={e => setEditForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="User" size="small" fullWidth value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Password" type="password" size="small" fullWidth placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} />
-                          </Grid>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Hostname</Label>
+                            <Input placeholder="e.g. host.company.com" value={editForm.host} onInput={e => setEditForm(f => ({ ...f, host: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Port</Label>
+                            <Input type="Number" value={editForm.port} onInput={e => setEditForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>User</Label>
+                            <Input value={editForm.username} onInput={e => setEditForm(f => ({ ...f, username: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Password</Label>
+                            <Input type="Password" placeholder="••••••••" value={editForm.password} onInput={e => setEditForm(f => ({ ...f, password: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
                         </>
                       ) : (
-                        /* ODATA EDIT FIELDS */
                         <>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Basis URL" size="small" fullWidth value={editForm.url} onChange={e => setEditForm(f => ({ ...f, url: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Token URL" size="small" fullWidth value={editForm.tokenUrl} onChange={e => setEditForm(f => ({ ...f, tokenUrl: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Client ID" size="small" fullWidth value={editForm.clientId} onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Client Secret" type="password" size="small" fullWidth placeholder="••••••••" value={editForm.clientSecret} onChange={e => setEditForm(f => ({ ...f, clientSecret: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={8}>
-                            <FormControl size="small" fullWidth>
-                              <InputLabel id="edit-space-label">Space</InputLabel>
-                              <Select
-                                labelId="edit-space-label"
-                                label="Space"
-                                value={editForm.space}
-                                onChange={e => setEditForm(f => ({ ...f, space: e.target.value }))}
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Basis URL</Label>
+                            <Input value={editForm.url} onInput={e => setEditForm(f => ({ ...f, url: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Token URL</Label>
+                            <Input value={editForm.tokenUrl} onInput={e => setEditForm(f => ({ ...f, tokenUrl: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Client ID</Label>
+                            <Input value={editForm.clientId} onInput={e => setEditForm(f => ({ ...f, clientId: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Client Secret</Label>
+                            <Input type="Password" placeholder="••••••••" value={editForm.clientSecret} onInput={e => setEditForm(f => ({ ...f, clientSecret: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Space</Label>
+                            <FlexBox style={{ gap: '0.5rem', width: '100%' }}>
+                              <Select 
                                 disabled={fetchingSpaces}
+                                onChange={e => setEditForm(f => ({ ...f, space: e.detail.selectedOption.value }))}
+                                style={{ flexGrow: 1 }}
                               >
                                 {Array.from(new Set([...fetchedSpaces, editForm.space])).filter(Boolean).map(sp => (
-                                  <MenuItem key={sp} value={sp}>{sp}</MenuItem>
+                                  <Option key={sp} value={sp} selected={sp === editForm.space}>{sp}</Option>
                                 ))}
                                 {fetchedSpaces.length === 0 && !editForm.space && (
-                                  <MenuItem value="" disabled>Please fetch spaces first</MenuItem>
+                                  <Option value="" disabled selected>Please fetch spaces first</Option>
                                 )}
                               </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={12} sm={4} sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Button
-                              variant="outlined"
-                              color="secondary"
-                              size="small"
-                              fullWidth
-                              onClick={() => handleLoadSpaces(true)}
-                              disabled={fetchingSpaces}
-                              sx={{ height: 40 }}
-                            >
-                              {fetchingSpaces ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
-                              Fetch Spaces
-                            </Button>
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Task chain: Flat authorization" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={editForm.taskChainFlat} onChange={e => setEditForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Task chain: Hierarchy authorization" size="small" fullWidth placeholder="e.g. TC_HIER_AUTH" value={editForm.taskChainHierarchy} onChange={e => setEditForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} />
-                          </Grid>
+                              <Button 
+                                onClick={() => handleLoadSpaces(true)}
+                                disabled={fetchingSpaces}
+                              >
+                                {fetchingSpaces ? <BusyIndicator active size="S" /> : 'Fetch Spaces'}
+                              </Button>
+                            </FlexBox>
+                          </FlexBox>
+
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Task chain: Flat authorization</Label>
+                            <Input placeholder="e.g. TC_FLAT_AUTH" value={editForm.taskChainFlat} onInput={e => setEditForm(f => ({ ...f, taskChainFlat: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Task chain: Hierarchy authorization</Label>
+                            <Input placeholder="e.g. TC_HIER_AUTH" value={editForm.taskChainHierarchy} onInput={e => setEditForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} style={{ width: '100%' }} />
+                          </FlexBox>
                         </>
                       )}
 
-                      <Grid item xs={12}>
-                        <FormControlLabel
-                          control={<Checkbox checked={editForm.isActive} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} />}
-                          label="Is Active Connection"
-                        />
-                      </Grid>
-                    </Grid>
+                      <CheckBox 
+                        checked={editForm.isActive} 
+                        onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} 
+                        text="Is Active Connection" 
+                      />
+                    </div>
 
-                    <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-                      <Button variant="outlined" color="inherit" onClick={() => setEditingId(null)}>Cancel</Button>
-                      <Button variant="contained" onClick={() => handleUpdate(s.ID)} disabled={loading} startIcon={<Check size={14} />}>Save Changes</Button>
-                    </Box>
-                  </Box>
+                    <FlexBox style={{ gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                      <Button design="Transparent" onClick={() => setEditingId(null)}>Cancel</Button>
+                      <Button design="Emphasized" icon="accept" onClick={() => handleUpdate(s.ID)} disabled={loading}>Save Changes</Button>
+                    </FlexBox>
+                  </FlexBox>
                 ) : (
                   /* VIEW DETAILS MODE */
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Cloud size={20} color={s.isActive ? "#3b82f6" : "text.secondary"} />
-                      <Box>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {s.systemName}
-                          <Chip label={currentType} size="small" color={currentType === 'SAP Hana' ? "secondary" : "primary"} sx={{ height: 20, fontSize: 10 }} />
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {currentType === 'SAP Hana' ? (
-                            <>Host: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{s.host || '—'}:{s.port || 443}</Box></>
-                          ) : (
-                            <>Basis URL: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{s.url || '—'}</Box></>
-                          )}
-                        </Typography>
-                      </Box>
+                  <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+                    <FlexBox justifySelf="Spread" alignItems="Center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                      <FlexBox alignItems="Center" style={{ gap: '1rem' }}>
+                        <Icon name="cloud" style={{ color: s.isActive ? '#3b82f6' : '#94a3b8' }} />
+                        <FlexBox direction="Column">
+                          <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                            <Title level="H5">{s.systemName}</Title>
+                            <Tag design={currentType === 'SAP Hana' ? "Set2" : "Set1"}>{currentType}</Tag>
+                          </FlexBox>
+                          <Label>
+                            {currentType === 'SAP Hana' ? `Host: ${s.host || '—'}:${s.port || 443}` : `Basis URL: ${s.url || '—'}`}
+                          </Label>
+                        </FlexBox>
+                      </FlexBox>
 
-                      <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-                        <Button variant="outlined" color="primary" size="small" onClick={() => handleTestConnection(s.ID)} startIcon={<Wifi size={13} />}>
+                      <FlexBox style={{ gap: '0.5rem' }}>
+                        <Button onClick={() => handleTestConnection(s.ID)} icon="connected">
                           Test Connection
                         </Button>
-                        <IconButton onClick={() => startEdit(s)} size="small" color="inherit">
-                          <Edit3 size={15} />
-                        </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(s.ID, s.systemName)} disabled={loading} size="small">
-                          <Trash2 size={15} />
-                        </IconButton>
-                      </Box>
-                    </Box>
+                        <Button design="Transparent" icon="edit" onClick={() => startEdit(s)} />
+                        <Button design="Transparent" icon="delete" onClick={() => handleDelete(s.ID, s.systemName)} disabled={loading} style={{ color: 'var(--sapNegativeElementColor)' }} />
+                      </FlexBox>
+                    </FlexBox>
 
                     {currentType === 'SAP Hana' ? (
-                      /* HANA VIEW DETAILS GRID */
-                      <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
-                        <Grid item xs={12} sm={5}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Hostname</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.host || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={2}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Port</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.port || '443'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>User</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.username || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={2}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>State</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: s.isActive ? '#10b981' : 'text.secondary' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                        <FlexBox direction="Column">
+                          <Label>Hostname</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.host || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>Port</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.port || '443'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>User</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.username || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>State</Label>
+                          <span style={{ fontWeight: 'bold', color: s.isActive ? '#10b981' : '#94a3b8' }}>
                             {s.isActive ? '● Active' : '○ Inactive'}
-                          </Typography>
-                        </Grid>
-                      </Grid>
+                          </span>
+                        </FlexBox>
+                      </div>
                     ) : (
-                      /* ODATA VIEW DETAILS GRID */
-                      <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
-                        <Grid item xs={12} sm={3}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Token URL</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.tokenUrl || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Client ID</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.clientId || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={2}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Selected Space</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#3b82f6' }}>
-                            {s.space || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={2}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>State</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: s.isActive ? '#10b981' : 'text.secondary' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                        <FlexBox direction="Column">
+                          <Label>Token URL</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.tokenUrl || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>Client ID</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.clientId || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>Selected Space</Label>
+                          <span style={{ fontWeight: 'bold', color: '#3b82f6' }}>{s.space || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>State</Label>
+                          <span style={{ fontWeight: 'bold', color: s.isActive ? '#10b981' : '#94a3b8' }}>
                             {s.isActive ? '● Active' : '○ Inactive'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Flat authorization</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.taskChainFlat || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Hierarchy authorization</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.taskChainHierarchy || '—'}
-                          </Typography>
-                        </Grid>
-                      </Grid>
+                          </span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>Task chain: Flat authorization</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.taskChainFlat || '—'}</span>
+                        </FlexBox>
+                        <FlexBox direction="Column">
+                          <Label>Task chain: Hierarchy authorization</Label>
+                          <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.taskChainHierarchy || '—'}</span>
+                        </FlexBox>
+                      </div>
                     )}
-                  </Box>
+                  </FlexBox>
                 )}
               </Card>
             );
           })
         )}
-      </Box>
-    </Box>
+      </FlexBox>
+    </FlexBox>
   );
 }

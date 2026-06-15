@@ -1,6 +1,28 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Snackbar } from '@mui/material';
-import { Plus, Trash2, Edit3, X, Check, Network } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  FlexBox, 
+  Card, 
+  CardHeader, 
+  Title, 
+  Label, 
+  Table, 
+  TableHeaderRow, 
+  TableHeaderCell, 
+  TableRow, 
+  TableCell, 
+  Button, 
+  Input, 
+  BusyIndicator, 
+  MessageStrip, 
+  Icon, 
+  Toast 
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/add.js";
+import "@ui5/webcomponents-icons/dist/delete.js";
+import "@ui5/webcomponents-icons/dist/edit.js";
+import "@ui5/webcomponents-icons/dist/accept.js";
+import "@ui5/webcomponents-icons/dist/decline.js";
+import "@ui5/webcomponents-icons/dist/connected.js";
 import * as api from '../api';
 
 export default function StreamsView() {
@@ -12,12 +34,13 @@ export default function StreamsView() {
   // Form states
   const [form, setForm] = useState({ ID: '', abbreviation: '', name: '' });
   const [editForm, setEditForm] = useState({ abbreviation: '', name: '' });
-  const [error, setError] = useState(''); // kept for backward compatibility if any local helper checks it, but we can also use snackbar
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  
+  const toastRef = useRef(null);
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
+  const showToast = (msg) => {
+    setSnackbarMessage(msg);
+    toastRef.current?.show();
   };
 
   async function load() {
@@ -27,6 +50,7 @@ export default function StreamsView() {
       setStreams(data);
     } catch (e) {
       console.error(e);
+      showToast(`Failed to load streams: ${e.message}`);
     }
     setLoading(false);
   }
@@ -48,7 +72,7 @@ export default function StreamsView() {
   async function handleCreate() {
     const validationErr = validate(form.ID, form.abbreviation, form.name);
     if (validationErr) {
-      setSnackbar({ open: true, message: validationErr, severity: 'error' });
+      showToast(validationErr);
       return;
     }
 
@@ -64,8 +88,9 @@ export default function StreamsView() {
       setForm({ ID: '', abbreviation: '', name: '' });
       setShowAdd(false);
       await load();
+      showToast('Stream created successfully.');
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
@@ -73,7 +98,7 @@ export default function StreamsView() {
   async function handleUpdate(id) {
     const validationErr = validate(undefined, editForm.abbreviation, editForm.name);
     if (validationErr) {
-      setSnackbar({ open: true, message: validationErr, severity: 'error' });
+      showToast(validationErr);
       return;
     }
 
@@ -87,8 +112,9 @@ export default function StreamsView() {
       await api.updateStream(id, payload);
       setEditingId(null);
       await load();
+      showToast('Stream updated successfully.');
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
@@ -99,8 +125,9 @@ export default function StreamsView() {
     try {
       await api.deleteStream(id);
       await load();
+      showToast('Stream deleted.');
     } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
+      showToast(e.message);
     }
     setLoading(false);
   }
@@ -108,150 +135,146 @@ export default function StreamsView() {
   function startEdit(s) {
     setEditingId(s.ID);
     setEditForm({ abbreviation: s.abbreviation, name: s.name });
-    setSnackbar(prev => ({ ...prev, open: false }));
   }
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Streams Management</Typography>
-          <Typography variant="body2" color="text.secondary">Configure operational Business Data Cloud streams</Typography>
-        </Box>
-        <Button variant="contained" onClick={() => { setShowAdd(s => !s); setError(''); }} startIcon={<Plus size={15} />}>
+    <FlexBox direction="Column" style={{ width: '100%', gap: '1rem', padding: '1rem', boxSizing: 'border-box' }}>
+      <Toast ref={toastRef}>{snackbarMessage}</Toast>
+
+      <FlexBox justifySelf="Spread" alignItems="Center" style={{ width: '100%', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <FlexBox direction="Column">
+          <Title level="H3">Streams Management</Title>
+          <Label>Configure operational Business Data Cloud streams</Label>
+        </FlexBox>
+        <Button 
+          design="Emphasized" 
+          onClick={() => { setShowAdd(s => !s); }} 
+          icon="add"
+        >
           Add Stream
         </Button>
-      </Box>
+      </FlexBox>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-
-      <Collapse in={showAdd}>
-        <Card sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '80px 120px 1fr auto' }, gap: 2, alignItems: 'end' }}>
-            <TextField
-              label="ID (2 Chars)"
-              size="small"
-              inputProps={{ maxLength: 2 }}
-              value={form.ID}
-              onChange={e => setForm(f => ({ ...f, ID: e.target.value }))}
-            />
-            <TextField
-              label="Abbreviation"
-              size="small"
-              inputProps={{ maxLength: 3 }}
-              value={form.abbreviation}
-              onChange={e => setForm(f => ({ ...f, abbreviation: e.target.value }))}
-            />
-            <TextField
-              label="Name"
-              size="small"
-              inputProps={{ maxLength: 150 }}
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="contained" onClick={handleCreate} disabled={loading} startIcon={<Check size={14} />}>
-                Save
-              </Button>
-              <IconButton onClick={() => setShowAdd(false)} size="small"><X size={16} /></IconButton>
-            </Box>
-          </Box>
+      {showAdd && (
+        <Card style={{ padding: '1.5rem', marginBottom: '1rem' }}>
+          <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+            <Title level="H5">New Stream Details</Title>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', alignItems: 'end', width: '100%' }}>
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>ID (2 Chars)</Label>
+                <Input
+                  maxLength={2}
+                  value={form.ID}
+                  onInput={e => setForm(f => ({ ...f, ID: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </FlexBox>
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>Abbreviation (3 Chars)</Label>
+                <Input
+                  maxLength={3}
+                  value={form.abbreviation}
+                  onInput={e => setForm(f => ({ ...f, abbreviation: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </FlexBox>
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>Name</Label>
+                <Input
+                  maxLength={150}
+                  value={form.name}
+                  onInput={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </FlexBox>
+              <FlexBox style={{ gap: '0.5rem' }}>
+                <Button design="Emphasized" onClick={handleCreate} disabled={loading} icon="accept">
+                  Save
+                </Button>
+                <Button design="Transparent" onClick={() => setShowAdd(false)} icon="decline" />
+              </FlexBox>
+            </div>
+          </FlexBox>
         </Card>
-      </Collapse>
+      )}
 
-      <Card>
+      <Card style={{ padding: '1rem' }}>
         {loading && streams.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={30} /></Box>
+          <FlexBox justifySelf="Center" style={{ width: '100%', justifyContent: 'center', padding: '3rem 0' }}>
+            <BusyIndicator active size="M" />
+          </FlexBox>
         ) : streams.length === 0 ? (
-          <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <Box sx={{ opacity: 0.5, mb: 2 }}><Network size={40} /></Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No operational streams configured</Typography>
-            <Typography variant="body2" color="text.secondary">Click "Add Stream" to configure a stream (e.g. FI / Finance).</Typography>
-          </Box>
+          <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ padding: '4rem 0', opacity: 0.5, gap: '1rem' }}>
+            <Icon name="connected" style={{ fontSize: '3rem' }} />
+            <Title level="H4">No operational streams configured</Title>
+            <Label>Click "Add Stream" to configure a stream (e.g. FI / Finance).</Label>
+          </FlexBox>
         ) : (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell style={{ width: 80, fontWeight: 600 }}>ID</TableCell>
-                  <TableCell style={{ width: 140, fontWeight: 600 }}>Abbreviation</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell align="right" style={{ width: 120, fontWeight: 600 }}>Actions</TableCell>
+          <Table
+            headerRow={
+              <TableHeaderRow>
+                <TableHeaderCell style={{ width: '100px' }}>ID</TableHeaderCell>
+                <TableHeaderCell style={{ width: '150px' }}>Abbreviation</TableHeaderCell>
+                <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell style={{ width: '150px', textAlign: 'right' }}>Actions</TableHeaderCell>
+              </TableHeaderRow>
+            }
+          >
+            {streams.map(s => {
+              const isEditing = editingId === s.ID;
+              return (
+                <TableRow key={s.ID}>
+                  <TableCell>
+                    <span style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{s.ID}</span>
+                  </TableCell>
+                  
+                  {isEditing ? (
+                    <>
+                      <TableCell>
+                        <Input
+                          maxLength={3}
+                          value={editForm.abbreviation}
+                          onInput={e => setEditForm(f => ({ ...f, abbreviation: e.target.value }))}
+                          style={{ width: '100%' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          maxLength={150}
+                          value={editForm.name}
+                          onInput={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                          style={{ width: '100%' }}
+                        />
+                      </TableCell>
+                      <TableCell style={{ textAlign: 'right' }}>
+                        <FlexBox style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
+                          <Button design="Emphasized" icon="accept" onClick={() => handleUpdate(s.ID)} disabled={loading} />
+                          <Button design="Transparent" icon="decline" onClick={() => setEditingId(null)} />
+                        </FlexBox>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell>
+                        <span style={{ fontFamily: 'monospace' }}>{s.abbreviation}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span>{s.name}</span>
+                      </TableCell>
+                      <TableCell style={{ textAlign: 'right' }}>
+                        <FlexBox style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
+                          <Button design="Transparent" icon="edit" onClick={() => startEdit(s)} />
+                          <Button design="Transparent" icon="delete" onClick={() => handleDelete(s.ID, s.name)} disabled={loading} style={{ color: 'var(--sapNegativeElementColor)' }} />
+                        </FlexBox>
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {streams.map(s => (
-                  <TableRow key={s.ID} hover>
-                    <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontFamily: 'monospace', fontSize: '1rem' }}>
-                      {s.ID}
-                    </TableCell>
-                    {editingId === s.ID ? (
-                      <>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            inputProps={{ maxLength: 3 }}
-                            value={editForm.abbreviation}
-                            onChange={e => setEditForm(f => ({ ...f, abbreviation: e.target.value }))}
-                            sx={{ '& input': { py: 0.5, px: 1, fontSize: 13, fontFamily: 'monospace' } }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            inputProps={{ maxLength: 150 }}
-                            value={editForm.name}
-                            onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                            sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 } }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'inline-flex', gap: 1 }}>
-                            <IconButton color="primary" onClick={() => handleUpdate(s.ID)} disabled={loading} size="small">
-                              <Check size={16} />
-                            </IconButton>
-                            <IconButton onClick={() => setEditingId(null)} size="small">
-                              <X size={16} />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                          {s.abbreviation}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>
-                          {s.name}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box sx={{ display: 'inline-flex', gap: 1 }}>
-                            <IconButton onClick={() => startEdit(s)} size="small" color="inherit">
-                              <Edit3 size={15} />
-                            </IconButton>
-                            <IconButton color="error" onClick={() => handleDelete(s.ID, s.name)} disabled={loading} size="small">
-                              <Trash2 size={15} />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              );
+            })}
+          </Table>
         )}
       </Card>
-    </Box>
+    </FlexBox>
   );
 }

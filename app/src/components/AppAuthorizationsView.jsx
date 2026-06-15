@@ -1,29 +1,25 @@
 import { useState, useEffect } from 'react';
 import { 
-  Box, 
-  Card, 
-  CardContent, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
   Button, 
-  Checkbox, 
-  IconButton, 
+  Card, 
+  Title, 
+  Text,
+  Table, 
+  TableHeaderRow,
+  TableHeaderCell, 
+  TableRow, 
+  TableCell, 
+  CheckBox, 
   Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  TextField, 
-  Autocomplete, 
-  CircularProgress,
-  Alert,
-  Snackbar
-} from '@mui/material';
-import { Plus, Trash2, Shield, Users, HelpCircle, AlertTriangle } from 'lucide-react';
+  Bar,
+  ComboBox,
+  ComboBoxItem,
+  BusyIndicator,
+  MessageStrip,
+  FlexBox,
+  Icon
+} from '@ui5/webcomponents-react';
+import '@ui5/webcomponents-icons/dist/AllIcons.js';
 import * as api from '../api';
 
 export default function AppAuthorizationsView() {
@@ -133,248 +129,242 @@ export default function AppAuthorizationsView() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {snackbar.open && (
+        <MessageStrip
+          design={snackbar.severity === 'error' ? 'Negative' : 'Positive'}
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          style={{ marginBottom: '16px' }}
+        >
           {snackbar.message}
-        </Alert>
-      </Snackbar>
+        </MessageStrip>
+      )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
+      <FlexBox justifyContent="SpaceBetween" alignItems="Center">
+        <FlexBox direction="Column" style={{ gap: '4px' }}>
+          <Title level="H3" style={{ fontWeight: 700 }}>
             Application Access Control
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+          </Title>
+          <Text style={{ color: 'var(--sapContent_LabelColor)' }}>
             Manage roles/features permission levels for administrators within the Auth Wizard itself.
-          </Typography>
-        </Box>
+          </Text>
+        </FlexBox>
         <Button 
-          variant="contained" 
-          startIcon={<Plus size={16} />}
+          design="Emphasized" 
+          icon="sap-icon://add"
           onClick={() => setOpenAdd(true)}
         >
           Add User Authorization
         </Button>
-      </Box>
+      </FlexBox>
 
       {authorizations.length === 0 && !loading && (
-        <Card sx={{ bgcolor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-          <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <AlertTriangle size={24} color="#f59e0b" />
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f59e0b' }}>
-                Open Demo Mode Active
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                No user authorizations are explicitly defined yet. All logged-in simulation users have full administrator access. Add a user below to enable strict role-based access control.
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+        <MessageStrip
+          design="Warning"
+          hideCloseButton
+          style={{ marginBottom: '16px' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontWeight: 600 }}>Open Demo Mode Active</span>
+            <span>
+              No user authorizations are explicitly defined yet. All logged-in simulation users have full administrator access. Add a user below to enable strict role-based access control.
+            </span>
+          </div>
+        </MessageStrip>
       )}
 
       <Card>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress size={30} />
-          </Box>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+            <BusyIndicator active size="Medium" />
+          </div>
         ) : (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell style={{ fontWeight: 600 }}>User ID</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>User Name</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Org Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Single Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Derived Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Assign Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="right">Actions</TableCell>
+          <Table
+            headerRow={
+              <TableHeaderRow>
+                <TableHeaderCell><Text style={{ fontWeight: 'bold' }}>User ID</Text></TableHeaderCell>
+                <TableHeaderCell><Text style={{ fontWeight: 'bold' }}>User Name</Text></TableHeaderCell>
+                <TableHeaderCell style={{ textAlign: 'center' }}><Text style={{ fontWeight: 'bold' }}>Manage Org Roles</Text></TableHeaderCell>
+                <TableHeaderCell style={{ textAlign: 'center' }}><Text style={{ fontWeight: 'bold' }}>Manage Single Roles</Text></TableHeaderCell>
+                <TableHeaderCell style={{ textAlign: 'center' }}><Text style={{ fontWeight: 'bold' }}>Manage Derived Roles</Text></TableHeaderCell>
+                <TableHeaderCell style={{ textAlign: 'center' }}><Text style={{ fontWeight: 'bold' }}>Assign Roles</Text></TableHeaderCell>
+                <TableHeaderCell style={{ textAlign: 'end' }}><Text style={{ fontWeight: 'bold' }}>Actions</Text></TableHeaderCell>
+              </TableHeaderRow>
+            }
+          >
+            {authorizations.length === 0 ? (
+              <TableRow>
+                <TableCell style={{ textAlign: 'center' }} colSpan={7}>
+                  <Text style={{ color: 'var(--sapContent_LabelColor)' }}>No administrator authorization definitions set.</Text>
+                </TableCell>
+              </TableRow>
+            ) : (
+              authorizations.map(auth => (
+                <TableRow key={auth.ID}>
+                  <TableCell>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{auth.userId}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span style={{ fontWeight: 500 }}>{auth.userName}</span>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'center' }}>
+                    <CheckBox 
+                      checked={auth.canManageOrgRoles}
+                      onChange={(e) => handleTogglePermission(auth.ID, 'canManageOrgRoles', e.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'center' }}>
+                    <CheckBox 
+                      checked={auth.canManageSingleRoles}
+                      onChange={(e) => handleTogglePermission(auth.ID, 'canManageSingleRoles', e.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'center' }}>
+                    <CheckBox 
+                      checked={auth.canManageDerivedRoles}
+                      onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'center' }}>
+                    <CheckBox 
+                      checked={auth.canAssignRoles}
+                      onChange={(e) => handleTogglePermission(auth.ID, 'canAssignRoles', e.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'end' }}>
+                    <Button 
+                      design="Transparent"
+                      icon="sap-icon://delete"
+                      onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}
+                      style={{ color: 'var(--sapContent_NegativeTextColor)' }}
+                    />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {authorizations.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                      No administrator authorization definitions set.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  authorizations.map(auth => (
-                    <TableRow key={auth.ID} hover>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{auth.userId}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{auth.userName}</TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageOrgRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageOrgRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#3b82f6' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageSingleRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageSingleRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#a78bfa' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageDerivedRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canAssignRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canAssignRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#10b981' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton 
-                          color="error"
-                          onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}
-                          size="small"
-                        >
-                          <Trash2 size={15} />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              ))
+            )}
+          </Table>
         )}
       </Card>
 
-      {/* Add User Dialog */}
       <Dialog 
         open={openAdd} 
         onClose={() => setOpenAdd(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            bgcolor: 'background.paper',
-            backgroundImage: 'none',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 2
-          }
-        }}
-      >
-        <DialogTitle sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)', pb: 2 }}>
-          Add User Authorization
-        </DialogTitle>
-        <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Autocomplete
-            value={selectedLdapUser}
-            onChange={(event, newValue) => {
-              setSelectedLdapUser(newValue);
-            }}
-            inputValue={ldapInput}
-            onInputChange={(event, newInputValue) => {
-              setLdapInput(newInputValue);
-            }}
-            options={ldapOptions}
-            loading={ldapLoading}
-            getOptionLabel={(option) => `${option.displayName} (${option.username})`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Search User (LDAP)"
-                size="small"
-                placeholder="Type username or name..."
-                InputProps={{
-                  ...(params.InputProps || {}),
-                  endAdornment: (
-                    <>
-                      {ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps?.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-            renderOption={(props, option) => {
-              const { key, ...optionProps } = props;
-              return (
-                <li key={key || option.username} {...optionProps}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName} ({option.username})</Typography>
-                    <Typography variant="caption" color="text.secondary">{option.department}</Typography>
-                  </Box>
-                </li>
-              );
-            }}
-            fullWidth
+        header={
+          <Bar startContent={<Title level="H4">Add User Authorization</Title>} />
+        }
+        footer={
+          <Bar 
+            endContent={
+              <>
+                <Button onClick={() => setOpenAdd(false)} design="Transparent">Cancel</Button>
+                <Button onClick={handleAddAuthorization} design="Emphasized" disabled={!selectedLdapUser}>Add</Button>
+              </>
+            } 
           />
+        }
+        style={{ width: '450px' }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+          <FlexBox alignItems="Center" style={{ gap: '8px', width: '100%' }}>
+            <ComboBox
+              placeholder="Search User (LDAP)..."
+              value={selectedLdapUser ? `${selectedLdapUser.displayName} (${selectedLdapUser.username})` : ldapInput}
+              onInput={e => {
+                setLdapInput(e.target.value);
+                if (!e.target.value) {
+                  setSelectedLdapUser(null);
+                }
+              }}
+              onSelectionChange={e => {
+                const selectedItem = e.detail.item;
+                if (selectedItem) {
+                  const username = selectedItem.dataset.username;
+                  const option = ldapOptions.find(o => o.username === username);
+                  if (option) {
+                    setSelectedLdapUser(option);
+                  }
+                } else {
+                  setSelectedLdapUser(null);
+                }
+              }}
+              style={{ width: '100%' }}
+            >
+              {ldapOptions.map(option => (
+                <ComboBoxItem
+                  key={option.username}
+                  text={`${option.displayName} (${option.username})`}
+                  data-username={option.username}
+                />
+              ))}
+            </ComboBox>
+            {ldapLoading && <BusyIndicator active size="Small" />}
+          </FlexBox>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>Permissions</Typography>
+          {selectedLdapUser && (
+            <div style={{ backgroundColor: 'var(--sapList_Background)', padding: '8px', borderRadius: '4px', border: '1px solid var(--sapGroup_BorderColor)' }}>
+              <Text style={{ fontWeight: 'bold', display: 'block' }}>
+                {selectedLdapUser.displayName} ({selectedLdapUser.username})
+              </Text>
+              <Text style={{ color: 'var(--sapContent_LabelColor)', fontSize: '12px' }}>
+                Department: {selectedLdapUser.department}
+              </Text>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Title level="H5" style={{ fontWeight: 600 }}>Permissions</Title>
             
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Checkbox 
+            <FlexBox alignItems="Center" style={{ gap: '8px' }}>
+              <CheckBox 
                 checked={newPermissions.canManageOrgRoles}
                 onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageOrgRoles: e.target.checked }))}
                 id="perm-org-roles"
               />
-              <Box component="label" htmlFor="perm-org-roles" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Org-Based Roles</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Add, change, delete org-based roles</Typography>
-              </Box>
-            </Box>
+              <div style={{ cursor: 'pointer' }} onClick={() => setNewPermissions(prev => ({ ...prev, canManageOrgRoles: !prev.canManageOrgRoles }))}>
+                <Text style={{ fontWeight: 500, display: 'block' }}>Manage Org-Based Roles</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--sapContent_LabelColor)' }}>Add, change, delete org-based roles</Text>
+              </div>
+            </FlexBox>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-              <Checkbox 
+            <FlexBox alignItems="Center" style={{ gap: '8px', marginTop: '4px' }}>
+              <CheckBox 
                 checked={newPermissions.canManageSingleRoles}
                 onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageSingleRoles: e.target.checked }))}
                 id="perm-single-roles"
               />
-              <Box component="label" htmlFor="perm-single-roles" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Single Roles</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Add, change, delete custom single roles</Typography>
-              </Box>
-            </Box>
+              <div style={{ cursor: 'pointer' }} onClick={() => setNewPermissions(prev => ({ ...prev, canManageSingleRoles: !prev.canManageSingleRoles }))}>
+                <Text style={{ fontWeight: 500, display: 'block' }}>Manage Single Roles</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--sapContent_LabelColor)' }}>Add, change, delete custom single roles</Text>
+              </div>
+            </FlexBox>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-              <Checkbox 
+            <FlexBox alignItems="Center" style={{ gap: '8px', marginTop: '4px' }}>
+              <CheckBox 
                 checked={newPermissions.canManageDerivedRoles}
                 onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageDerivedRoles: e.target.checked }))}
                 id="perm-derived-roles"
               />
-              <Box component="label" htmlFor="perm-derived-roles" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Derived Roles</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Add, change, delete child roles containing parents</Typography>
-              </Box>
-            </Box>
+              <div style={{ cursor: 'pointer' }} onClick={() => setNewPermissions(prev => ({ ...prev, canManageDerivedRoles: !prev.canManageDerivedRoles }))}>
+                <Text style={{ fontWeight: 500, display: 'block' }}>Manage Derived Roles</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--sapContent_LabelColor)' }}>Add, change, delete child roles containing parents</Text>
+              </div>
+            </FlexBox>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-              <Checkbox 
+            <FlexBox alignItems="Center" style={{ gap: '8px', marginTop: '4px' }}>
+              <CheckBox 
                 checked={newPermissions.canAssignRoles}
                 onChange={(e) => setNewPermissions(prev => ({ ...prev, canAssignRoles: e.target.checked }))}
                 id="perm-assign"
               />
-              <Box component="label" htmlFor="perm-assign" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Assign Roles</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Link and assign roles to users</Typography>
-              </Box>
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', px: 3, py: 2 }}>
-          <Button onClick={() => setOpenAdd(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" onClick={handleAddAuthorization} disabled={!selectedLdapUser}>Add</Button>
-        </DialogActions>
+              <div style={{ cursor: 'pointer' }} onClick={() => setNewPermissions(prev => ({ ...prev, canAssignRoles: !prev.canAssignRoles }))}>
+                <Text style={{ fontWeight: 500, display: 'block' }}>Assign Roles</Text>
+                <Text style={{ fontSize: '12px', color: 'var(--sapContent_LabelColor)' }}>Link and assign roles to users</Text>
+              </div>
+            </FlexBox>
+          </div>
+        </div>
       </Dialog>
-    </Box>
+    </div>
   );
 }
+

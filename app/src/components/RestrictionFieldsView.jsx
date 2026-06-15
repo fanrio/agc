@@ -1,6 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, List, ListItem, IconButton, Chip, CircularProgress, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Checkbox, OutlinedInput, ListItemText, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import { Plus, Trash2, X, Settings, Cloud, Edit3, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  FlexBox, 
+  Card, 
+  CardHeader, 
+  Title, 
+  Label, 
+  Table, 
+  TableHeaderRow, 
+  TableHeaderCell, 
+  TableRow, 
+  TableCell, 
+  Button, 
+  Input, 
+  Select, 
+  Option, 
+  MultiComboBox, 
+  MultiComboBoxItem, 
+  Tag, 
+  BusyIndicator, 
+  MessageStrip, 
+  Icon, 
+  Toast 
+} from '@ui5/webcomponents-react';
+import "@ui5/webcomponents-icons/dist/add.js";
+import "@ui5/webcomponents-icons/dist/delete.js";
+import "@ui5/webcomponents-icons/dist/edit.js";
+import "@ui5/webcomponents-icons/dist/accept.js";
+import "@ui5/webcomponents-icons/dist/decline.js";
+import "@ui5/webcomponents-icons/dist/cloud.js";
+import "@ui5/webcomponents-icons/dist/settings.js";
 import * as api from '../api';
 
 export default function RestrictionFieldsView() {
@@ -30,6 +58,14 @@ export default function RestrictionFieldsView() {
   const [editColumnsList, setEditColumnsList] = useState([]);
   const [loadingEditColumns, setLoadingEditColumns] = useState(false);
 
+  const [toastMessage, setToastMessage] = useState('');
+  const toastRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    toastRef.current?.show();
+  };
+
   async function load() {
     setLoading(true);
     try {
@@ -41,6 +77,7 @@ export default function RestrictionFieldsView() {
       setBdcConnections(connections);
     } catch (e) {
       console.error(e);
+      showToast(`Failed to load data: ${e.message}`);
     }
     setLoading(false);
   }
@@ -175,6 +212,7 @@ export default function RestrictionFieldsView() {
       setNewTextColumn('');
       setShowAdd(false);
       await load();
+      showToast('Restriction field added.');
     } catch (e) {
       alert(e.message);
     }
@@ -197,6 +235,7 @@ export default function RestrictionFieldsView() {
 
       setEditingId(null);
       await load();
+      showToast('Restriction field updated.');
     } catch (e) {
       alert(e.message);
     }
@@ -231,6 +270,7 @@ export default function RestrictionFieldsView() {
     try {
       await api.deleteRestrictionField(id);
       await load();
+      showToast('Restriction field removed.');
     } catch (e) {
       alert(e.message);
     }
@@ -238,308 +278,270 @@ export default function RestrictionFieldsView() {
   }
 
   return (
-    <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Restriction Fields Configuration</Typography>
-          <Typography variant="body2" color="text.secondary">Configure the field names and BDC asset associations</Typography>
-        </Box>
-        <Button variant="contained" color="primary" onClick={() => setShowAdd(s => !s)} startIcon={<Plus size={15} />}>
+    <FlexBox direction="Column" style={{ width: '100%', gap: '1rem', padding: '1rem', boxSizing: 'border-box' }}>
+      <Toast ref={toastRef}>{toastMessage}</Toast>
+
+      <FlexBox justifySelf="Spread" alignItems="Center" style={{ width: '100%', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <FlexBox direction="Column">
+          <Title level="H3">Restriction Fields Configuration</Title>
+          <Label>Configure the field names and BDC asset associations</Label>
+        </FlexBox>
+        <Button design="Emphasized" icon="add" onClick={() => setShowAdd(s => !s)}>
           Add Field
         </Button>
-      </Box>
+      </FlexBox>
 
-      <Collapse in={showAdd}>
-        <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New Restriction Field</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                label="Field Name"
-                size="small"
-                fullWidth
-                placeholder="e.g. CostCenter"
-                value={newFieldName}
-                onChange={e => setNewFieldName(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <FormControl size="small" fullWidth>
-                <InputLabel id="bdc-connection-select-label">BDC Connection</InputLabel>
+      {showAdd && (
+        <Card style={{ padding: '1.5rem', marginBottom: '1rem' }}>
+          <FlexBox direction="Column" style={{ gap: '1rem', width: '100%' }}>
+            <Title level="H5">New Restriction Field</Title>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end', width: '100%' }}>
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>Field Name</Label>
+                <Input
+                  placeholder="e.g. CostCenter"
+                  value={newFieldName}
+                  onInput={e => setNewFieldName(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </FlexBox>
+
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>BDC Connection</Label>
                 <Select
-                  labelId="bdc-connection-select-label"
-                  label="BDC Connection"
-                  value={newBdcConnectionId}
-                  onChange={e => setNewBdcConnectionId(e.target.value)}
+                  onChange={e => setNewBdcConnectionId(e.detail.selectedOption.value)}
+                  style={{ width: '100%' }}
                 >
-                  <MenuItem value=""><em>None (No BDC Link)</em></MenuItem>
+                  <Option value="">None (No BDC Link)</Option>
                   {bdcConnections.map(c => (
-                    <MenuItem key={c.ID} value={c.ID}>{c.systemName}</MenuItem>
+                    <Option key={c.ID} value={c.ID} selected={c.ID === newBdcConnectionId}>
+                      {c.systemName}
+                    </Option>
                   ))}
                 </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
-                <InputLabel id="asset-select-label">
-                  {loadingAssets ? 'Loading Assets...' : 'Asset'}
-                </InputLabel>
+              </FlexBox>
+
+              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                <Label showColon>{loadingAssets ? 'Loading Assets...' : 'Asset'}</Label>
                 <Select
-                  labelId="asset-select-label"
-                  label="Asset"
-                  value={newAsset}
-                  onChange={e => setNewAsset(e.target.value)}
+                  disabled={!newBdcConnectionId || loadingAssets}
+                  onChange={e => setNewAsset(e.detail.selectedOption.value)}
+                  style={{ width: '100%' }}
                 >
                   {assetsList.map(a => (
-                    <MenuItem key={a} value={a}>{a}</MenuItem>
+                    <Option key={a} value={a} selected={a === newAsset}>{a}</Option>
                   ))}
                   {assetsList.length === 0 && (
-                    <MenuItem value="" disabled>No assets available</MenuItem>
+                    <Option value="" disabled selected>No assets available</Option>
                   )}
                 </Select>
-              </FormControl>
-            </Grid>
+              </FlexBox>
 
-            {newBdcConnectionId && newAsset && (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <FormControl size="small" fullWidth disabled={loadingColumns || columnsList.length === 0}>
-                    <InputLabel id="new-id-columns-label">ID Columns (Keys)</InputLabel>
-                    <Select
-                      labelId="new-id-columns-label"
-                      multiple
-                      value={newIdColumns}
-                      onChange={e => setNewIdColumns(e.target.value)}
-                      input={<OutlinedInput label="ID Columns (Keys)" />}
-                      renderValue={selected => selected.join(', ')}
+              {newBdcConnectionId && newAsset && (
+                <>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>ID Columns (Keys)</Label>
+                    <MultiComboBox
+                      disabled={loadingColumns || columnsList.length === 0}
+                      onSelectionChange={e => {
+                        const selectedKeys = e.detail.items.map(item => item.getAttribute('value') || item.text);
+                        setNewIdColumns(selectedKeys);
+                      }}
+                      style={{ width: '100%' }}
                     >
                       {columnsList.map(c => (
-                        <MenuItem key={c} value={c}>
-                          <Checkbox checked={newIdColumns.indexOf(c) > -1} size="small" />
-                          <ListItemText primary={c} />
-                        </MenuItem>
+                        <MultiComboBoxItem key={c} value={c} text={c} selected={newIdColumns.indexOf(c) > -1} />
                       ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl size="small" fullWidth disabled={loadingColumns || columnsList.length === 0}>
-                    <InputLabel id="new-text-column-label">Text Column (Label)</InputLabel>
-                    <Select
-                      labelId="new-text-column-label"
-                      label="Text Column (Label)"
-                      value={newTextColumn}
-                      onChange={e => setNewTextColumn(e.target.value)}
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {columnsList.map(c => (
-                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </>
-            )}
-          </Grid>
+                    </MultiComboBox>
+                  </FlexBox>
 
-          <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-            <Button variant="outlined" color="inherit" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleAddField} disabled={loading || !newFieldName.trim()}>Save Field</Button>
-          </Box>
+                  <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                    <Label showColon>Text Column (Label)</Label>
+                    <Select
+                      disabled={loadingColumns || columnsList.length === 0}
+                      onChange={e => setNewTextColumn(e.detail.selectedOption.value)}
+                      style={{ width: '100%' }}
+                    >
+                      <Option value="">None</Option>
+                      {columnsList.map(c => (
+                        <Option key={c} value={c} selected={c === newTextColumn}>{c}</Option>
+                      ))}
+                    </Select>
+                  </FlexBox>
+                </>
+              )}
+            </div>
+
+            <FlexBox style={{ gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <Button design="Transparent" onClick={() => setShowAdd(false)}>Cancel</Button>
+              <Button design="Emphasized" onClick={handleAddField} disabled={loading || !newFieldName.trim()}>Save Field</Button>
+            </FlexBox>
+          </FlexBox>
         </Card>
-      </Collapse>
+      )}
 
-      <Card>
+      <Card style={{ padding: '1rem' }}>
         {loading && fields.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={30} /></Box>
+          <FlexBox justifySelf="Center" style={{ width: '100%', justifyContent: 'center', padding: '3rem 0' }}>
+            <BusyIndicator active size="M" />
+          </FlexBox>
         ) : fields.length === 0 ? (
-          <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <Box sx={{ opacity: 0.5, mb: 2 }}><Settings size={40} /></Box>
-            <Typography variant="subtitle1" color="text.primary" sx={{ fontWeight: 600 }}>No restriction fields configured</Typography>
-            <Typography variant="body2" color="text.secondary">Add fields like Country, Plant, or CostCenter to configure them.</Typography>
-          </Box>
+          <FlexBox direction="Column" alignItems="Center" justifyContent="Center" style={{ padding: '4rem 0', opacity: 0.5, gap: '1rem' }}>
+            <Icon name="settings" style={{ fontSize: '3rem' }} />
+            <Title level="H4">No restriction fields configured</Title>
+            <Label>Add fields like Country, Plant, or CostCenter to configure them.</Label>
+          </FlexBox>
         ) : (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell style={{ fontWeight: 600 }}>Field Name</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>BDC Connection</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Asset</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Metadata Mapping</TableCell>
-                  <TableCell align="right" style={{ width: 120, fontWeight: 600 }}>Actions</TableCell>
+          <Table
+            headerRow={
+              <TableHeaderRow>
+                <TableHeaderCell>Field Name</TableHeaderCell>
+                <TableHeaderCell>BDC Connection</TableHeaderCell>
+                <TableHeaderCell>Asset</TableHeaderCell>
+                <TableHeaderCell>Metadata Mapping</TableHeaderCell>
+                <TableHeaderCell style={{ width: '150px', textAlign: 'right' }}>Actions</TableHeaderCell>
+              </TableHeaderRow>
+            }
+          >
+            {fields.map(f => {
+              const isEditing = editingId === f.ID;
+              if (isEditing) {
+                return (
+                  <TableRow key={f.ID}>
+                    <TableCell colSpan={5}>
+                      <FlexBox direction="Column" style={{ gap: '1rem', padding: '1rem', width: '100%', boxSizing: 'border-box' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', width: '100%' }}>
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>Field Name</Label>
+                            <Input
+                              value={editForm.name}
+                              onInput={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                              style={{ width: '100%' }}
+                            />
+                          </FlexBox>
+
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>BDC Connection</Label>
+                            <Select
+                              onChange={e => setEditForm(prev => ({ ...prev, bdcConnectionId: e.detail.selectedOption.value }))}
+                              style={{ width: '100%' }}
+                            >
+                              <Option value="">None (No BDC Link)</Option>
+                              {bdcConnections.map(c => (
+                                <Option key={c.ID} value={c.ID} selected={c.ID === editForm.bdcConnectionId}>
+                                  {c.systemName}
+                                </Option>
+                              ))}
+                            </Select>
+                          </FlexBox>
+
+                          <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                            <Label showColon>{loadingEditAssets ? 'Loading Assets...' : 'Asset'}</Label>
+                            <Select
+                              disabled={!editForm.bdcConnectionId || loadingEditAssets}
+                              onChange={e => setEditForm(prev => ({ ...prev, asset: e.detail.selectedOption.value }))}
+                              style={{ width: '100%' }}
+                            >
+                              {Array.from(new Set([...editAssetsList, editForm.asset])).filter(Boolean).map(a => (
+                                <Option key={a} value={a} selected={a === editForm.asset}>{a}</Option>
+                              ))}
+                              {editAssetsList.length === 0 && (
+                                <Option value="" disabled selected>No assets available</Option>
+                              )}
+                            </Select>
+                          </FlexBox>
+
+                          {editForm.bdcConnectionId && editForm.asset && (
+                            <>
+                              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                                <Label showColon>ID Columns (Keys)</Label>
+                                <MultiComboBox
+                                  disabled={loadingEditColumns || editColumnsList.length === 0}
+                                  onSelectionChange={e => {
+                                    const selectedKeys = e.detail.items.map(item => item.getAttribute('value') || item.text);
+                                    setEditForm(prev => ({ ...prev, idColumns: selectedKeys }));
+                                  }}
+                                  style={{ width: '100%' }}
+                                >
+                                  {editColumnsList.map(c => (
+                                    <MultiComboBoxItem key={c} value={c} text={c} selected={editForm.idColumns.indexOf(c) > -1} />
+                                  ))}
+                                </MultiComboBox>
+                              </FlexBox>
+
+                              <FlexBox direction="Column" style={{ gap: '0.4rem' }}>
+                                <Label showColon>Text Column (Label)</Label>
+                                <Select
+                                  disabled={loadingEditColumns || editColumnsList.length === 0}
+                                  onChange={e => setEditForm(prev => ({ ...prev, textColumn: e.detail.selectedOption.value }))}
+                                  style={{ width: '100%' }}
+                                >
+                                  <Option value="">None</Option>
+                                  {editColumnsList.map(c => (
+                                    <Option key={c} value={c} selected={c === editForm.textColumn}>{c}</Option>
+                                  ))}
+                                </Select>
+                              </FlexBox>
+                            </>
+                          )}
+                        </div>
+
+                        <FlexBox style={{ gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <Button design="Emphasized" icon="accept" onClick={() => handleUpdateField(f.ID)} disabled={loading || !editForm.name.trim()}>Save</Button>
+                          <Button design="Transparent" icon="decline" onClick={() => setEditingId(null)}>Cancel</Button>
+                        </FlexBox>
+                      </FlexBox>
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+
+              return (
+                <TableRow key={f.ID}>
+                  <TableCell>
+                    <span style={{ fontWeight: 'bold' }}>{f.name}</span>
+                  </TableCell>
+                  <TableCell>
+                    {f.bdcConnection ? (
+                      <FlexBox alignItems="Center" style={{ gap: '0.5rem' }}>
+                        <Icon name="cloud" style={{ color: '#3b82f6' }} />
+                        <span>{f.bdcConnection.systemName}</span>
+                      </FlexBox>
+                    ) : 'None'}
+                  </TableCell>
+                  <TableCell>
+                    <span style={{ fontFamily: 'monospace' }}>{f.asset || '—'}</span>
+                  </TableCell>
+                  <TableCell>
+                    {f.bdcConnection ? (
+                      <FlexBox style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {f.idColumns && (
+                          <Tag design="Set1">
+                            {`Keys: ${(() => {
+                              try { return JSON.parse(f.idColumns).join(', '); } catch { return f.idColumns; }
+                            })()}`}
+                          </Tag>
+                        )}
+                        {f.textColumn && (
+                          <Tag design="Set2">
+                            {`Label: ${f.textColumn}`}
+                          </Tag>
+                        )}
+                      </FlexBox>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right' }}>
+                    <FlexBox style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
+                      <Button design="Transparent" icon="edit" onClick={() => startEdit(f)} disabled={loading} />
+                      <Button design="Transparent" icon="delete" onClick={() => handleDeleteField(f.ID, f.name)} disabled={loading} style={{ color: 'var(--sapNegativeElementColor)' }} />
+                    </FlexBox>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {fields.map(f => {
-                  const isEditing = editingId === f.ID;
-                  if (isEditing) {
-                    return (
-                      <TableRow key={f.ID}>
-                        <TableCell colSpan={5} sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)', p: 3 }}>
-                          <Grid container spacing={2}>
-                            <Grid item xs={12} sm={4}>
-                              <TextField
-                                label="Field Name"
-                                size="small"
-                                fullWidth
-                                value={editForm.name}
-                                onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                              />
-                            </Grid>
-                            <Grid item xs={12} sm={4}>
-                              <FormControl size="small" fullWidth>
-                                <InputLabel id="edit-bdc-select-label">BDC Connection</InputLabel>
-                                <Select
-                                  labelId="edit-bdc-select-label"
-                                  label="BDC Connection"
-                                  value={editForm.bdcConnectionId}
-                                  onChange={e => setEditForm(prev => ({ ...prev, bdcConnectionId: e.target.value }))}
-                                >
-                                  <MenuItem value=""><em>None (No BDC Link)</em></MenuItem>
-                                  {bdcConnections.map(c => (
-                                    <MenuItem key={c.ID} value={c.ID}>{c.systemName}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </Grid>
-                            <Grid item xs={12} sm={4}>
-                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
-                                <InputLabel id="edit-asset-select-label">
-                                  {loadingEditAssets ? 'Loading Assets...' : 'Asset'}
-                                </InputLabel>
-                                <Select
-                                  labelId="edit-asset-select-label"
-                                  label="Asset"
-                                  value={editForm.asset}
-                                  onChange={e => setEditForm(prev => ({ ...prev, asset: e.target.value }))}
-                                >
-                                  {Array.from(new Set([...editAssetsList, editForm.asset])).filter(Boolean).map(a => (
-                                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                                  ))}
-                                  {editAssetsList.length === 0 && (
-                                    <MenuItem value="" disabled>No assets available</MenuItem>
-                                  )}
-                                </Select>
-                              </FormControl>
-                            </Grid>
-
-                            {editForm.bdcConnectionId && editForm.asset && (
-                              <>
-                                <Grid item xs={12} sm={6}>
-                                  <FormControl size="small" fullWidth disabled={loadingEditColumns || editColumnsList.length === 0}>
-                                    <InputLabel id="edit-id-columns-label">ID Columns (Keys)</InputLabel>
-                                    <Select
-                                      labelId="edit-id-columns-label"
-                                      multiple
-                                      value={editForm.idColumns}
-                                      onChange={e => setEditForm(prev => ({ ...prev, idColumns: e.target.value }))}
-                                      input={<OutlinedInput label="ID Columns (Keys)" />}
-                                      renderValue={selected => selected.join(', ')}
-                                    >
-                                      {editColumnsList.map(c => (
-                                        <MenuItem key={c} value={c}>
-                                          <Checkbox checked={editForm.idColumns.indexOf(c) > -1} size="small" />
-                                          <ListItemText primary={c} />
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <FormControl size="small" fullWidth disabled={loadingEditColumns || editColumnsList.length === 0}>
-                                    <InputLabel id="edit-text-column-label">Text Column (Label)</InputLabel>
-                                    <Select
-                                      labelId="edit-text-column-label"
-                                      label="Text Column (Label)"
-                                      value={editForm.textColumn}
-                                      onChange={e => setEditForm(prev => ({ ...prev, textColumn: e.target.value }))}
-                                    >
-                                      <MenuItem value=""><em>None</em></MenuItem>
-                                      {editColumnsList.map(c => (
-                                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                </Grid>
-                              </>
-                            )}
-
-                            <Grid item xs={12} sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', alignItems: 'center', mt: 1 }}>
-                              <Button variant="contained" size="small" onClick={() => handleUpdateField(f.ID)} disabled={loading || !editForm.name.trim()} startIcon={<Check size={14} />}>
-                                Save
-                              </Button>
-                              <Button variant="outlined" size="small" color="inherit" onClick={() => setEditingId(null)} startIcon={<X size={14} />}>
-                                Cancel
-                              </Button>
-                            </Grid>
-                          </Grid>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }
-
-                  return (
-                    <TableRow key={f.ID} hover>
-                      <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {f.name}
-                      </TableCell>
-                      <TableCell>
-                        {f.bdcConnection ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Cloud size={14} color="#3b82f6" />
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {f.bdcConnection.systemName}
-                            </Typography>
-                          </Box>
-                        ) : 'None'}
-                      </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
-                        {f.asset || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {f.bdcConnection ? (
-                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {f.idColumns && (
-                              <Chip 
-                                label={`Keys: ${(() => {
-                                  try { return JSON.parse(f.idColumns).join(', '); } catch { return f.idColumns; }
-                                })()}`} 
-                                size="small" 
-                                variant="outlined" 
-                                sx={{ fontSize: 10, height: 20 }} 
-                              />
-                            )}
-                            {f.textColumn && (
-                              <Chip 
-                                label={`Label: ${f.textColumn}`} 
-                                size="small" 
-                                variant="outlined" 
-                                sx={{ fontSize: 10, height: 20 }} 
-                              />
-                            )}
-                          </Box>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                          <IconButton onClick={() => startEdit(f)} disabled={loading} size="small" color="inherit">
-                            <Edit3 size={15} />
-                          </IconButton>
-                          <IconButton color="error" onClick={() => handleDeleteField(f.ID, f.name)} disabled={loading} size="small">
-                            <Trash2 size={15} />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              );
+            })}
+          </Table>
         )}
       </Card>
-
-    </Box>
+    </FlexBox>
   );
 }
