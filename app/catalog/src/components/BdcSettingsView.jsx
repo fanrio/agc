@@ -3,11 +3,24 @@ import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress,
 import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
 import * as api from '../api';
 
+const ENV_LABEL = {
+  P: 'Production',
+  Q: 'Quality Assurance',
+  D: 'Development'
+};
+
+const ENV_COLOR = {
+  P: 'error',
+  Q: 'warning',
+  D: 'info'
+};
+
 export default function BdcSettingsView() {
   const [settings, setSettings] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showAdd, setShowAdd]   = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [environments, setEnvironments] = useState([]);
   
   // State for Toast Notifications
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
@@ -19,6 +32,7 @@ export default function BdcSettingsView() {
   const [form, setForm] = useState({
     systemName: '',
     connectionType: 'OData',
+    environment_ID: 'D',
     url: '',
     host: '',
     port: 443,
@@ -37,6 +51,7 @@ export default function BdcSettingsView() {
   const [editForm, setEditForm] = useState({
     systemName: '',
     connectionType: 'OData',
+    environment_ID: 'D',
     url: '',
     host: '',
     port: 443,
@@ -60,8 +75,12 @@ export default function BdcSettingsView() {
   async function load() {
     setLoading(true);
     try {
-      const data = await api.getBdcSettings();
+      const [data, envs] = await Promise.all([
+        api.getBdcSettings(),
+        api.getEnvironments()
+      ]);
       setSettings(data);
+      setEnvironments(envs);
     } catch (e) {
       setSnackbar({ open: true, message: `Failed to load settings: ${e.message}`, severity: 'error' });
     }
@@ -143,6 +162,7 @@ export default function BdcSettingsView() {
       const payload = {
         systemName: form.systemName,
         connectionType: form.connectionType,
+        environment_ID: form.environment_ID,
         url: form.connectionType === 'SAP Hana' ? '' : form.url,
         host: form.connectionType === 'SAP Hana' ? form.host : '',
         port: form.connectionType === 'SAP Hana' ? parseInt(form.port) || 443 : 443,
@@ -162,6 +182,7 @@ export default function BdcSettingsView() {
       setForm({
         systemName: '',
         connectionType: 'OData',
+        environment_ID: 'D',
         url: '',
         host: '',
         port: 443,
@@ -208,6 +229,7 @@ export default function BdcSettingsView() {
       const payload = {
         systemName: editForm.systemName,
         connectionType: editForm.connectionType,
+        environment_ID: editForm.environment_ID,
         url: editForm.connectionType === 'SAP Hana' ? '' : editForm.url,
         host: editForm.connectionType === 'SAP Hana' ? editForm.host : '',
         port: editForm.connectionType === 'SAP Hana' ? parseInt(editForm.port) || 443 : 443,
@@ -275,6 +297,7 @@ export default function BdcSettingsView() {
     setEditForm({
       systemName: s.systemName,
       connectionType: s.connectionType || 'OData',
+      environment_ID: s.environment_ID || 'D',
       url: s.url || '',
       host: s.host || '',
       port: s.port !== undefined ? s.port : 443,
@@ -324,10 +347,10 @@ export default function BdcSettingsView() {
         <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New System Connection</Typography>
           <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={4}>
               <TextField label="System Connection Name" size="small" fullWidth placeholder="e.g. Datasphere Production" value={form.systemName} onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))} />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={4}>
               <FormControl size="small" fullWidth>
                 <InputLabel id="add-conn-type-label">Connection Type</InputLabel>
                 <Select
@@ -341,6 +364,21 @@ export default function BdcSettingsView() {
                 </Select>
               </FormControl>
             </Grid>
+             <Grid item xs={12} sm={4}>
+               <FormControl size="small" fullWidth>
+                 <InputLabel id="add-env-label">Environment</InputLabel>
+                 <Select
+                   labelId="add-env-label"
+                   label="Environment"
+                   value={form.environment_ID}
+                   onChange={e => setForm(f => ({ ...f, environment_ID: e.target.value }))}
+                 >
+                   {environments.map(env => (
+                     <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
+                   ))}
+                 </Select>
+               </FormControl>
+             </Grid>
 
             {form.connectionType === 'SAP Hana' ? (
               /* HANA FIELDS */
@@ -444,10 +482,10 @@ export default function BdcSettingsView() {
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Edit Connection: {s.systemName}</Typography>
                     <Grid container spacing={2.5}>
-                      <Grid item xs={12} sm={6}>
+                      <Grid item xs={12} sm={4}>
                         <TextField label="System Connection Name" size="small" fullWidth value={editForm.systemName} onChange={e => setEditForm(f => ({ ...f, systemName: e.target.value }))} />
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid item xs={12} sm={4}>
                         <FormControl size="small" fullWidth>
                           <InputLabel id="edit-conn-type-label">Connection Type</InputLabel>
                           <Select
@@ -458,6 +496,21 @@ export default function BdcSettingsView() {
                           >
                             <MenuItem value="OData">OData (REST Catalog)</MenuItem>
                             <MenuItem value="SAP Hana">SAP Hana (Direct DB)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <FormControl size="small" fullWidth>
+                          <InputLabel id="edit-env-label">Environment</InputLabel>
+                          <Select
+                            labelId="edit-env-label"
+                            label="Environment"
+                            value={editForm.environment_ID}
+                            onChange={e => setEditForm(f => ({ ...f, environment_ID: e.target.value }))}
+                          >
+                            {environments.map(env => (
+                              <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
+                            ))}
                           </Select>
                         </FormControl>
                       </Grid>
@@ -557,6 +610,17 @@ export default function BdcSettingsView() {
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
                           {s.systemName}
                           <Chip label={currentType} size="small" color={currentType === 'SAP Hana' ? "secondary" : "primary"} sx={{ height: 20, fontSize: 10 }} />
+                          {s.environment_ID && (
+                            <Chip
+                              label={(() => {
+                                const found = environments.find(e => e.ID === s.environment_ID);
+                                return found ? found.name : s.environment_ID;
+                              })()}
+                              size="small"
+                              color={ENV_COLOR[s.environment_ID] || "default"}
+                              sx={{ height: 20, fontSize: 10 }}
+                            />
+                          )}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {currentType === 'SAP Hana' ? (

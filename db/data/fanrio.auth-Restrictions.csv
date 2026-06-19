@@ -1,4 +1,4 @@
 ID,role_ID,field,filterType,value,sourceLabel
-res-global,role-global,Global,SINGLE_VALUE,Global,Global
-res-germany,role-germany,Country,SINGLE_VALUE,Germany,Germany
-res-finance,role-finance,Department,SINGLE_VALUE,Finance,Finance
+11111111-1111-1111-1111-111111111111,role-global,Global,SINGLE_VALUE,Global,Global
+22222222-2222-2222-2222-222222222222,role-germany,Country,SINGLE_VALUE,Germany,Germany
+33333333-3333-3333-3333-333333333333,role-finance,Department,SINGLE_VALUE,Finance,Finance

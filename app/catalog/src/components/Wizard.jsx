@@ -42,6 +42,18 @@ function isCriticalRestriction(r, orgNodes) {
   return false;
 }
 
+const ENV_LABEL = {
+  P: 'Production',
+  Q: 'Quality Assurance',
+  D: 'Development'
+};
+
+const ENV_COLOR = {
+  P: 'error',
+  Q: 'warning',
+  D: 'info'
+};
+
 export default function Wizard({ context = {}, onDone, permissions }) {
   const [step, setStep]                   = useState(0);
   const [roleType, setRoleType]           = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
@@ -67,6 +79,8 @@ export default function Wizard({ context = {}, onDone, permissions }) {
 
   // States for optional direct assignment on creation
   const [critical, setCritical]           = useState(false);
+  const [environmentId, setEnvironmentId] = useState('D');
+  const [environments, setEnvironments]   = useState([]);
   const [assignUserId, setAssignUserId]   = useState('');
   const [assignUserName, setAssignUserName] = useState('');
 
@@ -111,6 +125,7 @@ export default function Wizard({ context = {}, onDone, permissions }) {
   useEffect(() => {
     api.getRoles().then(setAllRoles).catch(console.error);
     api.getAllOrgNodesFlat().then(setOrgNodes).catch(console.error);
+    api.getEnvironments().then(setEnvironments).catch(console.error);
     
     api.getRestrictionFields()
       .then(fields => {
@@ -134,6 +149,7 @@ export default function Wizard({ context = {}, onDone, permissions }) {
           setRestrictions(role.ownRestrictions || []);
           setApprovers(role.approvers || []);
           setCritical(!!role.critical);
+          setEnvironmentId(role.environment_ID || 'D');
         }
         setLoading(false);
       }).catch(e => { console.error(e); setLoading(false); });
@@ -225,6 +241,7 @@ export default function Wizard({ context = {}, onDone, permissions }) {
         await api.updateRole(roleId, { 
           description, 
           critical,
+          environment_ID: environmentId,
           type: roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE')
         });
 
@@ -260,13 +277,14 @@ export default function Wizard({ context = {}, onDone, permissions }) {
       } else if (roleType === 'ORG_BASED') {
         const result = await api.generateOrgRole(selectedOrgNodeId);
         roleId = result.roleId;
-        await api.updateRole(roleId, { name: roleName || result.roleName, description, critical });
+        await api.updateRole(roleId, { name: roleName || result.roleName, description, critical, environment_ID: environmentId });
       } else {
         const role = await api.createRole({
           name: roleName,
           type: selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE',
           description,
           critical,
+          environment_ID: environmentId,
         });
         roleId = role.ID;
 
@@ -458,6 +476,19 @@ export default function Wizard({ context = {}, onDone, permissions }) {
                 value={description}
                 onChange={e => setDescription(e.target.value)}
               />
+              <FormControl size="small" fullWidth sx={{ mt: 1 }}>
+                <InputLabel id="role-env-label">Environment</InputLabel>
+                <Select
+                  labelId="role-env-label"
+                  label="Environment"
+                  value={environmentId}
+                  onChange={e => setEnvironmentId(e.target.value)}
+                >
+                  {environments.map(env => (
+                    <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -580,14 +611,22 @@ export default function Wizard({ context = {}, onDone, permissions }) {
                   <Typography variant="body1" sx={{ fontWeight: 700, fontFamily: 'monospace', color: 'primary.light' }}>{roleName || '—'}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Type</Typography>
-                  <Chip
-                    label={roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
-                    size="small"
-                    color={roleType === 'ORG_BASED' ? 'primary' : 'secondary'}
-                    variant="outlined"
-                    sx={{ height: 20, fontSize: 10 }}
-                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Type & Environment</Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Chip
+                      label={roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
+                      size="small"
+                      color={roleType === 'ORG_BASED' ? 'primary' : 'secondary'}
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: 10 }}
+                    />
+                    <Chip
+                      label={environments.find(e => e.ID === environmentId)?.name || environmentId}
+                      size="small"
+                      color={ENV_COLOR[environmentId] || 'default'}
+                      sx={{ height: 20, fontSize: 10 }}
+                    />
+                  </Box>
                 </Box>
               </Box>
               <Box sx={{ mb: 2 }}>

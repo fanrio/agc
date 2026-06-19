@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, FormControl, Select, MenuItem } from '@mui/material';
-import { Home, Building2, Shield, Settings, Users, Network, History } from 'lucide-react';
+import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw } from 'lucide-react';
 import * as api from './api';
 import HomeView from './components/HomeView';
 import OrgStructureView from './components/OrgStructureView';
@@ -9,6 +9,7 @@ import Wizard from './components/Wizard';
 import RoleAssignmentsView from './components/RoleAssignmentsView';
 import AdministrationView from './components/AdministrationView';
 import AuditLogsView from './components/AuditLogsView';
+import ReplicationsView from './components/ReplicationsView';
 
 const DRAWER_WIDTH = 240;
 
@@ -17,6 +18,7 @@ const NAV = [
   { id: 'org',         label: 'Organization',        icon: Building2 },
   { id: 'roles',       label: 'Roles',               icon: Shield },
   { id: 'assignments', label: 'Role Assignments',    icon: Users },
+  { id: 'replications',label: 'Replications',         icon: RefreshCw },
   { id: 'audit',       label: 'Audit Logs',          icon: History },
   { id: 'admin',       label: 'Administration',      icon: Settings },
 ];
@@ -178,6 +180,7 @@ export default function App() {
         {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(roleId)   => openWizard({ parentRoleId: roleId })} onEditRole={(roleId) => openWizard({ roleId })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} permissions={permissions} />}
         {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} permissions={permissions} />}
         {activeNav === 'assignments' && <RoleAssignmentsView permissions={permissions} />}
+        {activeNav === 'replications' && <ReplicationsView />}
         {activeNav === 'audit'       && <AuditLogsView />}
         {activeNav === 'admin'       && <AdministrationView />}
       </Box>

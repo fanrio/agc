@@ -40,11 +40,13 @@ entity Streams {
 // Roles & Restrictions
 // ---------------------------------------------------------------------------
 
-entity Roles : cuid, managed {
+entity Roles : managed {
+  key ID          : String(36)  @default : 'uuid()';
   name            : String(200) not null;
   type            : String(20)  not null;  // ORG_BASED | DERIVED
   description     : String(500);
   critical        : Boolean @default : false;
+  environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
   parentRoles     : Association to many RoleInheritance on parentRoles.role = $self;
   childRoles      : Association to many RoleInheritance on childRoles.parent = $self;
@@ -89,6 +91,7 @@ entity BdcSettings {
   key ID       : String(36) @default : 'uuid()';
   systemName   : String(100) not null;
   connectionType : String(50) @default : 'OData'; // OData | SAP Hana
+  environment  : Association to Environments;
   url          : String(255);
   host         : String(255);
   port         : Integer @default : 443;
@@ -120,5 +123,21 @@ entity AppAuthorizations : cuid, managed {
   canManageSingleRoles : Boolean @default: false;
   canManageDerivedRoles: Boolean @default: false;
   canAssignRoles       : Boolean @default: false;
+}
+
+entity Environments {
+  key ID : String(10); // 'P', 'Q', 'D'
+  name   : String(100) not null;
+}
+
+entity Replications : cuid {
+  replicationDate  : DateTime;
+  status           : String(20) not null; // e.g. 'Open', 'Running', 'Success', 'Failed'
+  replicationRoles : String(1000) not null;
+  environment      : Association to Environments;
+  startTime        : DateTime;
+  endTime          : DateTime;
+  user             : String(200);
+  runId            : String(100);
 }
 

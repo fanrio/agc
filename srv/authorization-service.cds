@@ -19,8 +19,20 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity RoleInheritance  as projection on db.RoleInheritance;
   entity RoleApprovers    as projection on db.RoleApprovers;
   entity BdcSettings      as projection on db.BdcSettings;
+  entity Environments     as projection on db.Environments;
   entity AuditLogs        as projection on db.AuditLogs;
   entity AppAuthorizations as projection on db.AppAuthorizations;
+  entity Replications     as projection on db.Replications;
+
+  action triggerReplication() returns {
+    success : Boolean;
+    message : String;
+  };
+
+  action checkReplicationStatuses() returns {
+    success : Boolean;
+    message : String;
+  };
 
   action testBdcConnection(settingId : UUID) returns {
     success : Boolean;

@@ -4,6 +4,18 @@ import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 
+const ENV_LABEL = {
+  P: 'Production',
+  Q: 'Quality Assurance',
+  D: 'Development'
+};
+
+const ENV_COLOR = {
+  P: 'error',
+  Q: 'warning',
+  D: 'info'
+};
+
 // Helper to format ISO datetime strings
 function formatDateTime(isoString) {
   if (!isoString) return '—';
@@ -138,6 +150,14 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
             variant="outlined"
             sx={{ height: 20, fontSize: 10 }}
           />
+          {role.environment && (
+            <Chip
+              label={role.environment.name || role.environment_ID}
+              size="small"
+              color={ENV_COLOR[role.environment_ID] || "default"}
+              sx={{ height: 20, fontSize: 10 }}
+            />
+          )}
           {role.critical && (
             <Chip
               label="Critical"

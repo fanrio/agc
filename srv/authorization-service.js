@@ -2,13 +2,39 @@ const cds = require('@sap/cds');
 const { resolveEffectiveRestrictions, evaluateRestriction } = require('./lib/resolveEffectiveRestrictions');
 
 function isMockUrl(url) {
-  if (!url) return true;
-  const lower = url.toLowerCase();
-  return lower.includes('fanrio.corp') || lower.includes('mock') || lower.includes('dummy') || lower.includes('localhost') || lower.includes('127.0.0.1');
+  return false;
 }
 
 module.exports = cds.service.impl(async function () {
-  const { OrgNodes, OrgNodeAttributes, Roles, Restrictions, RoleAssignments, RoleInheritance, RestrictionFields, BdcSettings, AuditLogs } = this.entities;
+  const { OrgNodes, OrgNodeAttributes, Roles, Restrictions, RoleAssignments, RoleInheritance, RestrictionFields, BdcSettings, AuditLogs, Replications } = this.entities;
+
+  // Helper to add role change to replication list
+  async function _queueReplication(roleName, environmentId, user) {
+    if (!roleName) return;
+    try {
+      const envId = environmentId || 'D';
+      // Check if there is already a pending 'Open' replication for this role in this environment
+      const existing = await cds.db.run(SELECT.one.from(Replications).where({
+        replicationRoles: roleName,
+        environment_ID: envId,
+        status: 'Open'
+      }));
+      if (existing) {
+        return; // Already queued, avoid duplicates
+      }
+
+      await cds.db.run(INSERT.into(Replications).entries({
+        ID: cds.utils.uuid(),
+        replicationDate: new Date().toISOString(),
+        status: 'Open',
+        replicationRoles: roleName,
+        environment_ID: envId,
+        user: user || 'system'
+      }));
+    } catch (err) {
+      console.error('Failed to queue replication for role change:', err);
+    }
+  }
 
   // Auto-generate UUID keys for OrgNodes if not provided by client
   this.before('CREATE', 'OrgNodes', (req) => {
@@ -23,6 +49,13 @@ module.exports = cds.service.impl(async function () {
       req.data.ID = cds.utils.uuid();
     }
   });
+  // Auto-generate UUID keys for Roles if not provided by client
+  this.before('CREATE', 'Roles', (req) => {
+    if (!req.data.ID) {
+      req.data.ID = cds.utils.uuid();
+    }
+  });
+
 
   // Ensure Role names are unique on CREATE
   this.before('CREATE', 'Roles', async (req) => {
@@ -808,6 +841,9 @@ module.exports = cds.service.impl(async function () {
 
   // Helper to fetch OAuth token
   async function _getOAuthToken(tokenUrl, clientId, clientSecret) {
+    if (isMockUrl(tokenUrl)) {
+      return 'mock-token';
+    }
     const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     const tokenRes = await fetch(tokenUrl, {
       method: 'POST',
@@ -963,6 +999,246 @@ module.exports = cds.service.impl(async function () {
     return await connectionPromise;
   });
 
+  // Helper to check and update running replication statuses
+  async function _checkAndUpdateRunningReplications(db) {
+    const runningReps = await db.run(SELECT.from(Replications).where({ status: 'Running' }));
+    if (runningReps.length === 0) {
+      return { success: true, message: 'No running replications.' };
+    }
+
+    const runIds = Array.from(new Set(runningReps.map(r => r.runId).filter(Boolean)));
+    const results = [];
+    const errors = [];
+
+    for (const runId of runIds) {
+      try {
+        const repSample = runningReps.find(r => r.runId === runId);
+        const envId = repSample ? repSample.environment_ID : 'D';
+
+        const activeSetting = await db.run(SELECT.one.from(BdcSettings).where({
+          connectionType: 'OData',
+          isActive: true,
+          environment_ID: envId
+        }));
+
+        if (!activeSetting) {
+          errors.push(`Run ${runId}: No active BDC connection configured for environment: ${envId}`);
+          continue;
+        }
+
+        const { url, tokenUrl, clientId, clientSecret, space } = activeSetting;
+        if (!url || !tokenUrl || !clientId || !clientSecret || !space) {
+          errors.push(`Run ${runId}: Active BDC connection for environment ${envId} is missing parameters.`);
+          continue;
+        }
+
+        let status = 'RUNNING';
+        let finishedAt = null;
+
+        if (isMockUrl(url)) {
+          // Mock URL fallback logic: complete mock runs after 10 seconds
+          const startedMs = parseInt(runId.replace('mock-log-', '')) || Date.now();
+          if (Date.now() - startedMs > 10000) {
+            status = 'COMPLETED';
+            finishedAt = new Date().toISOString();
+          } else {
+            status = 'RUNNING';
+          }
+        } else {
+          const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
+          const s = space.trim();
+          const l = runId.trim();
+          const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/logs/${s}/${l}`;
+
+          const res = await fetch(endpoint, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json'
+            }
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            status = data.status || 'RUNNING';
+            finishedAt = data.finishedAt || data.endedAt || new Date().toISOString();
+          } else {
+            const errBody = await res.text().catch(() => '');
+            throw new Error(`Log request failed with status ${res.status}: ${errBody}`);
+          }
+        }
+
+        if (status === 'COMPLETED') {
+          await db.run(UPDATE(Replications)
+            .set({ 
+              status: 'Success', 
+              replicationDate: finishedAt || new Date().toISOString(),
+              endTime: finishedAt || new Date().toISOString()
+            })
+            .where({ runId: runId, status: 'Running' }));
+          results.push(`Run ${runId} completed successfully.`);
+        } else if (status === 'FAILED' || status === 'ABORTED') {
+          await db.run(UPDATE(Replications)
+            .set({ 
+              status: 'Failed', 
+              replicationDate: finishedAt || new Date().toISOString(),
+              endTime: finishedAt || new Date().toISOString()
+            })
+            .where({ runId: runId, status: 'Running' }));
+          results.push(`Run ${runId} failed or aborted.`);
+        } else {
+          results.push(`Run ${runId} is still running.`);
+        }
+      } catch (err) {
+        errors.push(`Run ${runId} check failed: ${err.message}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return {
+        success: false,
+        message: `Checked statuses with partial errors. Results: [${results.join('; ')}]. Errors: [${errors.join('; ')}]`
+      };
+    }
+    return {
+      success: true,
+      message: `Checked statuses: ${results.join('; ')}`
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // checkReplicationStatuses
+  // ---------------------------------------------------------------------------
+  this.on('checkReplicationStatuses', async (req) => {
+    const db = cds.db;
+    try {
+      return await _checkAndUpdateRunningReplications(db);
+    } catch (e) {
+      return req.error(500, `Failed to check replication statuses: ${e.message}`);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // triggerReplication
+  // ---------------------------------------------------------------------------
+  this.on('triggerReplication', async (req) => {
+    const db = cds.db;
+    
+    // 1. Check/update status of any currently 'Running' task chains before starting new ones
+    await _checkAndUpdateRunningReplications(db).catch(err => {
+      console.error('Error auto-refreshing running replication statuses:', err);
+    });
+    
+    // 2. Fetch all pending open or failed replications
+    const openReps = await db.run(SELECT.from(Replications).where({ status: { in: ['Open', 'Failed'] } }));
+    if (openReps.length === 0) {
+      return { success: true, message: 'No pending or failed changes to replicate.' };
+    }
+
+    // 3. Identify the unique environments of those open changes
+    const envIds = Array.from(new Set(openReps.map(r => r.environment_ID).filter(Boolean)));
+    
+    // If somehow no environments are set, fallback to Development
+    if (envIds.length === 0) {
+      envIds.push('D');
+    }
+
+    const results = [];
+    const errors = [];
+
+    // 4. For each environment, trigger the corresponding BDC task chain
+    for (const envId of envIds) {
+      const activeSetting = await db.run(SELECT.one.from(BdcSettings).where({ 
+        connectionType: 'OData', 
+        isActive: true, 
+        environment_ID: envId 
+      }));
+
+      if (!activeSetting) {
+        errors.push(`No active BDC connection configured for environment: ${envId}`);
+        continue;
+      }
+
+      const { url, tokenUrl, clientId, clientSecret, space, taskChainFlat } = activeSetting;
+      if (!url || !tokenUrl || !clientId || !clientSecret || !space || !taskChainFlat) {
+        errors.push(`Active BDC connection for environment ${envId} is missing parameters.`);
+        continue;
+      }
+
+      try {
+        const runStartTime = new Date().toISOString();
+        const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
+        const s = space.trim();
+        const tc = taskChainFlat.trim();
+        const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/chains/${s}/run/${tc}`;
+        
+        let success = false;
+        let responseData = null;
+
+        if (isMockUrl(url)) {
+          success = true;
+          responseData = {
+            logId: `mock-log-${Date.now()}`,
+            status: 'RUNNING',
+            spaceId: space,
+            taskChainId: taskChainFlat,
+            startedAt: runStartTime
+          };
+        } else {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+          });
+          if (res.ok) {
+            success = true;
+            responseData = await res.json().catch(() => ({}));
+          } else {
+            const errBody = await res.text().catch(() => '');
+            throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody}`);
+          }
+        }
+
+        const runUser = req?.user?.id || 'system';
+        const finalLogId = responseData && (responseData.logId || responseData.runId || `run-${Date.now()}`);
+
+        if (success) {
+          // Change status of open or failed replications in this environment to 'Running' (with startTime and runId)
+          await db.run(UPDATE(Replications)
+            .set({ 
+              status: 'Running', 
+              replicationDate: runStartTime,
+              startTime: runStartTime,
+              user: runUser,
+              runId: String(finalLogId)
+            })
+            .where({ environment_ID: envId, status: { in: ['Open', 'Failed'] } }));
+          results.push(`Environment ${envId}: Started replication (Run ID: ${finalLogId}) via connection ${activeSetting.systemName}`);
+        } else {
+          errors.push(`Environment ${envId}: Replication failed to trigger.`);
+        }
+      } catch (e) {
+        errors.push(`Environment ${envId} Error: ${e.message}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      if (results.length > 0) {
+        return { 
+          success: false, 
+          message: `Partial replication. Successes: [${results.join('; ')}]. Errors: [${errors.join('; ')}]` 
+        };
+      } else {
+        return req.error(500, `Replication failed: ${errors.join('; ')}`);
+      }
+    }
+
+    return { success: true, message: `All environments replicated: ${results.join('; ')}` };
+  });
+
   // ---------------------------------------------------------------------------
   // runBdcTaskChain
   // ---------------------------------------------------------------------------
@@ -1058,7 +1334,7 @@ module.exports = cds.service.impl(async function () {
   // ---------------------------------------------------------------------------
   // Audit Logs - Roles
   // ---------------------------------------------------------------------------
-  this.after('CREATE', 'Roles', async (role) => {
+  this.after('CREATE', 'Roles', async (role, req) => {
     try {
       await cds.db.run(INSERT.into(AuditLogs).entries({
         ID: cds.utils.uuid(),
@@ -1068,6 +1344,7 @@ module.exports = cds.service.impl(async function () {
         targetName: role.name,
         details: JSON.stringify(role)
       }));
+      await _queueReplication(role.name, role.environment_ID, req?.user?.id);
     } catch (err) {
       console.error('Audit Log failed for Roles CREATE:', err);
     }
@@ -1122,6 +1399,11 @@ module.exports = cds.service.impl(async function () {
             targetName: afterState ? afterState.name : (beforeState ? beforeState.name : 'Unknown Role'),
             details: JSON.stringify(diff)
           }));
+          await _queueReplication(
+            afterState ? afterState.name : (beforeState ? beforeState.name : 'Unknown Role'),
+            afterState ? afterState.environment_ID : (beforeState ? beforeState.environment_ID : 'D'),
+            req?.user?.id
+          );
         }
       }
     } catch (err) {
@@ -1143,6 +1425,7 @@ module.exports = cds.service.impl(async function () {
             targetName: beforeState.name,
             details: JSON.stringify(beforeState)
           }));
+          await _queueReplication(`${beforeState.name} (DELETED)`, beforeState.environment_ID, req?.user?.id);
         }
       }
     } catch (err) {
@@ -1254,12 +1537,12 @@ module.exports = cds.service.impl(async function () {
   });
 
   // ---------------------------------------------------------------------------
-  // Audit Logs - Restrictions (Consolidated under Roles)
+  // Audit Logs & Replications - Restrictions (Consolidated under Roles)
   // ---------------------------------------------------------------------------
-  this.after('CREATE', 'Restrictions', async (restriction) => {
+  this.after('CREATE', 'Restrictions', async (restriction, req) => {
     try {
       if (restriction.role_ID) {
-        const role = await cds.db.run(SELECT.one.from(Roles).columns('name').where({ ID: restriction.role_ID }));
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: restriction.role_ID }));
         const roleName = role ? role.name : 'Unknown Role';
         const details = {
           "Restriction Added": {
@@ -1275,6 +1558,7 @@ module.exports = cds.service.impl(async function () {
           targetName: roleName,
           details: JSON.stringify(details)
         }));
+        await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
       }
     } catch (err) {
       console.error('Audit Log failed for Restrictions CREATE:', err);
@@ -1311,7 +1595,7 @@ module.exports = cds.service.impl(async function () {
         }
 
         if (hasChanges && beforeState.role_ID) {
-          const role = await cds.db.run(SELECT.one.from(Roles).columns('name').where({ ID: beforeState.role_ID }));
+          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
           const roleName = role ? role.name : 'Unknown Role';
           const details = {
             [`Restriction Changed (${beforeState.field})`]: {
@@ -1327,6 +1611,7 @@ module.exports = cds.service.impl(async function () {
             targetName: roleName,
             details: JSON.stringify(details)
           }));
+          await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
         }
       }
     } catch (err) {
@@ -1340,7 +1625,7 @@ module.exports = cds.service.impl(async function () {
       if (id) {
         const beforeState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
         if (beforeState && beforeState.role_ID) {
-          const role = await cds.db.run(SELECT.one.from(Roles).columns('name').where({ ID: beforeState.role_ID }));
+          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
           const roleName = role ? role.name : 'Unknown Role';
           const details = {
             "Restriction Deleted": {
@@ -1356,6 +1641,7 @@ module.exports = cds.service.impl(async function () {
             targetName: roleName,
             details: JSON.stringify(details)
           }));
+          await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
         }
       }
     } catch (err) {

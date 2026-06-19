@@ -25,7 +25,7 @@ export const createOrgAttr     = (body)         => request('POST',   '/OrgNodeAt
 export const deleteOrgAttr     = (id)           => request('DELETE', `/OrgNodeAttributes(${id})`);
 
 // Roles
-export const getRoles          = ()             => request('GET',    '/Roles?$expand=ownRestrictions,assignments,orgNode,parentRoles($expand=parent),approvers');
+export const getRoles          = ()             => request('GET',    '/Roles?$expand=ownRestrictions,assignments,orgNode,parentRoles($expand=parent),approvers,environment');
 export const createRole        = (body)         => request('POST',   '/Roles', body);
 export const updateRole        = (id, body)     => request('PATCH',  `/Roles('${id}')`, body);
 export const deleteRole        = (id)           => request('DELETE', `/Roles('${id}')`);
@@ -55,7 +55,7 @@ export const createAssignment  = (body)         => request('POST',   '/RoleAssig
 export const deleteAssignment  = (id)           => request('DELETE', `/RoleAssignments(${id})`);
 
 // BDC Settings
-export const getBdcSettings     = ()             => request('GET',    '/BdcSettings');
+export const getBdcSettings     = ()             => request('GET',    '/BdcSettings?$expand=environment');
 export const createBdcSetting   = (body)         => request('POST',   '/BdcSettings', body);
 export const updateBdcSetting   = (id, body)     => request('PATCH',  `/BdcSettings('${id}')`, body);
 export const deleteBdcSetting   = (id)           => request('DELETE', `/BdcSettings('${id}')`);
@@ -79,9 +79,15 @@ export const fetchRawHanaViews = (settingId) => request('POST', '/fetchRawHanaVi
 export const runBdcTaskChain = (url, tokenUrl, clientId, clientSecret, space, taskChainId) => request('POST', '/runBdcTaskChain', { url, tokenUrl, clientId, clientSecret, space, taskChainId });
 export const fetchBdcTaskChainLog = (url, tokenUrl, clientId, clientSecret, space, logId) => request('POST', '/fetchBdcTaskChainLog', { url, tokenUrl, clientId, clientSecret, space, logId });
 export const getAuditLogs = () => request('GET', '/AuditLogs?$orderby=createdAt desc');
+export const getEnvironments = () => request('GET', '/Environments');
 
-// App Authorizations
 export const getAppAuthorizations       = ()             => request('GET',    '/AppAuthorizations');
 export const createAppAuthorization     = (body)         => request('POST',   '/AppAuthorizations', body);
 export const updateAppAuthorization     = (id, body)     => request('PATCH',  `/AppAuthorizations('${id}')`, body);
 export const deleteAppAuthorization     = (id)           => request('DELETE', `/AppAuthorizations('${id}')`);
+
+// Replications
+export const getReplications            = ()             => request('GET',    '/Replications?$orderby=replicationDate desc');
+export const triggerReplication         = ()             => request('POST',   '/triggerReplication', {});
+export const checkReplicationStatuses   = ()             => request('POST',   '/checkReplicationStatuses', {});
+

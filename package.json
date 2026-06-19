@@ -4,9 +4,9 @@
   "description": "SAP BDC Authorization Wizard — CAP backend + React frontend",
   "scripts": {
     "dev:cap": "cds serve all --with-mocks",
-    "dev:ui": "npm run dev --prefix app",
+    "dev:ui": "npm run dev --prefix app/catalog",
     "dev": "concurrently --names CAP,UI --prefix-colors cyan,magenta \"npm run dev:cap\" \"npm run dev:ui\"",
-    "build": "npm run build --prefix app && cds build",
+    "build": "npm run build --prefix app/catalog && cds build",
     "test": "node test_taskchain_action.js"
   },
   "dependencies": {
