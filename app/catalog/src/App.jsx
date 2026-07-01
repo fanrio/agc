@@ -34,6 +34,7 @@ export default function App() {
     canManageOrgRoles: true,
     canManageSingleRoles: true,
     canManageDerivedRoles: true,
+    managedDerivedRolesScope: 'ALL',
     canAssignRoles: true
   });
 
@@ -46,6 +47,7 @@ export default function App() {
           canManageOrgRoles: true,
           canManageSingleRoles: true,
           canManageDerivedRoles: true,
+          managedDerivedRolesScope: 'ALL',
           canAssignRoles: true
         });
       } else {
@@ -55,6 +57,7 @@ export default function App() {
             canManageOrgRoles: userAuth.canManageOrgRoles,
             canManageSingleRoles: userAuth.canManageSingleRoles,
             canManageDerivedRoles: userAuth.canManageDerivedRoles,
+            managedDerivedRolesScope: userAuth.managedDerivedRolesScope || 'ALL',
             canAssignRoles: userAuth.canAssignRoles
           });
         } else {
@@ -63,6 +66,7 @@ export default function App() {
             canManageOrgRoles: false,
             canManageSingleRoles: false,
             canManageDerivedRoles: false,
+            managedDerivedRolesScope: '',
             canAssignRoles: false
           });
         }

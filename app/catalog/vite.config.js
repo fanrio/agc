@@ -11,6 +11,19 @@ export default defineConfig({
         zip.writeZip('dist/catalog.zip')
       }
   }],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    server: {
+      deps: {
+        inline: [
+          /@mui\//,
+          /@emotion\//,
+          'react-transition-group'
+        ]
+      }
+    }
+  },
   server: {
     port: 5173,
     proxy: {

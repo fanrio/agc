@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, List, ListItem, IconButton, Chip, CircularProgress, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Checkbox, OutlinedInput, ListItemText, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Plus, Trash2, X, Settings, Cloud, Edit3, Check } from 'lucide-react';
 import * as api from '../api';
 
@@ -13,22 +13,69 @@ export default function RestrictionFieldsView() {
   const [newFieldName, setNewFieldName] = useState('');
   const [newBdcConnectionId, setNewBdcConnectionId] = useState('');
   const [newAsset, setNewAsset] = useState('');
+  const [newAssetText, setNewAssetText] = useState('');
+  const [newAssetHierarchy, setNewAssetHierarchy] = useState('');
+  const [newWithHierarchyDirectory, setNewWithHierarchyDirectory] = useState(false);
   const [assetsList, setAssetsList] = useState([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
-  // ID & Text Metadata Columns States
-  const [columnsList, setColumnsList] = useState([]);
-  const [loadingColumns, setLoadingColumns] = useState(false);
-  const [newIdColumns, setNewIdColumns] = useState([]);
-  const [newTextColumn, setNewTextColumn] = useState('');
-
   // Editing States
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', bdcConnectionId: '', asset: '', idColumns: [], textColumn: '' });
+  const [editForm, setEditForm] = useState({ name: '', bdcConnectionId: '', asset: '', assetText: '', assetHierarchy: '', withHierarchyDirectory: false });
   const [editAssetsList, setEditAssetsList] = useState([]);
   const [loadingEditAssets, setLoadingEditAssets] = useState(false);
-  const [editColumnsList, setEditColumnsList] = useState([]);
-  const [loadingEditColumns, setLoadingEditColumns] = useState(false);
+
+  // Alert Dialog States
+  const [alertDialog, setAlertDialog] = useState({ open: false, title: 'Error', message: '' });
+
+  function showAlert(message, title = 'Error') {
+    setAlertDialog({ open: true, title, message });
+  }
+
+  function handleCloseAlert() {
+    setAlertDialog({ open: false, title: 'Error', message: '' });
+  }
+
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
+
+  // Auto-check metadata of Selected Hierarchy Asset for "hierarchy" attribute (Creation form)
+  useEffect(() => {
+    if (!newBdcConnectionId || !newAssetHierarchy) {
+      setNewWithHierarchyDirectory(false);
+      return;
+    }
+    const conn = bdcConnections.find(c => c.ID === newBdcConnectionId);
+    if (conn) {
+      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, newAssetHierarchy)
+        .then(cols => {
+          const hasHierarchy = cols.some(c => c.toLowerCase() === 'hierarchy');
+          setNewWithHierarchyDirectory(hasHierarchy);
+        })
+        .catch(e => {
+          console.error('Failed to fetch asset columns for hierarchy check:', e);
+          setNewWithHierarchyDirectory(false);
+        });
+    }
+  }, [newBdcConnectionId, newAssetHierarchy, bdcConnections]);
+
+  // Auto-check metadata of Selected Hierarchy Asset for "hierarchy" attribute (Editing form)
+  useEffect(() => {
+    if (!editForm.bdcConnectionId || !editForm.assetHierarchy) {
+      return;
+    }
+    const conn = bdcConnections.find(c => c.ID === editForm.bdcConnectionId);
+    if (conn) {
+      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, editForm.assetHierarchy)
+        .then(cols => {
+          const hasHierarchy = cols.some(c => c.toLowerCase() === 'hierarchy');
+          setEditForm(prev => ({ ...prev, withHierarchyDirectory: hasHierarchy }));
+        })
+        .catch(e => {
+          console.error('Failed to fetch edit asset columns for hierarchy check:', e);
+        });
+    }
+  }, [editForm.bdcConnectionId, editForm.assetHierarchy, bdcConnections]);
 
   async function load() {
     setLoading(true);
@@ -54,6 +101,8 @@ export default function RestrictionFieldsView() {
     if (!newBdcConnectionId) {
       setAssetsList([]);
       setNewAsset('');
+      setNewAssetText('');
+      setNewAssetHierarchy('');
       return;
     }
     const conn = bdcConnections.find(c => c.ID === newBdcConnectionId);
@@ -63,48 +112,22 @@ export default function RestrictionFieldsView() {
         .then(assets => {
           setAssetsList(assets);
           setNewAsset(assets[0] || '');
+          setNewAssetText(assets[0] || '');
+          setNewAssetHierarchy(assets[0] || '');
         })
         .catch(e => {
           console.error('Failed to load assets:', e);
           setAssetsList([]);
           setNewAsset('');
-          alert(`Failed to load assets: ${e.message}`);
+          setNewAssetText('');
+          setNewAssetHierarchy('');
+          showAlert(`Failed to load assets: ${e.message}`);
         })
         .finally(() => {
           setLoadingAssets(false);
         });
     }
   }, [newBdcConnectionId, bdcConnections]);
-
-  // Auto-fetch columns when creation BDC connection or asset changes
-  useEffect(() => {
-    if (!newBdcConnectionId || !newAsset) {
-      setColumnsList([]);
-      setNewIdColumns([]);
-      setNewTextColumn('');
-      return;
-    }
-    const conn = bdcConnections.find(c => c.ID === newBdcConnectionId);
-    if (conn) {
-      setLoadingColumns(true);
-      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, newAsset)
-        .then(cols => {
-          setColumnsList(cols);
-          const defaultId = cols.find(c => c.toLowerCase() === 'id') || cols[0] || '';
-          setNewIdColumns(defaultId ? [defaultId] : []);
-          const defaultText = cols.find(c => ['name', 'text', 'description', 'formattedaddress'].includes(c.toLowerCase())) || cols[0] || '';
-          setNewTextColumn(defaultText);
-        })
-        .catch(e => {
-          console.error('Failed to fetch columns:', e);
-          setColumnsList([]);
-          alert(`Failed to load columns: ${e.message}`);
-        })
-        .finally(() => {
-          setLoadingColumns(false);
-        });
-    }
-  }, [newBdcConnectionId, newAsset, bdcConnections]);
 
   // Auto-fetch assets when editing BDC connection changes
   useEffect(() => {
@@ -122,37 +145,13 @@ export default function RestrictionFieldsView() {
         .catch(e => {
           console.error('Failed to load edit assets:', e);
           setEditAssetsList([]);
-          alert(`Failed to load edit assets: ${e.message}`);
+          showAlert(`Failed to load edit assets: ${e.message}`);
         })
         .finally(() => {
           setLoadingEditAssets(false);
         });
     }
   }, [editForm.bdcConnectionId, bdcConnections]);
-
-  // Auto-fetch columns when editing asset changes
-  useEffect(() => {
-    if (!editForm.bdcConnectionId || !editForm.asset) {
-      setEditColumnsList([]);
-      return;
-    }
-    const conn = bdcConnections.find(c => c.ID === editForm.bdcConnectionId);
-    if (conn) {
-      setLoadingEditColumns(true);
-      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, editForm.asset)
-        .then(cols => {
-          setEditColumnsList(cols);
-        })
-        .catch(e => {
-          console.error('Failed to load edit columns:', e);
-          setEditColumnsList([]);
-          alert(`Failed to load edit columns: ${e.message}`);
-        })
-        .finally(() => {
-          setLoadingEditColumns(false);
-        });
-    }
-  }, [editForm.bdcConnectionId, editForm.asset, bdcConnections]);
 
   async function handleAddField() {
     const name = newFieldName.trim();
@@ -163,20 +162,24 @@ export default function RestrictionFieldsView() {
         name,
         bdcConnection_ID: newBdcConnectionId || null,
         asset: newAsset || null,
-        idColumns: newIdColumns.length > 0 ? JSON.stringify(newIdColumns) : null,
-        textColumn: newTextColumn || null
+        assetText: newAssetText || null,
+        assetHierarchy: newAssetHierarchy || null,
+        withHierarchyDirectory: newWithHierarchyDirectory,
+        idColumns: null,
+        textColumn: null
       };
       await api.createRestrictionField(payload);
       
       setNewFieldName('');
       setNewBdcConnectionId('');
       setNewAsset('');
-      setNewIdColumns([]);
-      setNewTextColumn('');
+      setNewAssetText('');
+      setNewAssetHierarchy('');
+      setNewWithHierarchyDirectory(false);
       setShowAdd(false);
       await load();
     } catch (e) {
-      alert(e.message);
+      showAlert(e.message);
     }
     setLoading(false);
   }
@@ -190,51 +193,53 @@ export default function RestrictionFieldsView() {
         name,
         bdcConnection_ID: editForm.bdcConnectionId || null,
         asset: editForm.asset || null,
-        idColumns: editForm.idColumns.length > 0 ? JSON.stringify(editForm.idColumns) : null,
-        textColumn: editForm.textColumn || null
+        assetText: editForm.assetText || null,
+        assetHierarchy: editForm.assetHierarchy || null,
+        withHierarchyDirectory: editForm.withHierarchyDirectory || false,
+        idColumns: null,
+        textColumn: null
       };
       await api.updateRestrictionField(id, payload);
 
       setEditingId(null);
       await load();
     } catch (e) {
-      alert(e.message);
+      showAlert(e.message);
     }
     setLoading(false);
   }
 
   function startEdit(f) {
-    let initialIds = [];
-    try {
-      initialIds = f.idColumns ? JSON.parse(f.idColumns) : [];
-    } catch {
-      initialIds = f.idColumns ? [f.idColumns] : [];
-    }
     setEditingId(f.ID);
     setEditForm({
       name: f.name,
       bdcConnectionId: f.bdcConnection?.ID || '',
       asset: f.asset || '',
-      idColumns: initialIds,
-      textColumn: f.textColumn || ''
+      assetText: f.assetText || '',
+      assetHierarchy: f.assetHierarchy || '',
+      withHierarchyDirectory: !!f.withHierarchyDirectory
     });
-    if (f.asset) {
-      setEditAssetsList([f.asset]);
-    } else {
-      setEditAssetsList([]);
-    }
+    const initialAssets = Array.from(new Set([f.asset, f.assetText, f.assetHierarchy].filter(Boolean)));
+    setEditAssetsList(initialAssets);
   }
 
-  async function handleDeleteField(id, name) {
-    if (!confirm(`Remove restriction field "${name}"? Existing roles using this field name will not be deleted but it will no longer be available for new restrictions.`)) return;
-    setLoading(true);
-    try {
-      await api.deleteRestrictionField(id);
-      await load();
-    } catch (e) {
-      alert(e.message);
-    }
-    setLoading(false);
+  function handleDeleteField(id, name) {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Field',
+      message: `Remove restriction field "${name}"? Existing roles using this field name will not be deleted but it will no longer be available for new restrictions.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setLoading(true);
+        try {
+          await api.deleteRestrictionField(id);
+          await load();
+        } catch (e) {
+          showAlert(e.message);
+        }
+        setLoading(false);
+      }
+    });
   }
 
   return (
@@ -253,7 +258,7 @@ export default function RestrictionFieldsView() {
         <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New Restriction Field</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <TextField
                 label="Field Name"
                 size="small"
@@ -263,7 +268,7 @@ export default function RestrictionFieldsView() {
                 onChange={e => setNewFieldName(e.target.value)}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <FormControl size="small" fullWidth>
                 <InputLabel id="bdc-connection-select-label">BDC Connection</InputLabel>
                 <Select
@@ -279,14 +284,14 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={2}>
               <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
-                <InputLabel id="asset-select-label">
-                  {loadingAssets ? 'Loading Assets...' : 'Asset'}
+                <InputLabel id="new-asset-id-label">
+                  {loadingAssets ? 'Loading...' : 'Asset ID'}
                 </InputLabel>
                 <Select
-                  labelId="asset-select-label"
-                  label="Asset"
+                  labelId="new-asset-id-label"
+                  label="Asset ID"
                   value={newAsset}
                   onChange={e => setNewAsset(e.target.value)}
                 >
@@ -299,48 +304,56 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
-
-            {newBdcConnectionId && newAsset && (
-              <>
-                <Grid item xs={12} sm={6}>
-                  <FormControl size="small" fullWidth disabled={loadingColumns || columnsList.length === 0}>
-                    <InputLabel id="new-id-columns-label">ID Columns (Keys)</InputLabel>
-                    <Select
-                      labelId="new-id-columns-label"
-                      multiple
-                      value={newIdColumns}
-                      onChange={e => setNewIdColumns(e.target.value)}
-                      input={<OutlinedInput label="ID Columns (Keys)" />}
-                      renderValue={selected => selected.join(', ')}
-                    >
-                      {columnsList.map(c => (
-                        <MenuItem key={c} value={c}>
-                          <Checkbox checked={newIdColumns.indexOf(c) > -1} size="small" />
-                          <ListItemText primary={c} />
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl size="small" fullWidth disabled={loadingColumns || columnsList.length === 0}>
-                    <InputLabel id="new-text-column-label">Text Column (Label)</InputLabel>
-                    <Select
-                      labelId="new-text-column-label"
-                      label="Text Column (Label)"
-                      value={newTextColumn}
-                      onChange={e => setNewTextColumn(e.target.value)}
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {columnsList.map(c => (
-                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </>
-            )}
+            <Grid item xs={12} sm={2}>
+              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
+                <InputLabel id="new-asset-text-label">
+                  {loadingAssets ? 'Loading...' : 'Asset Text'}
+                </InputLabel>
+                <Select
+                  labelId="new-asset-text-label"
+                  label="Asset Text"
+                  value={newAssetText}
+                  onChange={e => setNewAssetText(e.target.value)}
+                >
+                  <MenuItem value=""><em>None</em></MenuItem>
+                  {assetsList.map(a => (
+                    <MenuItem key={a} value={a}>{a}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={2}>
+              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
+                <InputLabel id="new-asset-hierarchy-label">
+                  {loadingAssets ? 'Loading...' : 'Asset Hierarchy'}
+                </InputLabel>
+                <Select
+                  labelId="new-asset-hierarchy-label"
+                  label="Asset Hierarchy"
+                  value={newAssetHierarchy}
+                  onChange={e => setNewAssetHierarchy(e.target.value)}
+                >
+                  <MenuItem value=""><em>None</em></MenuItem>
+                  {assetsList.map(a => (
+                    <MenuItem key={a} value={a}>{a}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
+
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mt: 1.5, mb: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={newWithHierarchyDirectory}
+                  onChange={e => setNewWithHierarchyDirectory(e.target.checked)}
+                  disabled={!newAssetHierarchy}
+                />
+              }
+              label="With Hierarchy Directory"
+            />
+          </Box>
 
           <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
             <Button variant="outlined" color="inherit" onClick={() => setShowAdd(false)}>Cancel</Button>
@@ -365,8 +378,10 @@ export default function RestrictionFieldsView() {
                 <TableRow>
                   <TableCell style={{ fontWeight: 600 }}>Field Name</TableCell>
                   <TableCell style={{ fontWeight: 600 }}>BDC Connection</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Asset</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Metadata Mapping</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Asset ID</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Asset Text</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Asset Hierarchy</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Hierarchy Directory</TableCell>
                   <TableCell align="right" style={{ width: 120, fontWeight: 600 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -376,9 +391,9 @@ export default function RestrictionFieldsView() {
                   if (isEditing) {
                     return (
                       <TableRow key={f.ID}>
-                        <TableCell colSpan={5} sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)', p: 3 }}>
+                        <TableCell colSpan={7} sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)', p: 3 }}>
                           <Grid container spacing={2}>
-                            <Grid item xs={12} sm={4}>
+                            <Grid item xs={12} sm={3}>
                               <TextField
                                 label="Field Name"
                                 size="small"
@@ -387,7 +402,7 @@ export default function RestrictionFieldsView() {
                                 onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
                               />
                             </Grid>
-                            <Grid item xs={12} sm={4}>
+                            <Grid item xs={12} sm={3}>
                               <FormControl size="small" fullWidth>
                                 <InputLabel id="edit-bdc-select-label">BDC Connection</InputLabel>
                                 <Select
@@ -403,14 +418,14 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
-                            <Grid item xs={12} sm={4}>
+                            <Grid item xs={12} sm={2}>
                               <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
-                                <InputLabel id="edit-asset-select-label">
-                                  {loadingEditAssets ? 'Loading Assets...' : 'Asset'}
+                                <InputLabel id="edit-asset-id-label">
+                                  {loadingEditAssets ? 'Loading...' : 'Asset ID'}
                                 </InputLabel>
                                 <Select
-                                  labelId="edit-asset-select-label"
-                                  label="Asset"
+                                  labelId="edit-asset-id-label"
+                                  label="Asset ID"
                                   value={editForm.asset}
                                   onChange={e => setEditForm(prev => ({ ...prev, asset: e.target.value }))}
                                 >
@@ -423,47 +438,55 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
+                            <Grid item xs={12} sm={2}>
+                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
+                                <InputLabel id="edit-asset-text-label">
+                                  {loadingEditAssets ? 'Loading...' : 'Asset Text'}
+                                </InputLabel>
+                                <Select
+                                  labelId="edit-asset-text-label"
+                                  label="Asset Text"
+                                  value={editForm.assetText}
+                                  onChange={e => setEditForm(prev => ({ ...prev, assetText: e.target.value }))}
+                                >
+                                  <MenuItem value=""><em>None</em></MenuItem>
+                                  {Array.from(new Set([...editAssetsList, editForm.assetText])).filter(Boolean).map(a => (
+                                    <MenuItem key={a} value={a}>{a}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} sm={2}>
+                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
+                                <InputLabel id="edit-asset-hierarchy-label">
+                                  {loadingEditAssets ? 'Loading...' : 'Asset Hierarchy'}
+                                </InputLabel>
+                                <Select
+                                  labelId="edit-asset-hierarchy-label"
+                                  label="Asset Hierarchy"
+                                  value={editForm.assetHierarchy}
+                                  onChange={e => setEditForm(prev => ({ ...prev, assetHierarchy: e.target.value }))}
+                                >
+                                  <MenuItem value=""><em>None</em></MenuItem>
+                                  {Array.from(new Set([...editAssetsList, editForm.assetHierarchy])).filter(Boolean).map(a => (
+                                    <MenuItem key={a} value={a}>{a}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Grid>
 
-                            {editForm.bdcConnectionId && editForm.asset && (
-                              <>
-                                <Grid item xs={12} sm={6}>
-                                  <FormControl size="small" fullWidth disabled={loadingEditColumns || editColumnsList.length === 0}>
-                                    <InputLabel id="edit-id-columns-label">ID Columns (Keys)</InputLabel>
-                                    <Select
-                                      labelId="edit-id-columns-label"
-                                      multiple
-                                      value={editForm.idColumns}
-                                      onChange={e => setEditForm(prev => ({ ...prev, idColumns: e.target.value }))}
-                                      input={<OutlinedInput label="ID Columns (Keys)" />}
-                                      renderValue={selected => selected.join(', ')}
-                                    >
-                                      {editColumnsList.map(c => (
-                                        <MenuItem key={c} value={c}>
-                                          <Checkbox checked={editForm.idColumns.indexOf(c) > -1} size="small" />
-                                          <ListItemText primary={c} />
-                                        </MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <FormControl size="small" fullWidth disabled={loadingEditColumns || editColumnsList.length === 0}>
-                                    <InputLabel id="edit-text-column-label">Text Column (Label)</InputLabel>
-                                    <Select
-                                      labelId="edit-text-column-label"
-                                      label="Text Column (Label)"
-                                      value={editForm.textColumn}
-                                      onChange={e => setEditForm(prev => ({ ...prev, textColumn: e.target.value }))}
-                                    >
-                                      <MenuItem value=""><em>None</em></MenuItem>
-                                      {editColumnsList.map(c => (
-                                        <MenuItem key={c} value={c}>{c}</MenuItem>
-                                      ))}
-                                    </Select>
-                                  </FormControl>
-                                </Grid>
-                              </>
-                            )}
+                            <Grid item xs={12}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={!!editForm.withHierarchyDirectory}
+                                    onChange={e => setEditForm(prev => ({ ...prev, withHierarchyDirectory: e.target.checked }))}
+                                    disabled={!editForm.assetHierarchy}
+                                  />
+                                }
+                                label="With Hierarchy Directory"
+                              />
+                            </Grid>
 
                             <Grid item xs={12} sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', alignItems: 'center', mt: 1 }}>
                               <Button variant="contained" size="small" onClick={() => handleUpdateField(f.ID)} disabled={loading || !editForm.name.trim()} startIcon={<Check size={14} />}>
@@ -497,29 +520,14 @@ export default function RestrictionFieldsView() {
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
                         {f.asset || '—'}
                       </TableCell>
-                      <TableCell>
-                        {f.bdcConnection ? (
-                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {f.idColumns && (
-                              <Chip 
-                                label={`Keys: ${(() => {
-                                  try { return JSON.parse(f.idColumns).join(', '); } catch { return f.idColumns; }
-                                })()}`} 
-                                size="small" 
-                                variant="outlined" 
-                                sx={{ fontSize: 10, height: 20 }} 
-                              />
-                            )}
-                            {f.textColumn && (
-                              <Chip 
-                                label={`Label: ${f.textColumn}`} 
-                                size="small" 
-                                variant="outlined" 
-                                sx={{ fontSize: 10, height: 20 }} 
-                              />
-                            )}
-                          </Box>
-                        ) : '—'}
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                        {f.assetText || '—'}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                        {f.assetHierarchy || '—'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.8125rem' }}>
+                        {f.withHierarchyDirectory ? 'Yes' : '—'}
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
@@ -539,6 +547,53 @@ export default function RestrictionFieldsView() {
           </TableContainer>
         )}
       </Card>
+
+      {/* Alert Dialog replacing default window.alert */}
+      <Dialog
+        open={alertDialog.open}
+        onClose={handleCloseAlert}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {alertDialog.title}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            {alertDialog.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAlert} variant="contained" autoFocus>
+            OK
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">
+          {confirmDialog.title}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            {confirmDialog.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </Box>
   );

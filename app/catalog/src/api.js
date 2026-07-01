@@ -62,7 +62,7 @@ export const deleteBdcSetting   = (id)           => request('DELETE', `/BdcSetti
 export const testBdcConnection  = (settingId)    => request('POST',   '/testBdcConnection', { settingId });
 export const fetchBdcSpaces     = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchBdcSpaces', { url, tokenUrl, clientId, clientSecret });
 export const fetchBdcAssets     = (url, tokenUrl, clientId, clientSecret, space) => request('POST', '/fetchBdcAssets', { url, tokenUrl, clientId, clientSecret, space });
-export const fetchBdcRelationalValues = (url, tokenUrl, clientId, clientSecret, space, asset, idColumns, textColumn) => request('POST', '/fetchBdcRelationalValues', { url, tokenUrl, clientId, clientSecret, space, asset, idColumns, textColumn });
+export const fetchBdcRelationalValues = (url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn) => request('POST', '/fetchBdcRelationalValues', { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn });
 export const fetchBdcAssetColumns = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchBdcAssetColumns', { url, tokenUrl, clientId, clientSecret, space, asset });
 
 // Actions
@@ -78,6 +78,7 @@ export const fetchRawBdcAssetColumns = (url, tokenUrl, clientId, clientSecret, s
 export const fetchRawHanaViews = (settingId) => request('POST', '/fetchRawHanaViews', { settingId });
 export const runBdcTaskChain = (url, tokenUrl, clientId, clientSecret, space, taskChainId) => request('POST', '/runBdcTaskChain', { url, tokenUrl, clientId, clientSecret, space, taskChainId });
 export const fetchBdcTaskChainLog = (url, tokenUrl, clientId, clientSecret, space, logId) => request('POST', '/fetchBdcTaskChainLog', { url, tokenUrl, clientId, clientSecret, space, logId });
+export const fetchBdcAssociations = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchBdcAssociations', { url, tokenUrl, clientId, clientSecret, space, asset });
 export const getAuditLogs = () => request('GET', '/AuditLogs?$orderby=createdAt desc');
 export const getEnvironments = () => request('GET', '/Environments');
 

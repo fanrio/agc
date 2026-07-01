@@ -13,6 +13,7 @@ export default function BdcApiTesterView() {
   const [spaceInput, setSpaceInput] = useState('');
   const [assetInput, setAssetInput] = useState('');
   const [taskChainInput, setTaskChainInput] = useState('');
+  const [logIdInput, setLogIdInput] = useState('');
 
   // Execution states
   const [executing, setExecuting] = useState(false);
@@ -97,6 +98,16 @@ export default function BdcApiTesterView() {
           throw new Error('Space and Task Chain ID fields are required to execute a run.');
         }
         result = await api.runBdcTaskChain(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, taskChainInput);
+      } else if (selectedApi === 'FETCH_TASK_CHAIN_LOG') {
+        if (!spaceInput.trim() || !logIdInput.trim()) {
+          throw new Error('Space and Log ID fields are required to fetch task chain logs.');
+        }
+        result = await api.fetchBdcTaskChainLog(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, logIdInput);
+      } else if (selectedApi === 'ASSOCIATIONS') {
+        if (!spaceInput.trim() || !assetInput.trim()) {
+          throw new Error('Space and Asset fields are required to list associations.');
+        }
+        result = await api.fetchBdcAssociations(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, assetInput);
       }
 
       setOutput(result);
@@ -114,8 +125,9 @@ export default function BdcApiTesterView() {
 
   const selectedConn = connections.find(c => c.ID === selectedConnId);
   const isHana = selectedConn && selectedConn.connectionType === 'SAP Hana';
-  const showSpaceAssetFields = selectedApi === 'VALUES' || selectedApi === 'COLUMNS';
+  const showSpaceAssetFields = selectedApi === 'VALUES' || selectedApi === 'COLUMNS' || selectedApi === 'ASSOCIATIONS';
   const showTaskChainFields = selectedApi === 'RUN_TASK_CHAIN';
+  const showLogFields = selectedApi === 'FETCH_TASK_CHAIN_LOG';
 
   return (
     <Box>
@@ -173,6 +185,7 @@ export default function BdcApiTesterView() {
                 label="Select API Endpoint"
                 value={selectedApi}
                 onChange={e => setSelectedApi(e.target.value)}
+                data-testid="api-endpoint-select"
               >
                 {isHana ? (
                   <MenuItem value="HANA_VIEWS">fetchRawHanaViews (List Database Views)</MenuItem>
@@ -182,7 +195,9 @@ export default function BdcApiTesterView() {
                     <MenuItem key="ASSETS" value="ASSETS">fetchRawBdcAssets (Assets Catalog)</MenuItem>,
                     <MenuItem key="VALUES" value="VALUES">fetchRawBdcRelationalValues (Relational Data)</MenuItem>,
                     <MenuItem key="COLUMNS" value="COLUMNS">fetchRawBdcAssetColumns ($metadata XML Schema)</MenuItem>,
-                    <MenuItem key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN">runBdcTaskChain (Start Task Chain Run)</MenuItem>
+                    <MenuItem key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN">runBdcTaskChain (Start Task Chain Run)</MenuItem>,
+                    <MenuItem key="FETCH_TASK_CHAIN_LOG" value="FETCH_TASK_CHAIN_LOG">fetchBdcTaskChainLog (Fetch Task Chain Log)</MenuItem>,
+                    <MenuItem key="ASSOCIATIONS" value="ASSOCIATIONS">fetchBdcAssociations (List View Associations)</MenuItem>
                   ]
                 )}
               </Select>
@@ -197,6 +212,7 @@ export default function BdcApiTesterView() {
                   placeholder="e.g. HH_SAP"
                   value={spaceInput}
                   onChange={e => setSpaceInput(e.target.value)}
+                  data-testid="space-input"
                 />
                 <TextField
                   label="Asset ID (View/Table)"
@@ -205,6 +221,7 @@ export default function BdcApiTesterView() {
                   placeholder="e.g. VDIM_Place"
                   value={assetInput}
                   onChange={e => setAssetInput(e.target.value)}
+                  data-testid="asset-input"
                 />
               </>
             )}
@@ -226,6 +243,29 @@ export default function BdcApiTesterView() {
                   placeholder="e.g. df_authorization_flat"
                   value={taskChainInput}
                   onChange={e => setTaskChainInput(e.target.value)}
+                />
+              </>
+            )}
+
+            {showLogFields && (
+              <>
+                <TextField
+                  label="Space ID"
+                  size="small"
+                  fullWidth
+                  placeholder="e.g. HH_SAP"
+                  value={spaceInput}
+                  onChange={e => setSpaceInput(e.target.value)}
+                  data-testid="space-input"
+                />
+                <TextField
+                  label="Log ID"
+                  size="small"
+                  fullWidth
+                  placeholder="e.g. log-12345"
+                  value={logIdInput}
+                  onChange={e => setLogIdInput(e.target.value)}
+                  data-testid="log-id-input"
                 />
               </>
             )}

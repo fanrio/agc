@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Plus, Trash2, X, Check, Shield, Users } from 'lucide-react';
 import * as api from '../api';
 
@@ -22,6 +22,9 @@ function hasAnyRestrictions(role, allRoles) {
 
 export default function RoleAssignmentsView({ permissions }) {
   const [assignments, setAssignments] = useState([]);
+  
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
   const [roles, setRoles]             = useState([]);
   const [loading, setLoading]         = useState(true);
   const [showAdd, setShowAdd]         = useState(false);
@@ -79,16 +82,23 @@ export default function RoleAssignmentsView({ permissions }) {
     setLoading(false);
   }
 
-  async function handleDelete(id, user, roleName) {
-    if (!confirm(`Remove assignment of role "${roleName}" from user "${user}"?`)) return;
-    setLoading(true);
-    try {
-      await api.deleteAssignment(id);
-      await load();
-    } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
-    }
-    setLoading(false);
+  function handleDelete(id, user, roleName) {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Assignment',
+      message: `Remove assignment of role "${roleName}" from user "${user}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setLoading(true);
+        try {
+          await api.deleteAssignment(id);
+          await load();
+        } catch (e) {
+          setSnackbar({ open: true, message: e.message, severity: 'error' });
+        }
+        setLoading(false);
+      }
+    });
   }
 
   return (
@@ -219,6 +229,31 @@ export default function RoleAssignmentsView({ permissions }) {
           </TableContainer>
         )}
       </Card>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">
+          {confirmDialog.title}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            {confirmDialog.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

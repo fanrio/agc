@@ -250,11 +250,11 @@ export default function AuditLogsView() {
   const getActionChip = (action) => {
     switch (action) {
       case 'CREATE':
-        return <Chip label="CREATE" size="small" sx={{ bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 600 }} />;
+        return <Chip label="CREATE" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', border: '1px solid', borderColor: 'success.main', fontWeight: 600 }} />;
       case 'UPDATE':
-        return <Chip label="UPDATE" size="small" sx={{ bgcolor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)', fontWeight: 600 }} />;
+        return <Chip label="UPDATE" size="small" sx={{ bgcolor: 'info.light', color: 'info.dark', border: '1px solid', borderColor: 'info.main', fontWeight: 600 }} />;
       case 'DELETE':
-        return <Chip label="DELETE" size="small" sx={{ bgcolor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 600 }} />;
+        return <Chip label="DELETE" size="small" sx={{ bgcolor: 'error.light', color: 'error.dark', border: '1px solid', borderColor: 'error.main', fontWeight: 600 }} />;
       default:
         return <Chip label={action} size="small" />;
     }
@@ -397,20 +397,21 @@ export default function AuditLogsView() {
                                   fontWeight: 600,
                                   fontSize: 10,
                                   height: 20,
-                                  bgcolor: row.action === 'Added' ? 'rgba(16, 185, 129, 0.12)' : row.action === 'Deleted' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                                  color: row.action === 'Added' ? '#10b981' : row.action === 'Deleted' ? '#f87171' : '#60a5fa',
-                                  border: `1px solid ${row.action === 'Added' ? 'rgba(16, 185, 129, 0.3)' : row.action === 'Deleted' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
+                                  bgcolor: row.action === 'Added' ? 'success.light' : row.action === 'Deleted' ? 'error.light' : 'info.light',
+                                  color: row.action === 'Added' ? 'success.dark' : row.action === 'Deleted' ? 'error.dark' : 'info.dark',
+                                  border: '1px solid',
+                                  borderColor: row.action === 'Added' ? 'success.main' : row.action === 'Deleted' ? 'error.main' : 'info.main'
                                 }}
                               />
                             </TableCell>
-                            <TableCell sx={{ color: '#ba1a1a', textDecoration: row.action === 'Changed' ? 'line-through' : 'none' }}>{row.oldVal}</TableCell>
-                            <TableCell sx={{ color: '#10b981' }}>{row.newVal}</TableCell>
+                            <TableCell sx={{ color: 'error.main', textDecoration: row.action === 'Changed' ? 'line-through' : 'none' }}>{row.oldVal}</TableCell>
+                            <TableCell sx={{ color: 'success.main' }}>{row.newVal}</TableCell>
                           </>
                         ) : (
                           <>
                             <TableCell sx={{ fontWeight: 500 }}>{row.field}</TableCell>
-                            <TableCell sx={{ color: '#ba1a1a', textDecoration: 'line-through' }}>{row.oldVal || '—'}</TableCell>
-                            <TableCell sx={{ color: '#10b981' }}>{row.newVal || '—'}</TableCell>
+                            <TableCell sx={{ color: 'error.main', textDecoration: 'line-through' }}>{row.oldVal || '—'}</TableCell>
+                            <TableCell sx={{ color: 'success.main' }}>{row.newVal || '—'}</TableCell>
                           </>
                         )}
                       </TableRow>
@@ -489,14 +490,14 @@ export default function AuditLogsView() {
             onClick={loadLogs} 
             startIcon={<RefreshCw size={16} />}
             disabled={loading}
-            sx={{ borderColor: 'rgba(255,255,255,0.12)', color: 'text.secondary', '&:hover': { borderColor: '#3b82f6', color: '#60a5fa' } }}
+            sx={{ borderColor: 'divider', color: 'text.secondary', '&:hover': { borderColor: '#3b82f6', color: '#60a5fa' } }}
           >
             Refresh
           </Button>
         </Box>
 
         {/* Filter Toolbar Card */}
-        <Card sx={{ bgcolor: 'background.paper', border: '1px solid rgba(255,255,255,0.08)', backgroundImage: 'none' }}>
+        <Card sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', backgroundImage: 'none' }}>
           <CardContent sx={{ p: '20px !important' }}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
@@ -580,8 +581,10 @@ export default function AuditLogsView() {
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', flexGrow: 1 }}>
                   <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>Performed By</InputLabel>
+                    <InputLabel id="actor-filter-label">Performed By</InputLabel>
                     <Select
+                      labelId="actor-filter-label"
+                      id="actor-filter-select"
                       value={actorFilter}
                       label="Performed By"
                       onChange={(e) => { setActorFilter(e.target.value); setPage(0); }}
@@ -678,7 +681,7 @@ export default function AuditLogsView() {
                             <IconButton 
                               onClick={() => setSelectedLog(log)}
                               size="small"
-                              sx={{ color: '#60a5fa', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.12)' } }}
+                              sx={{ color: 'primary.main', '&:hover': { bgcolor: 'primary.light', color: 'primary.contrastText' } }}
                             >
                               <Eye size={16} />
                             </IconButton>
@@ -698,7 +701,7 @@ export default function AuditLogsView() {
                 page={page}
                 onPageChange={handlePageChange}
                 onRowsPerPageChange={handleRowsPerPageChange}
-                sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', color: 'text.secondary' }}
+                sx={{ borderTop: '1px solid', borderColor: 'divider', color: 'text.secondary' }}
               />
             </Box>
           )}
@@ -714,14 +717,14 @@ export default function AuditLogsView() {
             sx: {
               bgcolor: 'background.paper',
               backgroundImage: 'none',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 2
+              border: '1px solid',
+              borderColor: 'divider',
             }
           }}
         >
           {selectedLog && (
             <>
-              <DialogTitle sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)', pb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     Audit Details
@@ -737,7 +740,7 @@ export default function AuditLogsView() {
                 </Typography>
                 {renderDetailsTable(selectedLog)}
               </DialogContent>
-              <DialogActions sx={{ borderTop: '1px solid rgba(255,255,255,0.08)', px: 3, py: 2 }}>
+              <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
                 <Button 
                   onClick={() => setSelectedLog(null)} 
                   variant="contained"

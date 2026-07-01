@@ -61,6 +61,7 @@ service AuthorizationService @(path: '/odata/v4/auth') {
     clientSecret : String,
     space        : String,
     asset        : String,
+    assetText    : String,
     idColumns    : String,
     textColumn   : String
   ) returns array of {
@@ -181,4 +182,13 @@ service AuthorizationService @(path: '/odata/v4/auth') {
     passed   : Boolean;
     reason   : String;
   };
+
+  action fetchBdcAssociations(
+    url          : String,
+    tokenUrl     : String,
+    clientId     : String,
+    clientSecret : String,
+    space        : String,
+    asset        : String
+  ) returns LargeString;
 }

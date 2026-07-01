@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
+import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
 import { Globe, Building2, MapPin, Factory, Briefcase, Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight } from 'lucide-react';
 import * as api from '../api';
 
@@ -72,6 +72,7 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
   const [newChild, setNewChild]        = useState({ name: '', type: '' });
   const [newAttr, setNewAttr]          = useState({ field: '', value: '' });
   const [loading, setLoading]          = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const Icon = (node.type && TYPE_ICONS[node.type.name]) || Building2;
   const hasChildren = node.children && node.children.length > 0;
@@ -95,7 +96,11 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
       onError(`Cannot delete "${node.name}" — it still has child nodes. Remove all children first.`);
       return;
     }
-    if (!confirm(`Delete node "${node.name}"? This cannot be undone.`)) return;
+    setConfirmDeleteOpen(true);
+  }
+
+  async function executeDelete() {
+    setConfirmDeleteOpen(false);
     setLoading(true);
     try {
       await api.deleteOrgNode(node.ID);
@@ -290,6 +295,31 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
             permissions={permissions}
           />
         ))}
+
+        {/* Confirm Delete Dialog */}
+        <Dialog
+          open={confirmDeleteOpen}
+          onClose={() => setConfirmDeleteOpen(false)}
+          aria-labelledby="confirm-delete-dialog-title"
+          aria-describedby="confirm-delete-dialog-description"
+        >
+          <DialogTitle id="confirm-delete-dialog-title">
+            Delete Node
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="confirm-delete-dialog-description">
+              Delete node "{node.name}"? This cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">
+              Cancel
+            </Button>
+            <Button onClick={executeDelete} color="error" variant="contained" autoFocus>
+              Delete
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );

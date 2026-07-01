@@ -2,7 +2,7 @@ const cds = require('@sap/cds');
 const { resolveEffectiveRestrictions, evaluateRestriction } = require('./lib/resolveEffectiveRestrictions');
 
 function isMockUrl(url) {
-  return false;
+  return !!(url && (url.includes('mock') || url.includes('sandbox') || url.includes('test') || url.includes('localhost')));
 }
 
 module.exports = cds.service.impl(async function () {
@@ -292,20 +292,70 @@ module.exports = cds.service.impl(async function () {
     }
   }
 
-  // Sync role assignments to HANA on CREATE
-  this.after('CREATE', 'RoleAssignments', async (assignment) => {
+  // Helper to sync all assignments of a role (and its descendants) to HANA
+  async function _syncRoleAssignmentsToHana(roleId) {
+    const db = cds.db;
+    try {
+      const allInheritances = await db.run(SELECT.from(RoleInheritance));
+      
+      // Find all descendant roles recursively (child roles that inherit this parent role)
+      const roleIds = new Set([roleId]);
+      const queue = [roleId];
+      while (queue.length > 0) {
+        const currId = queue.shift();
+        const children = allInheritances.filter(ri => ri.parent_ID === currId);
+        for (const child of children) {
+          if (!roleIds.has(child.role_ID)) {
+            roleIds.add(child.role_ID);
+            queue.push(child.role_ID);
+          }
+        }
+      }
+
+      // Fetch and sync all assignments for all these roles
+      const assignments = await db.run(SELECT.from(RoleAssignments).where({ role_ID: { in: Array.from(roleIds) } }));
+      for (const assignment of assignments) {
+        try {
+          await _syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
+        } catch (e) {
+          console.error(`Failed to sync assignment ${assignment.ID} on role change:`, e);
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to sync role assignments for role ${roleId}:`, err);
+    }
+  }
+
+  // Sync role assignments to HANA and queue replication on CREATE
+  this.after('CREATE', 'RoleAssignments', async (assignment, req) => {
     try {
       await _syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
     } catch (e) {
-      console.error("Failed to replicate assignment creation:", e);
+      console.error("Failed to replicate assignment creation to HANA:", e);
+    }
+    try {
+      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+      if (role) {
+        await _queueReplication(role.name, role.environment_ID, req?.user?.id);
+      }
+    } catch (err) {
+      console.error("Failed to queue replication for assignment creation:", err);
     }
   });
 
-  // Sync role assignments to HANA on DELETE
+  // Sync role assignments to HANA and queue replication on DELETE
   this.before('DELETE', 'RoleAssignments', async (req) => {
     try {
       const id = req.data.ID || req.query.DELETE?.where?.[2]?.val || (req.params[0] && (req.params[0].ID || req.params[0]));
       if (id) {
+        // Fetch assignment details before deletion to determine environment/role
+        const assignment = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
+        if (assignment) {
+          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+          if (role) {
+            await _queueReplication(`${role.name} (ASSIGNMENT DELETED)`, role.environment_ID, req?.user?.id);
+          }
+        }
         await _syncAssignmentToHana(id, null, null, true);
       }
     } catch (e) {
@@ -645,22 +695,12 @@ module.exports = cds.service.impl(async function () {
     return assetsList;
   });
 
-  // ---------------------------------------------------------------------------
-  // fetchBdcRelationalValues
-  // ---------------------------------------------------------------------------
   this.on('fetchBdcRelationalValues', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset, idColumns, textColumn } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset || !idColumns || !textColumn) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, asset, idColumns, or textColumn');
+    console.log('=== DEBUG: fetchBdcRelationalValues input ===', req.data);
+    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn } = req.data;
+    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
+      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     }
-
-    let cols = [];
-    try {
-      cols = JSON.parse(idColumns);
-    } catch {
-      cols = [idColumns];
-    }
-    if (!Array.isArray(cols)) cols = [cols];
 
     let rawData = null;
     let mapped = [];
@@ -687,36 +727,147 @@ module.exports = cds.service.impl(async function () {
         throw new Error('No access_token returned in OAuth response');
       }
 
-      // 2. Fetch data from Basis URL + /api/v1/datasphere/consumption/relational/[SPACE]/[ASSET]/[ASSET]
+      // Automatically retrieve key columns from metadata using helper
+      let cols = [];
+      try {
+        cols = await _getAssetKeyColumns(url, accessToken, space, asset);
+      } catch (err) {
+        console.error(`Failed to automatically resolve key columns for asset ${asset}:`, err.message);
+      }
+
+      // Fallback: use passed idColumns parameter if present
+      if (!cols || cols.length === 0 || cols[0] === 'id') {
+        if (idColumns) {
+          try {
+            const parsed = JSON.parse(idColumns);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              cols = parsed;
+            } else if (parsed) {
+              cols = [parsed];
+            }
+          } catch {
+            cols = [idColumns];
+          }
+        }
+      }
+      if (!Array.isArray(cols) || cols.length === 0 || !cols[0]) {
+        cols = ['id'];
+      }
+
+      console.log(`=== DEBUG: fetchBdcRelationalValues resolved key columns (cols) ===`, cols);
+
+      // 2. Fetch keys from Asset ID view (cleanAsset)
       const cleanSpace = space.trim();
       const cleanAsset = asset.trim();
-      const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/${cleanAsset}`;
-      const relationalRes = await fetch(relationalEndpoint, {
+      const assetEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/${cleanAsset}`;
+      
+      const assetRes = await fetch(assetEndpoint, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json'
         }
       });
 
-      if (!relationalRes.ok) {
-        throw new Error(`Relational request failed with status ${relationalRes.status}`);
+      if (!assetRes.ok) {
+        throw new Error(`Asset ID relational request failed: ${assetRes.status} ${assetRes.statusText}`);
       }
 
-      const responseText = await relationalRes.text();
-      rawData = JSON.parse(responseText);
-      console.log('fetchBdcRelationalValues data:', rawData);
+      const assetResponseText = await assetRes.text();
+      rawData = JSON.parse(assetResponseText);
+      const assetRows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
+      const assetRecords = Array.isArray(assetRows) ? assetRows : [];
 
-      const rows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
-      const records = Array.isArray(rows) ? rows : [];
+      // 3. Fetch translations from Asset Text view (cleanAssetText) if provided
+      let assetTextRecords = [];
+      if (assetText && assetText.trim()) {
+        const cleanAssetText = assetText.trim();
+        const assetTextEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAssetText}/${cleanAssetText}`;
+        const textRes = await fetch(assetTextEndpoint, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (textRes.ok) {
+          const textResponseText = await textRes.text();
+          const textRaw = JSON.parse(textResponseText);
+          const textRows = textRaw.value?.[0]?.value || textRaw.results || textRaw.value || textRaw || [];
+          assetTextRecords = Array.isArray(textRows) ? textRows : [];
+        } else {
+          console.warn(`Asset Text relational request failed: ${textRes.status}. Falling back to Asset ID text retrieval.`);
+        }
+      }
 
-      mapped = records.map(row => {
-        const idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
-        const textVal = row[textColumn] !== undefined && row[textColumn] !== null ? String(row[textColumn]) : idVal;
-        return {
+      // 4. Build translation map if Asset Text is provided
+      const translationMap = new Map();
+      if (assetTextRecords.length > 0) {
+        for (const row of assetTextRecords) {
+          const key = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+          if (key) {
+            // Label must be taken from the attribute "description" (case-insensitive) or textColumn
+            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn || 'description';
+            const textVal = row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]) : '';
+            translationMap.set(key, textVal);
+          }
+        }
+      }
+
+      // 5. Map Asset ID records to keys and look up translations
+      mapped = assetRecords.map(row => {
+        // Look for case-insensitive matches for NodeID, SalesOrg, RegionID
+        const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
+        const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
+        const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
+        
+        let idVal;
+        let textVal;
+
+        if (nodeIdCol) {
+          idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
+          const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
+          const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
+          
+          if (salesOrgVal) {
+            textVal = `${idVal} - ${salesOrgVal}`;
+          } else if (regionIdVal) {
+            textVal = `${idVal} - ${regionIdVal}`;
+          } else {
+            textVal = idVal;
+          }
+        } else {
+          idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+          textVal = idVal;
+          if (assetText && assetText.trim() && assetTextRecords.length > 0) {
+            textVal = translationMap.get(idVal) || idVal;
+          } else {
+            // Check if main asset contains "Description" (case-insensitive) or textColumn
+            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn;
+            if (descCol && row[descCol] !== undefined && row[descCol] !== null) {
+              textVal = String(row[descCol]);
+            } else {
+              textVal = idVal;
+            }
+          }
+        }
+
+        const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
+        const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
+
+        const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
+        const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
+
+        const returnObj = {
           id: idVal,
-          text: textVal
+          text: nodeIdCol ? textVal : (idVal === textVal ? idVal : `${idVal} - ${textVal}`)
         };
-      }).filter(item => item.id);
+        if (nodeIdCol) {
+          returnObj.parent_ID = (parentIdVal !== null && parentIdVal !== 'null' && parentIdVal !== '') ? parentIdVal : null;
+        }
+        if (hierarchyVal !== undefined) {
+          returnObj.hierarchy = hierarchyVal;
+        }
+        return returnObj;
+      }).filter(item => item.id !== undefined && item.id !== null && item.id !== '');
 
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
@@ -863,6 +1014,72 @@ module.exports = cds.service.impl(async function () {
     return tokenData.access_token;
   }
 
+  // Helper to fetch keys of an asset from OData metadata
+  async function _getAssetKeyColumns(url, accessToken, space, asset) {
+    if (isMockUrl(url)) {
+      return ['id'];
+    }
+    try {
+      const cleanSpace = space.trim();
+      const cleanAsset = asset.trim();
+      const metadataEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/$metadata`;
+      
+      const res = await fetch(metadataEndpoint, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/xml, application/json'
+        }
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch metadata: ${res.status}`);
+      }
+      const xml = await res.text();
+      
+      // Look for the entity type block
+      const cleanAssetLower = cleanAsset.toLowerCase();
+      let foundBlockContent = null;
+      const entityTypeScanner = /<(?:\w+:)?EntityType\s+Name="([^"]+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?EntityType>/gi;
+      let match;
+      while ((match = entityTypeScanner.exec(xml)) !== null) {
+        const entityName = match[1].toLowerCase();
+        if (entityName === cleanAssetLower || entityName === `${cleanAssetLower}type` || entityName.includes(cleanAssetLower)) {
+          foundBlockContent = match[2];
+          break;
+        }
+      }
+      
+      const contentToSearch = foundBlockContent || xml;
+      const keyBlockRegex = /<(?:\w+:)?Key>([\s\S]*?)<\/(?:\w+:)?Key>/i;
+      const keyBlockMatch = keyBlockRegex.exec(contentToSearch);
+      
+      const keys = [];
+      if (keyBlockMatch) {
+        const propRefRegex = /<(?:\w+:)?PropertyRef\s+Name="([^"]+)"/g;
+        let refMatch;
+        while ((refMatch = propRefRegex.exec(keyBlockMatch[1])) !== null) {
+          keys.push(refMatch[1]);
+        }
+      }
+      
+      if (keys.length > 0) {
+        return keys;
+      }
+      
+      // Fallback: scan all properties and look for "id"
+      const propRegex = /<(?:\w+:)?Property\s+Name="([^"]+)"/g;
+      let propMatch;
+      const properties = [];
+      while ((propMatch = propRegex.exec(contentToSearch)) !== null) {
+        properties.push(propMatch[1]);
+      }
+      const fallbackKey = properties.find(p => p.toLowerCase() === 'id') || properties[0] || 'id';
+      return [fallbackKey];
+    } catch (e) {
+      console.error(`Failed to automatically resolve key columns for asset ${asset}:`, e.message);
+      return ['id']; // default fallback
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // fetchRawBdcSpaces
   // ---------------------------------------------------------------------------
@@ -873,10 +1090,11 @@ module.exports = cds.service.impl(async function () {
     }
     try {
       const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const res = await fetch(`${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`, {
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
+      const res = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
       });
-      if (!res.ok) throw new Error(`Spaces request failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Spaces request failed: ${res.status} [Endpoint: ${endpoint}]`);
       const data = await res.json();
       return JSON.stringify(data, null, 2);
     } catch (e) {
@@ -894,10 +1112,11 @@ module.exports = cds.service.impl(async function () {
     }
     try {
       const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const res = await fetch(`${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`, {
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
+      const res = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
       });
-      if (!res.ok) throw new Error(`Assets request failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Assets request failed: ${res.status} [Endpoint: ${endpoint}]`);
       const data = await res.json();
       return JSON.stringify(data, null, 2);
     } catch (e) {
@@ -917,10 +1136,11 @@ module.exports = cds.service.impl(async function () {
       const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
       const s = space.trim();
       const a = asset.trim();
-      const res = await fetch(`${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`, {
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`;
+      const res = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
       });
-      if (!res.ok) throw new Error(`Relational Values request failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Relational Values request failed: ${res.status} [Endpoint: ${endpoint}]`);
       const data = await res.json();
       return JSON.stringify(data, null, 2);
     } catch (e) {
@@ -940,14 +1160,83 @@ module.exports = cds.service.impl(async function () {
       const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
       const s = space.trim();
       const a = asset.trim();
-      const res = await fetch(`${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`, {
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
+      const res = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
       });
-      if (!res.ok) throw new Error(`Asset Columns Metadata request failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Asset Columns Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
       const data = await res.text();
       return data;
     } catch (e) {
       return req.error(500, `Datasphere API Raw Error: ${e.message}`);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // fetchBdcAssociations
+  // ---------------------------------------------------------------------------
+  this.on('fetchBdcAssociations', async (req) => {
+    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
+    if (!url || !tokenUrl || !clientId || !clientSecret || space === undefined || asset === undefined) {
+      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    }
+    try {
+      const s = space ? space.trim() : '';
+      const a = asset ? asset.trim() : '';
+      
+      // If mock url, return mock associations
+      if (isMockUrl(url)) {
+        return JSON.stringify([
+          { name: "to_TextTable", targetType: "MY_SPACE.COMPANY_TEXT" },
+          { name: "to_HierarchyDirectory", targetType: "MY_SPACE.MY_HIERARCHY_DIRECTORY" }
+        ], null, 2);
+      }
+      
+      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
+      const analyticalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/analytical/${s}/${a}/$metadata`;
+      
+      let res;
+      let endpoint = analyticalEndpoint;
+      try {
+        res = await fetch(analyticalEndpoint, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
+        });
+      } catch (err) {
+        console.warn(`Analytical endpoint fetch failed: ${err.message}. Trying relational fallback.`);
+      }
+
+      if (!res || !res.ok) {
+        const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
+        endpoint = relationalEndpoint;
+        res = await fetch(relationalEndpoint, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
+        });
+      }
+
+      if (!res.ok) throw new Error(`Asset Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
+      const xml = await res.text();
+      
+      const associations = [];
+      const navPropRegex = /<NavigationProperty\b[^>]*>/g;
+      const nameRegex = /\bName="([^"]+)"/;
+      const typeRegex = /\bType="([^"]+)"/;
+      
+      let match;
+      while ((match = navPropRegex.exec(xml)) !== null) {
+        const tagContent = match[0];
+        const nameMatch = nameRegex.exec(tagContent);
+        const typeMatch = typeRegex.exec(tagContent);
+        if (nameMatch && typeMatch) {
+          associations.push({
+            name: nameMatch[1],
+            targetType: typeMatch[1]
+          });
+        }
+      }
+      
+      return JSON.stringify(associations, null, 2);
+    } catch (e) {
+      return req.error(500, `Datasphere API fetchBdcAssociations Error: ${e.message}`);
     }
   });
 
@@ -1036,13 +1325,18 @@ module.exports = cds.service.impl(async function () {
         let finishedAt = null;
 
         if (isMockUrl(url)) {
-          // Mock URL fallback logic: complete mock runs after 10 seconds
-          const startedMs = parseInt(runId.replace('mock-log-', '')) || Date.now();
-          if (Date.now() - startedMs > 10000) {
+          if (runId && runId.includes('complete')) {
             status = 'COMPLETED';
             finishedAt = new Date().toISOString();
           } else {
-            status = 'RUNNING';
+            // Mock URL fallback logic: complete mock runs after 10 seconds
+            const startedMs = parseInt(runId.replace('mock-log-', '')) || Date.now();
+            if (Date.now() - startedMs > 10000) {
+              status = 'COMPLETED';
+              finishedAt = new Date().toISOString();
+            } else {
+              status = 'RUNNING';
+            }
           }
         } else {
           const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
@@ -1053,14 +1347,14 @@ module.exports = cds.service.impl(async function () {
           const res = await fetch(endpoint, {
             headers: {
               'Authorization': `Bearer ${token}`,
-              'Accept': 'application/json'
+              'Accept': 'application/vnd.sap.datasphere.task.log.details+json, application/json'
             }
           });
 
           if (res.ok) {
             const data = await res.json();
             status = data.status || 'RUNNING';
-            finishedAt = data.finishedAt || data.endedAt || new Date().toISOString();
+            finishedAt = data.endTime || data.finishedAt || data.endedAt || new Date().toISOString();
           } else {
             const errBody = await res.text().catch(() => '');
             throw new Error(`Log request failed with status ${res.status}: ${errBody}`);
@@ -1130,6 +1424,7 @@ module.exports = cds.service.impl(async function () {
     
     // 2. Fetch all pending open or failed replications
     const openReps = await db.run(SELECT.from(Replications).where({ status: { in: ['Open', 'Failed'] } }));
+    console.log("DEBUG triggerReplication openReps:", JSON.stringify(openReps));
     if (openReps.length === 0) {
       return { success: true, message: 'No pending or failed changes to replicate.' };
     }
@@ -1221,11 +1516,13 @@ module.exports = cds.service.impl(async function () {
           errors.push(`Environment ${envId}: Replication failed to trigger.`);
         }
       } catch (e) {
+        console.error("DEBUG CATCH EXCEPTION:", e);
         errors.push(`Environment ${envId} Error: ${e.message}`);
       }
     }
 
     if (errors.length > 0) {
+      console.error("DEBUG triggerReplication errors:", errors);
       if (results.length > 0) {
         return { 
           success: false, 
@@ -1265,7 +1562,7 @@ module.exports = cds.service.impl(async function () {
       
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody}`);
+        throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
       }
       
       const data = await res.json();
@@ -1302,13 +1599,13 @@ module.exports = cds.service.impl(async function () {
       const res = await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
+          'Accept': 'application/vnd.sap.datasphere.task.log.details+json, application/json'
         }
       });
       
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        throw new Error(`Task chain log request failed: ${res.status} ${res.statusText}. Response: ${errBody}`);
+        throw new Error(`Task chain log request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
       }
       
       const data = await res.json();
@@ -1316,12 +1613,16 @@ module.exports = cds.service.impl(async function () {
     } catch (e) {
       if (isMockUrl(url)) {
         console.warn(`fetchBdcTaskChainLog failed: ${e.message}. Returning mock log detail for testing.`);
+        const now = new Date();
+        const start = new Date(now.getTime() - 5000);
         return JSON.stringify({
           logId: logId,
           status: 'COMPLETED',
           spaceId: space,
-          startedAt: new Date(Date.now() - 5000).toISOString(),
-          finishedAt: new Date().toISOString(),
+          startTime: start.toISOString(),
+          endTime: now.toISOString(),
+          startedAt: start.toISOString(),
+          finishedAt: now.toISOString(),
           tasks: [
             { taskId: 'step-1-data-flow', taskType: 'DATA_FLOW', status: 'COMPLETED' }
           ]
@@ -1405,6 +1706,7 @@ module.exports = cds.service.impl(async function () {
             req?.user?.id
           );
         }
+        await _syncRoleAssignmentsToHana(id);
       }
     } catch (err) {
       console.error('Audit Log failed for Roles UPDATE:', err);
@@ -1417,6 +1719,7 @@ module.exports = cds.service.impl(async function () {
       if (id) {
         const beforeState = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
         if (beforeState) {
+          // Log parent deletion
           await cds.db.run(INSERT.into(AuditLogs).entries({
             ID: cds.utils.uuid(),
             entityName: 'Roles',
@@ -1426,6 +1729,49 @@ module.exports = cds.service.impl(async function () {
             details: JSON.stringify(beforeState)
           }));
           await _queueReplication(`${beforeState.name} (DELETED)`, beforeState.environment_ID, req?.user?.id);
+
+          // Handle recursive descendant and assignment deletions
+          req.context = req.context || {};
+          if (!req.context.inCascadingDelete) {
+            req.context.inCascadingDelete = true;
+
+            const allInheritances = await cds.db.run(SELECT.from(RoleInheritance));
+            const descendantRoleIds = [];
+            const queue = [id];
+            const visited = new Set([id]);
+            while (queue.length > 0) {
+              const curr = queue.shift();
+              const children = allInheritances.filter(ri => ri.parent_ID === curr);
+              for (const child of children) {
+                if (!visited.has(child.role_ID)) {
+                  visited.add(child.role_ID);
+                  descendantRoleIds.push(child.role_ID);
+                  queue.push(child.role_ID);
+                }
+              }
+            }
+
+            // 1. Delete all assignments associated with the parent role and descendants
+            const allRoleIds = [id, ...descendantRoleIds];
+            const assignments = await cds.db.run(SELECT.from(RoleAssignments).where({ role_ID: { in: allRoleIds } }));
+            for (const assignment of assignments) {
+              // Using this.run to trigger hooks (audit logs & HANA sync)
+              await this.run(DELETE.from(RoleAssignments).where({ ID: assignment.ID }));
+            }
+
+            // 2. Delete all inheritances involving these roles
+            await cds.db.run(DELETE.from(RoleInheritance).where({
+              or: [
+                { role_ID: { in: allRoleIds } },
+                { parent_ID: { in: allRoleIds } }
+              ]
+            }));
+
+            // 3. Delete descendant roles recursively (triggering hooks for audit log and compositions)
+            for (const descId of descendantRoleIds) {
+              await this.run(DELETE.from(Roles).where({ ID: descId }));
+            }
+          }
         }
       }
     } catch (err) {
@@ -1509,6 +1855,20 @@ module.exports = cds.service.impl(async function () {
             details: JSON.stringify(diff)
           }));
         }
+
+        // Queue replication for updated assignment
+        if (afterState) {
+          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: afterState.role_ID }));
+          if (role) {
+            await _queueReplication(role.name, role.environment_ID, req?.user?.id);
+          }
+        }
+        if (beforeState && beforeState.role_ID !== afterState?.role_ID) {
+          const oldRole = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
+          if (oldRole) {
+            await _queueReplication(oldRole.name, oldRole.environment_ID, req?.user?.id);
+          }
+        }
       }
     } catch (err) {
       console.error('Audit Log failed for RoleAssignments UPDATE:', err);
@@ -1559,6 +1919,9 @@ module.exports = cds.service.impl(async function () {
           details: JSON.stringify(details)
         }));
         await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+        if (restriction.role_ID) {
+          await _syncRoleAssignmentsToHana(restriction.role_ID);
+        }
       }
     } catch (err) {
       console.error('Audit Log failed for Restrictions CREATE:', err);
@@ -1612,6 +1975,9 @@ module.exports = cds.service.impl(async function () {
             details: JSON.stringify(details)
           }));
           await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+          if (beforeState && beforeState.role_ID) {
+            await _syncRoleAssignmentsToHana(beforeState.role_ID);
+          }
         }
       }
     } catch (err) {
@@ -1642,6 +2008,9 @@ module.exports = cds.service.impl(async function () {
             details: JSON.stringify(details)
           }));
           await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+          if (beforeState && beforeState.role_ID) {
+            await _syncRoleAssignmentsToHana(beforeState.role_ID);
+          }
         }
       }
     } catch (err) {

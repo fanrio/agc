@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
 import * as api from '../api';
 
@@ -18,6 +18,9 @@ const ENV_COLOR = {
 export default function BdcSettingsView() {
   const [settings, setSettings] = useState([]);
   const [loading, setLoading]   = useState(true);
+  
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
   const [showAdd, setShowAdd]   = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [environments, setEnvironments] = useState([]);
@@ -265,17 +268,24 @@ export default function BdcSettingsView() {
     setLoading(false);
   }
 
-  async function handleDelete(id, name) {
-    if (!confirm(`Delete BDC System Connection "${name}"?`)) return;
-    setLoading(true);
-    try {
-      await api.deleteBdcSetting(id);
-      await load();
-      setSnackbar({ open: true, message: 'Connection setting deleted.', severity: 'info' });
-    } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
-    }
-    setLoading(false);
+  function handleDelete(id, name) {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Connection',
+      message: `Delete BDC System Connection "${name}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setLoading(true);
+        try {
+          await api.deleteBdcSetting(id);
+          await load();
+          setSnackbar({ open: true, message: 'Connection setting deleted.', severity: 'info' });
+        } catch (e) {
+          setSnackbar({ open: true, message: e.message, severity: 'error' });
+        }
+        setLoading(false);
+      }
+    });
   }
 
   async function handleTestConnection(id) {
@@ -720,6 +730,31 @@ export default function BdcSettingsView() {
           })
         )}
       </Box>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">
+          {confirmDialog.title}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            {confirmDialog.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

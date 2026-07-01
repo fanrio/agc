@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Snackbar } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Plus, Trash2, Edit3, X, Check, Network } from 'lucide-react';
 import * as api from '../api';
 
@@ -8,6 +8,9 @@ export default function StreamsView() {
   const [loading, setLoading]   = useState(true);
   const [showAdd, setShowAdd]   = useState(false);
   const [editingId, setEditingId] = useState(null);
+  
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
 
   // Form states
   const [form, setForm] = useState({ ID: '', abbreviation: '', name: '' });
@@ -93,16 +96,23 @@ export default function StreamsView() {
     setLoading(false);
   }
 
-  async function handleDelete(id, name) {
-    if (!confirm(`Delete stream "${name}" (${id})?`)) return;
-    setLoading(true);
-    try {
-      await api.deleteStream(id);
-      await load();
-    } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
-    }
-    setLoading(false);
+  function handleDelete(id, name) {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Stream',
+      message: `Delete stream "${name}" (${id})?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setLoading(true);
+        try {
+          await api.deleteStream(id);
+          await load();
+        } catch (e) {
+          setSnackbar({ open: true, message: e.message, severity: 'error' });
+        }
+        setLoading(false);
+      }
+    });
   }
 
   function startEdit(s) {
@@ -252,6 +262,31 @@ export default function StreamsView() {
           </TableContainer>
         )}
       </Card>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">
+          {confirmDialog.title}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            {confirmDialog.message}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

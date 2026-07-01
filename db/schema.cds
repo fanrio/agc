@@ -25,7 +25,10 @@ entity OrgNodeAttributes : cuid {
 entity RestrictionFields : cuid {
   name          : String(100) not null;
   bdcConnection : Association to BdcSettings;
-  asset         : String(255);
+  asset         : String(255);          // Asset ID
+  assetText     : String(255);          // Asset Text
+  assetHierarchy: String(255);          // Asset Hierarchy
+  withHierarchyDirectory: Boolean;      // Checkbox info based on hierarchy attribute presence
   idColumns     : String(500); // e.g. ["id"] or ["company","plant"]
   textColumn    : String(100);
 }
@@ -122,6 +125,7 @@ entity AppAuthorizations : cuid, managed {
   canManageOrgRoles    : Boolean @default: false;
   canManageSingleRoles : Boolean @default: false;
   canManageDerivedRoles: Boolean @default: false;
+  managedDerivedRolesScope: String(1000) @default: 'ALL';
   canAssignRoles       : Boolean @default: false;
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, CircularProgress, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox } from '@mui/material';
-import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus } from 'lucide-react';
+import { Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, CircularProgress, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox } from '@mui/material';
+import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 
@@ -99,11 +99,120 @@ function hasAnyRestrictions(role, allRoles) {
   return false;
 }
 
+function canManageThisDerivedRole(role, permissions, allRoles) {
+  if (!permissions) return false;
+  if (!permissions.canManageDerivedRoles) return false;
+  const scope = permissions.managedDerivedRolesScope;
+  if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
+    return true;
+  }
+
+  try {
+    const scopeList = JSON.parse(scope);
+    if (Array.isArray(scopeList)) {
+      const matches = (id, name) => scopeList.some(s => s.roleId === id || (name && s.roleId === name));
+      if (matches(role.ID, role.name)) return true;
+      if (role.parentRoles && role.parentRoles.length > 0) {
+        for (const pr of role.parentRoles) {
+          const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
+          if (parentId) {
+            const parent = allRoles.find(r => r.ID === parentId);
+            if (parent && matches(parent.ID, parent.name)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+  } catch (e) {
+    const terms = scope.split(',').map(s => s.trim().toLowerCase());
+    if (terms.includes(role.name.toLowerCase()) || terms.includes(role.ID.toLowerCase())) {
+      return true;
+    }
+    if (role.parentRoles && role.parentRoles.length > 0) {
+      for (const pr of role.parentRoles) {
+        const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
+        if (parentId) {
+          const parent = allRoles.find(r => r.ID === parentId);
+          if (parent) {
+            if (terms.includes(parent.name.toLowerCase()) || terms.includes(parent.ID.toLowerCase())) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function canDeriveFromRole(parentRole, permissions) {
+  if (!permissions) return false;
+  if (!permissions.canManageDerivedRoles) return false;
+  const scope = permissions.managedDerivedRolesScope;
+  if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
+    return true;
+  }
+
+  try {
+    const scopeList = JSON.parse(scope);
+    if (Array.isArray(scopeList)) {
+      return scopeList.some(s => s.roleId === parentRole.ID || s.roleId === parentRole.name);
+    }
+  } catch (e) {
+    const terms = scope.split(',').map(s => s.trim().toLowerCase());
+    return terms.includes(parentRole.name.toLowerCase()) || terms.includes(parentRole.ID.toLowerCase());
+  }
+  return false;
+}
+
 function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact, permissions }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const [showEffective, setShowEffective] = useState(false);
   const [effective, setEffective] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  const getDescendantsAndUsers = (roleId, rolesList) => {
+    const descendantRoles = [];
+    const queue = [roleId];
+    const visited = new Set([roleId]);
+    while (queue.length > 0) {
+      const currId = queue.shift();
+      const children = rolesList.filter(r => r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === currId));
+      for (const child of children) {
+        if (!visited.has(child.ID)) {
+          visited.add(child.ID);
+          descendantRoles.push(child);
+          queue.push(child.ID);
+        }
+      }
+    }
+
+    const allRoleIds = [roleId, ...descendantRoles.map(r => r.ID)];
+    const affectedUsers = [];
+    const userVisited = new Set();
+    rolesList.forEach(r => {
+      if (allRoleIds.includes(r.ID) && r.assignments) {
+        r.assignments.forEach(a => {
+          const userKey = `${a.userId}-${r.ID}`;
+          if (!userVisited.has(userKey)) {
+            userVisited.add(userKey);
+            affectedUsers.push({
+              userId: a.userId,
+              userName: a.userName,
+              roleName: r.name
+            });
+          }
+        });
+      }
+    });
+
+    return { descendantRoles, affectedUsers };
+  };
+
+  const { descendantRoles, affectedUsers } = getDescendantsAndUsers(role.ID, allRoles);
 
   const children = allRoles.filter(r => r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === role.ID));
 
@@ -119,8 +228,11 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
   }
 
   async function handleDelete() {
-    if (children.length > 0) { onError('Cannot delete a role that has child roles. Delete children first.'); return; }
-    if (!confirm(`Delete role "${role.name}"?`)) return;
+    setConfirmDeleteOpen(true);
+  }
+
+  async function executeDelete() {
+    setConfirmDeleteOpen(false);
     setLoading(true);
     try {
       await api.deleteRole(role.ID);
@@ -131,7 +243,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Card sx={{ ml: depth * 3, p: 2.5, position: 'relative' }}>
+      <Card sx={{ ml: { xs: Math.min(depth, 1) * 1.5, sm: depth * 3 }, p: 2.5, position: 'relative' }}>
         {/* Card Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: isCompact ? 1.5 : 1.5 }}>
           {children.length > 0 && !isSearchActive && (
@@ -139,7 +251,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
               {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             </IconButton>
           )}
-          <Shield size={16} color={role.type === 'ORG_BASED' ? '#3b82f6' : '#a78bfa'} />
+          <Shield size={16} color={role.type === 'ORG_BASED' ? '#1d4ed8' : '#7c3aed'} />
           <Typography variant="body1" sx={{ fontWeight: 700, fontFamily: 'monospace', flexGrow: 1 }} noWrap>
             {role.name}
           </Typography>
@@ -148,14 +260,14 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
             size="small"
             color={role.type === 'ORG_BASED' ? 'primary' : 'secondary'}
             variant="outlined"
-            sx={{ height: 20, fontSize: 10 }}
+            sx={{ height: 20, fontSize: 12 }}
           />
           {role.environment && (
             <Chip
               label={role.environment.name || role.environment_ID}
               size="small"
               color={ENV_COLOR[role.environment_ID] || "default"}
-              sx={{ height: 20, fontSize: 10 }}
+              sx={{ height: 20, fontSize: 12 }}
             />
           )}
           {role.critical && (
@@ -163,14 +275,14 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
               label="Critical"
               size="small"
               color="error"
-              sx={{ height: 20, fontSize: 10, fontWeight: 600 }}
+              sx={{ height: 20, fontSize: 12, fontWeight: 600 }}
             />
           )}
           {depth > 0 && (
             <Chip
               label={`L${depth}`}
               size="small"
-              sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(255,255,255,0.05)', color: 'text.secondary' }}
+              sx={{ height: 20, fontSize: 12, bgcolor: 'action.hover', color: 'text.secondary' }}
             />
           )}
         </Box>
@@ -193,7 +305,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
         {/* Assigned users */}
         {!isCompact && role.assignments && role.assignments.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Users size={14} color="#94a3b8" />
+            <Users size={14} color="#64748b" />
             <Typography variant="caption" color="text.secondary">
               Assigned: {role.assignments.map(a => a.userName || a.userId).join(', ')}
             </Typography>
@@ -203,8 +315,8 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
         {/* Approvers */}
         {!isCompact && role.approvers && role.approvers.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Shield size={14} color="#a78bfa" />
-            <Typography variant="caption" sx={{ color: '#a78bfa' }}>
+            <Shield size={14} color="#7c3aed" />
+            <Typography variant="caption" sx={{ color: '#7c3aed' }}>
               Approvers: {role.approvers.map(a => a.userName || a.userId).join(', ')}
             </Typography>
           </Box>
@@ -212,7 +324,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
 
         {/* Managed Metadata */}
         {!isCompact && (
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2, fontSize: 10, color: 'text.secondary', opacity: 0.8 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2, fontSize: 12, color: 'text.secondary', opacity: 0.8 }}>
             <Box>
               Created: <Box component="span" sx={{ color: 'text.primary' }}>{formatDateTime(role.createdAt)}</Box> by <Box component="span" sx={{ color: 'text.primary' }}>{role.createdBy || 'seed'}</Box>
             </Box>
@@ -236,7 +348,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
             onClick={() => onEdit(role.ID)} 
             disabled={permissions && (
               role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-              (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
+              (role.parentRoles && role.parentRoles.length > 0) ? !canManageThisDerivedRole(role, permissions, allRoles) : !permissions.canManageSingleRoles
             )}
             startIcon={<Edit3 size={13} />}
           >
@@ -247,7 +359,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
             variant="outlined" 
             color="secondary" 
             onClick={() => onDerive(role.ID)} 
-            disabled={permissions && !permissions.canManageDerivedRoles}
+            disabled={permissions && !canDeriveFromRole(role, permissions)}
             startIcon={<GitBranch size={13} />}
           >
             Derive Child Role
@@ -268,7 +380,7 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
             onClick={handleDelete} 
             disabled={loading || (permissions && (
               role.type === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-              (role.parentRoles && role.parentRoles.length > 0) ? !permissions.canManageDerivedRoles : !permissions.canManageSingleRoles
+              (role.parentRoles && role.parentRoles.length > 0) ? !canManageThisDerivedRole(role, permissions, allRoles) : !permissions.canManageSingleRoles
             ))} 
             sx={{ ml: 'auto' }}
           >
@@ -316,6 +428,110 @@ function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, 
           permissions={permissions}
         />
       ))}
+
+      {/* Confirm Delete Dialog */}
+      <Dialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        aria-labelledby="confirm-delete-dialog-title"
+        aria-describedby="confirm-delete-dialog-description"
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+          <AlertTriangle color="#d32f2f" size={24} />
+          <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
+            Confirm Deletion & Analyze Impact
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 3 }}>
+            Are you sure you want to delete role <strong>{role.name}</strong>? This action cannot be undone.
+            {(descendantRoles.length > 0 || affectedUsers.length > 0) && (
+              <Box component="span" sx={{ display: 'block', mt: 1, color: 'error.main', fontWeight: 600 }}>
+                Warning: Deleting this role will also delete all of its derived roles and active user assignments.
+              </Box>
+            )}
+          </DialogContentText>
+
+          {(descendantRoles.length > 0 || affectedUsers.length > 0) && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, mt: 1 }}>
+              {/* Derived Roles Panel */}
+              <Card variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <GitBranch size={18} color="#0288d1" />
+                    Derived Roles to Delete
+                  </Typography>
+                  <Chip
+                    label={descendantRoles.length}
+                    size="small"
+                    color="info"
+                    sx={{ fontWeight: 600 }}
+                  />
+                </Box>
+                {descendantRoles.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 1 }}>
+                    No derived roles will be affected.
+                  </Typography>
+                ) : (
+                  <Box sx={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {descendantRoles.map(r => (
+                      <Card key={r.ID} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{r.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{r.description || 'No description'}</Typography>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+              </Card>
+
+              {/* Affected Users Panel */}
+              <Card variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Users size={18} color="#2e7d32" />
+                    Assigned Users Affected
+                  </Typography>
+                  <Chip
+                    label={affectedUsers.length}
+                    size="small"
+                    color="success"
+                    sx={{ fontWeight: 600 }}
+                  />
+                </Box>
+                {affectedUsers.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 1 }}>
+                    No assigned users will be affected.
+                  </Typography>
+                ) : (
+                  <Box sx={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {affectedUsers.map(u => (
+                      <Card key={`${u.userId}-${u.roleName}`} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{u.userName}</Typography>
+                          <Chip label={u.userId} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Assigned Role: <Box component="span" sx={{ fontFamily: 'monospace' }}>{u.roleName}</Box>
+                        </Typography>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+              </Card>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={executeDelete} color="error" variant="contained" autoFocus>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -445,7 +661,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             placeholder="Search roles or restrictions…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            sx={{ width: 260 }}
+            sx={{ width: { xs: '100%', sm: 260 } }}
           />
           <ToggleButtonGroup
             value={viewMode}

@@ -1,20 +1,41 @@
 {
-  "@odata.context": "https://cimt-ag-1.eu10.hcs.cloud.sap/api/v1/datasphere/consumption/relational/HH_SAP/Dim_CompanyCode/$metadata#Dim_CompanyCode",
+  "@odata.context": "https://cimt-ag-1.eu10.hcs.cloud.sap/api/v1/datasphere/consumption/relational/HH_SAP/Dim_Sales_Organization/$metadata#Dim_Sales_Organization",
   "value": [
     {
-      "ID": "DE01",
-      "Name": "Deutschland",
-      "Languange": "DE"
+      "salesorg": "DE03",
+      "createdon": "2025-01-01",
+      "status": "A",
+      "country": "DE"
     },
     {
-      "ID": "DE01",
-      "Name": "Germany",
-      "Languange": "EN"
+      "salesorg": "DE09",
+      "createdon": "2025-01-02",
+      "status": "A",
+      "country": "DE"
     },
     {
-      "ID": "DE01",
-      "Name": "Alemanie",
-      "Languange": "FR"
+      "salesorg": "ES01",
+      "createdon": "2025-01-04",
+      "status": "A",
+      "country": "ES"
+    },
+    {
+      "salesorg": "FR01",
+      "createdon": "2025-01-03",
+      "status": "A",
+      "country": "FR"
+    },
+    {
+      "salesorg": "GB02",
+      "createdon": "2025-01-05",
+      "status": "A",
+      "country": "GB"
+    },
+    {
+      "salesorg": "US02",
+      "createdon": "2025-01-06",
+      "status": "A",
+      "country": "US"
     }
   ]
 }

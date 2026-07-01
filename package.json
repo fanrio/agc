@@ -17,6 +17,7 @@
     "hdb": "^2.27.1"
   },
   "devDependencies": {
+    "@cap-js/cds-test": "^1.0.1",
     "@sap/cds-dk": "^9.9.1",
     "concurrently": "^10.0.3"
   },

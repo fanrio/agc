@@ -9,14 +9,17 @@ import { Filter, Lock, Unlock, X, Plus, Globe, Building2, MapPin, Factory, Brief
 function getHierarchyOptions(flatNodes) {
   const map = {};
   flatNodes.forEach(node => {
-    map[node.ID] = { ...node, children: [] };
+    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
+    map[id] = { ...node, children: [] };
   });
 
   const roots = [];
   flatNodes.forEach(node => {
-    const mappedNode = map[node.ID];
-    if (node.parent_ID && map[node.parent_ID]) {
-      map[node.parent_ID].children.push(mappedNode);
+    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
+    const parentId = node.parent_ID !== undefined && node.parent_ID !== null ? node.parent_ID : node.parent_id;
+    const mappedNode = map[id];
+    if (parentId && map[parentId]) {
+      map[parentId].children.push(mappedNode);
     } else {
       roots.push(mappedNode);
     }
@@ -31,6 +34,47 @@ function getHierarchyOptions(flatNodes) {
   }
   roots.forEach(r => traverse(r, 0));
   return result;
+}
+
+// Helper to check if any ancestor of nodeId is present in currentSelection list
+export function isAncestorSelected(nodeId, currentSelection, flatNodes) {
+  if (!flatNodes || !Array.isArray(flatNodes) || flatNodes.length === 0) return false;
+  
+  const nodeMap = new Map();
+  flatNodes.forEach(node => {
+    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
+    const localId = node.localId !== undefined && node.localId !== null ? node.localId : id;
+    nodeMap.set(String(localId), node);
+  });
+
+  // Map currentSelection (which contains original IDs) to localIds
+  const selectionLocalIds = currentSelection.map(id => {
+    const matchingNode = flatNodes.find(n => (n.id !== undefined ? n.id : n.ID) === id);
+    return matchingNode ? (matchingNode.localId || id) : id;
+  }).map(String);
+
+  const node = flatNodes.find(n => (n.id !== undefined ? n.id : n.ID) === nodeId);
+  if (!node) return false;
+
+  let curr = node;
+  while (curr) {
+    const parentId = curr.localParentId !== undefined && curr.localParentId !== null
+      ? curr.localParentId
+      : (curr.parent_ID !== undefined && curr.parent_ID !== null ? curr.parent_ID : curr.parent_id);
+    if (parentId === undefined || parentId === null || parentId === '') break;
+    if (selectionLocalIds.includes(String(parentId))) {
+      return true;
+    }
+    const localParentIdStr = String(parentId);
+    curr = nodeMap.get(localParentIdStr);
+  }
+  return false;
+}
+
+// Helper to filter selection list and exclude children of selected parents
+export function filterSelectedNodes(selectedList, flatNodes) {
+  if (!selectedList || !Array.isArray(selectedList)) return [];
+  return selectedList.filter(id => !isAncestorSelected(id, selectedList, flatNodes));
 }
 
 const FILTER_TYPES = ['SINGLE_VALUE', 'MULTI_VALUE', 'RANGE', 'HIERARCHY', 'PATTERN'];
@@ -91,26 +135,48 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
   const fieldConfig = restrictionFields.find(f => f.name === field);
   const [bdcValues, setBdcValues] = useState([]);
   const [loadingBdc, setLoadingBdc] = useState(false);
+  const [selectedHierarchyDirectory, setSelectedHierarchyDirectory] = useState('');
 
   useEffect(() => {
-    if (!fieldConfig || !fieldConfig.bdcConnection || !fieldConfig.asset) {
+    setSelectedHierarchyDirectory('');
+  }, [fieldConfig, filterType]);
+
+  useEffect(() => {
+    if (!fieldConfig || !fieldConfig.bdcConnection) {
       setBdcValues([]);
       return;
     }
+    if (filterType === 'PATTERN') {
+      setBdcValues([]);
+      return;
+    }
+    if (filterType === 'HIERARCHY' && !fieldConfig.assetHierarchy) {
+      setBdcValues([]);
+      return;
+    }
+
     setLoadingBdc(true);
     const conn = fieldConfig.bdcConnection;
+    const targetAsset = filterType === 'HIERARCHY' ? fieldConfig.assetHierarchy : fieldConfig.asset;
+
     api.fetchBdcRelationalValues(
       conn.url, 
       conn.tokenUrl, 
       conn.clientId, 
       conn.clientSecret, 
       conn.space, 
-      fieldConfig.asset, 
+      targetAsset, 
+      filterType === 'HIERARCHY' ? null : (fieldConfig.assetText || null), 
       fieldConfig.idColumns || '["id"]', 
       fieldConfig.textColumn || 'id'
     )
       .then(values => {
-        setBdcValues(values || []);
+        const mapped = (values || []).map(v => ({
+          ...v,
+          localId: v.hierarchy ? `${v.hierarchy}-${v.id}` : v.id,
+          localParentId: (v.hierarchy && v.parent_ID) ? `${v.hierarchy}-${v.parent_ID}` : v.parent_ID
+        }));
+        setBdcValues(mapped);
       })
       .catch(e => {
         console.error('Failed to fetch BDC relational values:', e);
@@ -119,11 +185,22 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       .finally(() => {
         setLoadingBdc(false);
       });
-  }, [fieldConfig, field]);
+  }, [fieldConfig, field, filterType]);
 
   const hasBdcOptions = bdcValues.length > 0;
 
-  if (filterType === 'SINGLE_VALUE' || filterType === 'PATTERN') {
+  if (filterType === 'PATTERN') {
+    return (
+      <TextField
+        size="small"
+        fullWidth
+        placeholder="e.g. CC1% or DE_"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+  }
+  if (filterType === 'SINGLE_VALUE') {
     if (loadingBdc) {
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
     }
@@ -167,7 +244,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       <TextField
         size="small"
         fullWidth
-        placeholder={filterType === 'PATTERN' ? 'e.g. CC1% or DE_' : 'e.g. Germany'}
+        placeholder="e.g. Germany"
         value={value}
         onChange={e => onChange(e.target.value)}
       />
@@ -338,19 +415,93 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     );
   }
   if (filterType === 'HIERARCHY') {
+    // If BDC link and hierarchy asset is configured, use BDC hierarchy loader
+    if (fieldConfig && fieldConfig.bdcConnection && fieldConfig.assetHierarchy) {
+      if (loadingBdc) {
+        return <TextField size="small" fullWidth disabled value="Loading hierarchy from Datasphere..." />;
+      }
+
+      const selectedIds = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
+      const uniqueHierarchies = Array.from(new Set(bdcValues.map(v => v.hierarchy).filter(Boolean)));
+      
+      // Filter options based on selected directory (if withHierarchyDirectory is true)
+      const isWithDirectory = !!fieldConfig.withHierarchyDirectory;
+      const filteredOptions = isWithDirectory && selectedHierarchyDirectory
+        ? bdcValues.filter(v => v.hierarchy === selectedHierarchyDirectory)
+        : bdcValues;
+
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+          {isWithDirectory && (
+            <FormControl size="small" fullWidth>
+              <InputLabel id="hierarchy-directory-label">Hierarchy Directory</InputLabel>
+              <Select
+                labelId="hierarchy-directory-label"
+                value={selectedHierarchyDirectory}
+                onChange={e => {
+                  setSelectedHierarchyDirectory(e.target.value);
+                  onChange(JSON.stringify([]));
+                }}
+                label="Hierarchy Directory"
+              >
+                <MenuItem value=""><em>All Directories</em></MenuItem>
+                {uniqueHierarchies.map(h => (
+                  <MenuItem key={h} value={h}>{h}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="restriction-hierarchy-bdc-label">Select Hierarchy Nodes</InputLabel>
+            <Select
+              labelId="restriction-hierarchy-bdc-label"
+              multiple
+              value={selectedIds}
+              onChange={e => {
+                const nextSelected = e.target.value;
+                const filtered = filterSelectedNodes(nextSelected, filteredOptions);
+                onChange(JSON.stringify(filtered));
+              }}
+              input={<OutlinedInput label="Select Hierarchy Nodes" />}
+              renderValue={(selected) => {
+                return selected.map(id => bdcValues.find(x => x.id === id)?.text || id).join(', ');
+              }}
+            >
+              {getHierarchyOptions(filteredOptions).map(v => {
+                const isChecked = selectedIds.includes(v.id);
+                const isDisabled = isAncestorSelected(v.id, selectedIds, filteredOptions);
+                const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
+                return (
+                  <MenuItem 
+                    key={v.id} 
+                    value={v.id}
+                    disabled={isDisabled}
+                    sx={{
+                      pl: 2 + (v.depth || 0) * 3, // Indent based on depth hierarchy
+                      py: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                    }}
+                  >
+                    <SelectionIcon
+                      fontSize="small"
+                      style={{ marginRight: 8, boxSizing: 'content-box' }}
+                    />
+                    <ListItemText primary={v.text} />
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+        </Box>
+      );
+    }
+
+    // Default local orgNodes fallback if no BDC hierarchy asset defined
     const sortedNodes = getHierarchyOptions(orgNodes);
     const selectedIds = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
-
-    const isAncestorSelected = (nodeId, currentSelection) => {
-      let curr = orgNodes.find(x => x.ID === nodeId);
-      while (curr && curr.parent_ID) {
-        if (currentSelection.includes(curr.parent_ID)) {
-          return true;
-        }
-        curr = orgNodes.find(x => x.ID === curr.parent_ID);
-      }
-      return false;
-    };
 
     return (
       <FormControl size="small" fullWidth>
@@ -362,8 +513,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
           value={selectedIds}
           onChange={e => {
             const nextSelected = e.target.value;
-            // Clean up: remove children/descendants if their parent/ancestor is in the selection
-            const filtered = nextSelected.filter(id => !isAncestorSelected(id, nextSelected));
+            const filtered = filterSelectedNodes(nextSelected, orgNodes);
             onChange(JSON.stringify(filtered));
           }}
           input={<OutlinedInput label="Select Hierarchy Nodes" />}
@@ -375,7 +525,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
           {sortedNodes.map(n => {
             const isChecked = selectedIds.includes(n.ID);
             const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-            const isDisabled = isAncestorSelected(n.ID, selectedIds);
+            const isDisabled = isAncestorSelected(n.ID, selectedIds, orgNodes);
 
             // Choose icon based on node type
             let TypeIcon = Building2;
@@ -402,7 +552,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
                   fontSize="small"
                   style={{ marginRight: 8, boxSizing: 'content-box' }}
                 />
-                <TypeIcon size={16} color={isDisabled ? "text.disabled" : "#3b82f6"} />
+                <TypeIcon size={16} color={isDisabled ? "text.disabled" : "primary.main"} />
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   <Typography variant="body2" sx={{ fontWeight: 700, color: isDisabled ? 'text.disabled' : 'text.primary' }}>
                     {n.name}
@@ -445,14 +595,14 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       flexWrap: 'wrap',
       gap: 1.5,
       p: '8px 16px',
-      bgcolor: isOwn ? 'rgba(59, 130, 246, 0.04)' : 'rgba(255, 255, 255, 0.02)',
+      bgcolor: isOwn ? 'rgba(15, 23, 42, 0.04)' : 'action.hover',
       border: '1px solid',
-      borderColor: isOwn ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+      borderColor: isOwn ? 'primary.main' : 'divider',
       borderRadius: 1.5,
       width: '100%',
     }}>
-      {isOwn ? <Unlock size={14} color="#3b82f6" /> : <Lock size={14} color="#94a3b8" />}
-      <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.light' : 'text.secondary', fontFamily: 'monospace' }}>
+      {isOwn ? <Unlock size={14} color="#0f172a" /> : <Lock size={14} color="#64748b" />}
+      <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.main' : 'text.secondary', fontFamily: 'monospace' }}>
         {restriction.field}
       </Typography>
       <Chip label={label} size="small" color={color} sx={{ fontSize: 9, height: 18 }} />
@@ -516,6 +666,9 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
     onChange(restrictions.filter(r => r.ID !== id));
   }
 
+  const inheritedFields = new Set(inheritedRestrictions.map(r => r.field));
+  const availableFields = restrictionFields.filter(f => !inheritedFields.has(f.name));
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Snackbar
@@ -577,7 +730,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
               onChange={e => setDraft(d => ({ ...d, field: e.target.value }))}
             >
               <MenuItem value=""><em>Select Field</em></MenuItem>
-              {restrictionFields.map(f => (
+              {availableFields.map(f => (
                 <MenuItem key={f.ID} value={f.name}>{f.name}</MenuItem>
               ))}
             </Select>
