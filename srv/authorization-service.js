@@ -1,6 +1,8 @@
 const cds = require('@sap/cds');
 const { resolveEffectiveRestrictions, evaluateRestriction } = require('./lib/resolveEffectiveRestrictions');
 const { syncDynamicRule } = require('./lib/dynamicSync');
+const HanaClient = require('./lib/hanaClient');
+const BdcClient = require('./lib/bdcClient');
 
 function isMockUrl(url) {
   return !!(url && (url.includes('mock') || url.includes('sandbox') || url.includes('test') || url.includes('localhost')));
@@ -219,121 +221,61 @@ module.exports = cds.service.impl(async function () {
     const bdcSettings = await db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }));
     if (bdcSettings.length === 0) return;
 
-    const hana = require('@sap/hana-client');
+    const entries = [];
+    if (!isDelete) {
+      for (const r of restrictions) {
+        let op = 'EQ';
+        let low = r.value;
+        let high = '';
 
-    for (const setting of bdcSettings) {
-      if (!setting.username || !/^[a-zA-Z0-9_]+$/.test(setting.username)) {
-        console.error(`Invalid schema name/username for HANA sync: [${setting.username}] - potential SQL injection blocked`);
-        continue;
-      }
-      const conn = hana.createConnection();
-      const connParams = {
-        serverNode: `${setting.host}:${setting.port || 443}`,
-        uid: setting.username,
-        pwd: setting.password,
-        encrypt: 'true',
-        sslValidateCertificate: 'true',
-        sslHostNameInCertificate: setting.host
-      };
+        if (r.filterType === 'SINGLE_VALUE') {
+          op = 'EQ';
+        } else if (r.filterType === 'RANGE') {
+          op = 'BT';
+          try {
+            const rangeObj = JSON.parse(r.value);
+            low = String(rangeObj.from || '');
+            high = String(rangeObj.to || '');
+          } catch (e) {}
+        } else if (r.filterType === 'PATTERN') {
+          op = 'CP';
+        }
 
-      await new Promise((resolve) => {
-        conn.connect(connParams, (err) => {
-          if (err) {
-            console.error(`Failed to connect to HANA database [${setting.systemName}] for sync:`, err.message);
-            resolve();
-          } else {
-            // Delete existing rows for this assignment
-            const deleteSql = `DELETE FROM "${setting.username}"."authoriziation_flat" WHERE "ID" LIKE ?`;
-            conn.prepare(deleteSql, (prepErr, stmt) => {
-              if (prepErr) {
-                console.error("Failed to prepare delete sync query:", prepErr);
-                conn.disconnect(() => resolve());
-              } else {
-                stmt.exec([`${assignmentId}%`], (execErr) => {
-                  if (execErr) console.error("Failed to execute delete sync query:", execErr);
-
-                  if (isDelete || restrictions.length === 0) {
-                    conn.disconnect(() => resolve());
-                  } else {
-                    // Insert rows
-                    const insertSql = `INSERT INTO "${setting.username}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
-                    conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
-                      if (insertPrepErr) {
-                        console.error("Failed to prepare insert sync query:", insertPrepErr);
-                        conn.disconnect(() => resolve());
-                        return;
-                      }
-
-                      const entries = [];
-                      for (const r of restrictions) {
-                        let op = 'EQ';
-                        let low = r.value;
-                        let high = '';
-
-                        if (r.filterType === 'SINGLE_VALUE') {
-                          op = 'EQ';
-                        } else if (r.filterType === 'RANGE') {
-                          op = 'BT';
-                          try {
-                            const rangeObj = JSON.parse(r.value);
-                            low = String(rangeObj.from || '');
-                            high = String(rangeObj.to || '');
-                          } catch (e) {}
-                        } else if (r.filterType === 'PATTERN') {
-                          op = 'CP';
-                        }
-
-                        if (r.filterType === 'MULTI_VALUE') {
-                          let values = [r.value];
-                          try {
-                            values = JSON.parse(r.value);
-                            if (!Array.isArray(values)) values = [r.value];
-                          } catch (e) {}
-                          for (let idx = 0; idx < values.length; idx++) {
-                            entries.push([
-                              `${assignmentId}_${r.ID}_${idx}`,
-                              userId,
-                              role.name,
-                              r.field,
-                              op,
-                              String(values[idx]),
-                              high
-                            ]);
-                          }
-                        } else {
-                          entries.push([
-                            `${assignmentId}_${r.ID}`,
-                            userId,
-                            role.name,
-                            r.field,
-                            op,
-                            low,
-                            high
-                          ]);
-                        }
-                      }
-
-                      let chain = Promise.resolve();
-                      for (const entry of entries) {
-                        chain = chain.then(() => new Promise((resolveExec) => {
-                          insertStmt.exec(entry, (insertExecErr) => {
-                            if (insertExecErr) console.error("Failed to insert sync row:", insertExecErr);
-                            resolveExec();
-                          });
-                        }));
-                      }
-
-                      chain.then(() => {
-                        conn.disconnect(() => resolve());
-                      });
-                    });
-                  }
-                });
-              }
+        if (r.filterType === 'MULTI_VALUE') {
+          let values = [r.value];
+          try {
+            values = JSON.parse(r.value);
+            if (!Array.isArray(values)) values = [r.value];
+          } catch (e) {}
+          for (let idx = 0; idx < values.length; idx++) {
+            entries.push({
+              userId,
+              roleName: role.name,
+              field: r.field,
+              operator: op,
+              low: String(values[idx]),
+              high
             });
           }
-        });
-      });
+        } else {
+          entries.push({
+            userId,
+            roleName: role.name,
+            field: r.field,
+            operator: op,
+            low,
+            high
+          });
+        }
+      }
+    }
+
+    for (const setting of bdcSettings) {
+      try {
+        await HanaClient.syncAssignment(setting, assignmentId, isDelete, entries);
+      } catch (err) {
+        console.error(`Hana sync failed for system [${setting.systemName}]:`, err.message);
+      }
     }
   }
 
@@ -516,59 +458,7 @@ module.exports = cds.service.impl(async function () {
       if (!setting.username || !setting.password) {
         return { success: false, message: 'Failed: User and Password are required for SAP Hana connection' };
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(setting.username)) {
-        return { success: false, message: 'Failed: Invalid schema/username format: potential SQL injection blocked' };
-      }
-
-      // Real database connectivity check using the official @sap/hana-client library
-      const hana = require('@sap/hana-client');
-      const conn = hana.createConnection();
-      const connParams = {
-        serverNode: `${setting.host}:${setting.port || 443}`,
-        uid: setting.username,
-        pwd: setting.password,
-        encrypt: 'true',
-        sslValidateCertificate: 'true',
-        sslHostNameInCertificate: setting.host
-      };
-
-      const connectionPromise = new Promise((resolve) => {
-        conn.connect(connParams, (err) => {
-          if (err) {
-            resolve({
-              success: false,
-              message: `Hana database connection failed: ${err.message}`
-            });
-          } else {
-            // Create "authoriziation_flat" table in username schema
-            const sql = `CREATE TABLE "${setting.username}"."authoriziation_flat" (
-              "ID" VARCHAR(100) PRIMARY KEY,
-              "USER" VARCHAR(150),
-              "ROLE" VARCHAR(150),
-              "FIELD" VARCHAR(50),
-              "OPERATOR" VARCHAR(2),
-              "LOW" VARCHAR(1333),
-              "HIGH" VARCHAR(1333)
-            )`;
-            conn.exec(sql, (execErr) => {
-              if (execErr) {
-                const isAlreadyExists = execErr.code === 288 || execErr.message.toLowerCase().includes('already exists') || execErr.message.toLowerCase().includes('duplicate table name');
-                if (!isAlreadyExists) {
-                  console.error("Failed to create table:", execErr);
-                }
-              }
-              conn.disconnect(() => {
-                resolve({
-                  success: true,
-                  message: `Successfully connected to SAP Hana database. Table "${setting.username}"."authoriziation_flat" is verified/created.`
-                });
-              });
-            });
-          }
-        });
-      });
-
-      return await connectionPromise;
+      return await HanaClient.testConnectionAndCreateTable(setting);
     } else {
       if (!setting.url || !setting.url.startsWith('http')) {
         return { success: false, message: `Failed: Invalid endpoint URL '${setting.url || ''}'` };
@@ -597,150 +487,29 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // fetchBdcSpaces
-  // ---------------------------------------------------------------------------
   this.on('fetchBdcSpaces', async (req) => {
     const { url, tokenUrl, clientId, clientSecret } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret) {
       return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
     }
-
     try {
-      // 1. Fetch access token from OAuth Token URL
-      const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const tokenRes = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: 'grant_type=client_credentials'
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`Token request failed with status ${tokenRes.status}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error('No access_token returned in OAuth response');
-      }
-
-      // 2. Fetch spaces from Basis URL + /api/v1/datasphere/consumption/catalog/spaces
-      const spacesEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
-      const spacesRes = await fetch(spacesEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!spacesRes.ok) {
-        throw new Error(`Spaces request failed with status ${spacesRes.status}`);
-      }
-
-      const data = await spacesRes.json();
-      let spacesList = [];
-      if (Array.isArray(data)) {
-        spacesList = data.map(s => s.id || s.name || s);
-      } else if (data && Array.isArray(data.results)) {
-        spacesList = data.results.map(s => s.id || s.name || s);
-      } else if (data && Array.isArray(data.value)) {
-        spacesList = data.value.map(s => s.id || s.name || s);
-      }
-
-      return spacesList;
+      return await BdcClient.fetchSpaces(url, tokenUrl, clientId, clientSecret);
     } catch (e) {
-      if (isMockUrl(url)) {
-        console.warn(`fetchBdcSpaces failed: ${e.message}. Returning mock fallback spaces for testing.`);
-        // Mock fallback spaces for demo/testing purposes
-        return ['SALES_DEMO_SPACE', 'FINANCE_QA_SPACE', 'PRODUCTION_CORE_SPACE', 'HR_GLOBAL_SPACE'];
-      }
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // fetchBdcAssets
-  // ---------------------------------------------------------------------------
   this.on('fetchBdcAssets', async (req) => {
     const { url, tokenUrl, clientId, clientSecret, space } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret) {
       return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
     }
-
-    let assetsList = [];
-    let rawData = null;
-
     try {
-      // 1. Fetch access token from OAuth Token URL
-      const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const tokenRes = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: 'grant_type=client_credentials'
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`Token request failed with status ${tokenRes.status}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error('No access_token returned in OAuth response');
-      }
-
-      // 2. Fetch assets from Basis URL + /api/v1/datasphere/consumption/catalog/assets
-      const assetsEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
-      const assetsRes = await fetch(assetsEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!assetsRes.ok) {
-        throw new Error(`Assets request failed with status ${assetsRes.status}`);
-      }
-
-      rawData = await assetsRes.json();
-      console.log('fetchBdcAssets data:', rawData);
-
-      let rawAssets = [];
-      if (Array.isArray(rawData)) {
-        rawAssets = rawData;
-      } else if (rawData && Array.isArray(rawData.results)) {
-        rawAssets = rawData.results;
-      } else if (rawData && Array.isArray(rawData.value)) {
-        rawAssets = rawData.value;
-      }
-
-      if (space) {
-        rawAssets = rawAssets.filter(a => a.spaceName === space);
-      }
-      assetsList = rawAssets.map(a => a.id || a.name || a);
+      const { assetsList } = await BdcClient.fetchAssets(url, tokenUrl, clientId, clientSecret, space);
+      return assetsList;
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
-
-    // Save list to file
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const filePath = path.join(__dirname, 'last_fetched_assets.json');
-      fs.writeFileSync(filePath, JSON.stringify(rawData || assetsList, null, 2), 'utf-8');
-      console.log('Successfully saved assets payload to:', filePath);
-    } catch (err) {
-      console.error('Failed to save assets file:', err);
-    }
-
-    return assetsList;
   });
 
   this.on('fetchBdcRelationalValues', async (req) => {
@@ -1040,26 +809,7 @@ module.exports = cds.service.impl(async function () {
 
   // Helper to fetch OAuth token
   async function _getOAuthToken(tokenUrl, clientId, clientSecret) {
-    if (isMockUrl(tokenUrl)) {
-      return 'mock-token';
-    }
-    const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const tokenRes = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
-    if (!tokenRes.ok) {
-      throw new Error(`Token request failed with status ${tokenRes.status}`);
-    }
-    const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) {
-      throw new Error('No access_token returned in OAuth response');
-    }
-    return tokenData.access_token;
+    return await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
   }
 
   // Helper to fetch keys of an asset from OData metadata
@@ -1299,41 +1049,18 @@ module.exports = cds.service.impl(async function () {
     const setting = await db.run(SELECT.one.from(BdcSettings).where({ ID: settingId }));
     if (!setting) return req.error(404, `BDC Setting with ID ${settingId} not found`);
 
-    const hana = require('@sap/hana-client');
-    const conn = hana.createConnection();
-    const connParams = {
-      serverNode: `${setting.host}:${setting.port || 443}`,
-      uid: setting.username,
-      pwd: setting.password,
-      encrypt: 'true',
-      sslValidateCertificate: 'true',
-      sslHostNameInCertificate: setting.host
-    };
-
-    const connectionPromise = new Promise((resolve) => {
-      conn.connect(connParams, (err) => {
-        if (err) {
-          resolve(req.error(500, `Hana connection failed: ${err.message}`));
-        } else {
-          const query = `
-            SELECT SCHEMA_NAME, VIEW_NAME 
-            FROM VIEWS 
-            WHERE SCHEMA_NAME NOT IN ('SYS', '_SYS_BI', '_SYS_BIC', '_SYS_STATISTICS', '_SYS_XS')
-            ORDER BY SCHEMA_NAME, VIEW_NAME
-          `;
-          conn.exec(query, (err, rows) => {
-            conn.disconnect();
-            if (err) {
-              resolve(req.error(500, `Query failed: ${err.message}`));
-            } else {
-              resolve(JSON.stringify(rows, null, 2));
-            }
-          });
-        }
-      });
-    });
-
-    return await connectionPromise;
+    try {
+      const query = `
+        SELECT SCHEMA_NAME, VIEW_NAME 
+        FROM VIEWS 
+        WHERE SCHEMA_NAME NOT IN ('SYS', '_SYS_BI', '_SYS_BIC', '_SYS_STATISTICS', '_SYS_XS')
+        ORDER BY SCHEMA_NAME, VIEW_NAME
+      `;
+      const rows = await HanaClient.execute(setting, query);
+      return JSON.stringify(rows, null, 2);
+    } catch (err) {
+      return req.error(500, err.message);
+    }
   });
 
   // Helper to check and update running replication statuses
