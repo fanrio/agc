@@ -20,23 +20,28 @@ class HanaClient {
   }
 
   static validateUsername(username) {
-    if (!username || !/^[a-zA-Z0-9_]+$/.test(username)) {
+    // Trim whitespace first (guards against accidental trailing spaces stored in DB)
+    const trimmed = (username || '').trim();
+    // SAP HANA usernames / schema names allow: letters, digits, underscore, hash (#),
+    // dollar sign ($) and dot (.) — e.g. "HH_SAP#AEISELE", "SAP$USER", "MY.SCHEMA"
+    if (!trimmed || !/^[a-zA-Z0-9_.#$]+$/.test(trimmed)) {
       throw new Error(`Invalid schema name/username: [${username}] - potential SQL injection blocked`);
     }
+    return trimmed;
   }
 
   /**
    * Helper to execute a single query with automatic connect/disconnect
    */
   static async execute(setting, sql, params = []) {
-    this.validateUsername(setting.username);
+    const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
       conn.connect(connParams, (err) => {
         if (err) return reject(new Error(`Hana connection failed: ${err.message}`));
-        
+
         const callback = (execErr, rows) => {
           conn.disconnect();
           if (execErr) return reject(new Error(`Query execution failed: ${execErr.message}`));
@@ -56,7 +61,7 @@ class HanaClient {
    * Helper to test connection and ensure flat table exists
    */
   static async testConnectionAndCreateTable(setting) {
-    this.validateUsername(setting.username);
+    const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
@@ -67,7 +72,7 @@ class HanaClient {
           return;
         }
 
-        const createSql = `CREATE TABLE "${setting.username}"."authoriziation_flat" (
+        const createSql = `CREATE TABLE "${schemaName}"."authoriziation_flat" (
            "ID" VARCHAR(100) PRIMARY KEY,
            "USER" VARCHAR(150),
            "ROLE" VARCHAR(150),
@@ -79,9 +84,9 @@ class HanaClient {
 
         conn.exec(createSql, (execErr) => {
           if (execErr) {
-            const isAlreadyExists = execErr.code === 288 || 
-                                    execErr.message.toLowerCase().includes('already exists') || 
-                                    execErr.message.toLowerCase().includes('duplicate table name');
+            const isAlreadyExists = execErr.code === 288 ||
+              execErr.message.toLowerCase().includes('already exists') ||
+              execErr.message.toLowerCase().includes('duplicate table name');
             if (!isAlreadyExists) {
               console.error("Failed to create table:", execErr);
             }
@@ -89,7 +94,7 @@ class HanaClient {
           conn.disconnect(() => {
             resolve({
               success: true,
-              message: `Successfully connected to SAP Hana database. Table "${setting.username}"."authoriziation_flat" is verified/created.`
+              message: `Successfully connected to SAP Hana database. Table "${schemaName}"."authoriziation_flat" is verified/created.`
             });
           });
         });
@@ -101,7 +106,7 @@ class HanaClient {
    * Performs flat table synchronization for a role assignment with transaction safety
    */
   static async syncAssignment(setting, assignmentId, isDelete, restrictions) {
-    this.validateUsername(setting.username);
+    const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
@@ -126,8 +131,8 @@ class HanaClient {
             });
           };
 
-          const deleteSql = `DELETE FROM "${setting.username}"."authoriziation_flat" WHERE "ID" LIKE ?`;
-          
+          const deleteSql = `DELETE FROM "${schemaName}"."authoriziation_flat" WHERE "ID" LIKE ?`;
+
           conn.prepare(deleteSql, (prepErr, stmt) => {
             if (prepErr) {
               return rollbackAndReject(`Failed to prepare delete query: ${prepErr.message}`);
@@ -146,8 +151,8 @@ class HanaClient {
                   conn.disconnect(() => resolve());
                 });
               } else {
-                const insertSql = `INSERT INTO "${setting.username}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
-                
+                const insertSql = `INSERT INTO "${schemaName}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
                 conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
                   if (insertPrepErr) {
                     return rollbackAndReject(`Failed to prepare insert query: ${insertPrepErr.message}`);
