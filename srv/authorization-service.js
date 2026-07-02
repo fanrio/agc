@@ -513,195 +513,16 @@ module.exports = cds.service.impl(async function () {
   });
 
   this.on('fetchBdcRelationalValues', async (req) => {
-    console.log('=== DEBUG: fetchBdcRelationalValues input ===', req.data);
-    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn } = req.data;
+    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
       return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     }
-
-    let rawData = null;
-    let mapped = [];
-
     try {
-      // 1. Fetch access token from OAuth Token URL
-      const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const tokenRes = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: 'grant_type=client_credentials'
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`Token request failed with status ${tokenRes.status}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error('No access_token returned in OAuth response');
-      }
-
-      // Automatically retrieve key columns from metadata using helper
-      let cols = [];
-      try {
-        cols = await _getAssetKeyColumns(url, accessToken, space, asset);
-      } catch (err) {
-        console.error(`Failed to automatically resolve key columns for asset ${asset}:`, err.message);
-      }
-
-      // Fallback: use passed idColumns parameter if present
-      if (!cols || cols.length === 0 || cols[0] === 'id') {
-        if (idColumns) {
-          try {
-            const parsed = JSON.parse(idColumns);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              cols = parsed;
-            } else if (parsed) {
-              cols = [parsed];
-            }
-          } catch {
-            cols = [idColumns];
-          }
-        }
-      }
-      if (!Array.isArray(cols) || cols.length === 0 || !cols[0]) {
-        cols = ['id'];
-      }
-
-      console.log(`=== DEBUG: fetchBdcRelationalValues resolved key columns (cols) ===`, cols);
-
-      // 2. Fetch keys from Asset ID view (cleanAsset)
-      const cleanSpace = space.trim();
-      const cleanAsset = asset.trim();
-      const assetEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/${cleanAsset}`;
-      
-      const assetRes = await fetch(assetEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!assetRes.ok) {
-        throw new Error(`Asset ID relational request failed: ${assetRes.status} ${assetRes.statusText}`);
-      }
-
-      const assetResponseText = await assetRes.text();
-      rawData = JSON.parse(assetResponseText);
-      const assetRows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
-      const assetRecords = Array.isArray(assetRows) ? assetRows : [];
-
-      // 3. Fetch translations from Asset Text view (cleanAssetText) if provided
-      let assetTextRecords = [];
-      if (assetText && assetText.trim()) {
-        const cleanAssetText = assetText.trim();
-        const assetTextEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAssetText}/${cleanAssetText}`;
-        const textRes = await fetch(assetTextEndpoint, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json'
-          }
-        });
-        if (textRes.ok) {
-          const textResponseText = await textRes.text();
-          const textRaw = JSON.parse(textResponseText);
-          const textRows = textRaw.value?.[0]?.value || textRaw.results || textRaw.value || textRaw || [];
-          assetTextRecords = Array.isArray(textRows) ? textRows : [];
-        } else {
-          console.warn(`Asset Text relational request failed: ${textRes.status}. Falling back to Asset ID text retrieval.`);
-        }
-      }
-
-      // 4. Build translation map if Asset Text is provided
-      const translationMap = new Map();
-      if (assetTextRecords.length > 0) {
-        for (const row of assetTextRecords) {
-          const key = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
-          if (key) {
-            // Label must be taken from the attribute "description" (case-insensitive) or textColumn
-            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn || 'description';
-            const textVal = row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]) : '';
-            translationMap.set(key, textVal);
-          }
-        }
-      }
-
-      // 5. Map Asset ID records to keys and look up translations
-      mapped = assetRecords.map(row => {
-        // Look for case-insensitive matches for NodeID, SalesOrg, RegionID
-        const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
-        const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
-        const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
-        
-        let idVal;
-        let textVal;
-
-        if (nodeIdCol) {
-          idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
-          const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
-          const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
-          
-          if (salesOrgVal) {
-            textVal = `${idVal} - ${salesOrgVal}`;
-          } else if (regionIdVal) {
-            textVal = `${idVal} - ${regionIdVal}`;
-          } else {
-            textVal = idVal;
-          }
-        } else {
-          idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
-          textVal = idVal;
-          if (assetText && assetText.trim() && assetTextRecords.length > 0) {
-            textVal = translationMap.get(idVal) || idVal;
-          } else {
-            // Check if main asset contains "Description" (case-insensitive) or textColumn
-            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn;
-            if (descCol && row[descCol] !== undefined && row[descCol] !== null) {
-              textVal = String(row[descCol]);
-            } else {
-              textVal = idVal;
-            }
-          }
-        }
-
-        const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
-        const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
-
-        const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
-        const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
-
-        const returnObj = {
-          id: idVal,
-          text: nodeIdCol ? textVal : (idVal === textVal ? idVal : `${idVal} - ${textVal}`)
-        };
-        if (nodeIdCol) {
-          returnObj.parent_ID = (parentIdVal !== null && parentIdVal !== 'null' && parentIdVal !== '') ? parentIdVal : null;
-        }
-        if (hierarchyVal !== undefined) {
-          returnObj.hierarchy = hierarchyVal;
-        }
-        return returnObj;
-      }).filter(item => item.id !== undefined && item.id !== null && item.id !== '');
-
+      const { mapped } = await BdcClient.fetchRelationalValues(req.data);
+      return mapped;
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
-
-    // Save list to file
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const filePath = path.join(__dirname, 'last_fetched_relational_values.json');
-      fs.writeFileSync(filePath, JSON.stringify(rawData || mapped, null, 2), 'utf-8');
-      console.log('Successfully saved relational values to:', filePath);
-    } catch (err) {
-      console.error('Failed to save relational values file:', err);
-    }
-
-    return mapped;
   });
 
   // ---------------------------------------------------------------------------
@@ -710,71 +531,8 @@ module.exports = cds.service.impl(async function () {
     if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
       return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     }
-
     try {
-      // 1. Fetch access token from OAuth Token URL
-      const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const tokenRes = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: 'grant_type=client_credentials'
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`Token request failed with status ${tokenRes.status}`);
-      }
-
-      const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error('No access_token returned in OAuth response');
-      }
-
-      // 2. Fetch metadata XML schema document from OData service root
-      const cleanSpace = space.trim();
-      const cleanAsset = asset.trim();
-      const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/$metadata`;
-      const relationalRes = await fetch(relationalEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/xml, application/json'
-        }
-      });
-
-      if (!relationalRes.ok) {
-        throw new Error(`Relational request failed with status ${relationalRes.status}`);
-      }
-
-      const responseText = await relationalRes.text();
-      
-      const properties = [];
-      const cleanAssetLower = cleanAsset.toLowerCase();
-      let foundBlockContent = null;
-
-      // Look through all EntityTypes in the OData XML to locate the one matching the asset name
-      const entityTypeScanner = /<(?:\w+:)?EntityType\s+Name="([^"]+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?EntityType>/gi;
-      let match;
-      while ((match = entityTypeScanner.exec(responseText)) !== null) {
-        const entityName = match[1].toLowerCase();
-        if (entityName === cleanAssetLower || entityName === `${cleanAssetLower}type` || entityName.includes(cleanAssetLower)) {
-          foundBlockContent = match[2];
-          break;
-        }
-      }
-
-      const contentToSearch = foundBlockContent || responseText;
-      const propRegex = /<(?:\w+:)?Property\s+Name="([^"]+)"/g;
-      let propMatch;
-      while ((propMatch = propRegex.exec(contentToSearch)) !== null) {
-        if (!properties.includes(propMatch[1])) {
-          properties.push(propMatch[1]);
-        }
-      }
-
-      return properties;
+      return await BdcClient.fetchAssetColumns(url, tokenUrl, clientId, clientSecret, space, asset);
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
@@ -1320,39 +1078,9 @@ module.exports = cds.service.impl(async function () {
       return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or taskChainId');
     }
     try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim();
-      const tc = taskChainId.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/chains/${s}/run/${tc}`;
-      
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
-      });
-      
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
-      }
-      
-      const data = await res.json();
+      const data = await BdcClient.runTaskChain(url, tokenUrl, clientId, clientSecret, space, taskChainId);
       return JSON.stringify(data, null, 2);
     } catch (e) {
-      if (isMockUrl(url)) {
-        console.warn(`runBdcTaskChain failed: ${e.message}. Returning mock run log response for testing.`);
-        return JSON.stringify({
-          logId: `mock-log-${Date.now()}`,
-          status: 'RUNNING',
-          spaceId: space,
-          taskChainId: taskChainId,
-          startedAt: new Date().toISOString()
-        }, null, 2);
-      }
       return req.error(500, `Datasphere API runBdcTaskChain Error: ${e.message}`);
     }
   });
@@ -1366,43 +1094,9 @@ module.exports = cds.service.impl(async function () {
       return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or logId');
     }
     try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim();
-      const l = logId.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/logs/${s}/${l}`;
-      
-      const res = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.sap.datasphere.task.log.details+json, application/json'
-        }
-      });
-      
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`Task chain log request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
-      }
-      
-      const data = await res.json();
+      const data = await BdcClient.fetchTaskChainLog(url, tokenUrl, clientId, clientSecret, space, logId);
       return JSON.stringify(data, null, 2);
     } catch (e) {
-      if (isMockUrl(url)) {
-        console.warn(`fetchBdcTaskChainLog failed: ${e.message}. Returning mock log detail for testing.`);
-        const now = new Date();
-        const start = new Date(now.getTime() - 5000);
-        return JSON.stringify({
-          logId: logId,
-          status: 'COMPLETED',
-          spaceId: space,
-          startTime: start.toISOString(),
-          endTime: now.toISOString(),
-          startedAt: start.toISOString(),
-          finishedAt: now.toISOString(),
-          tasks: [
-            { taskId: 'step-1-data-flow', taskType: 'DATA_FLOW', status: 'COMPLETED' }
-          ]
-        }, null, 2);
-      }
       return req.error(500, `Datasphere API fetchBdcTaskChainLog Error: ${e.message}`);
     }
   });

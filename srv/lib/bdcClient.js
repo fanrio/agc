@@ -2,16 +2,18 @@ const fs = require('fs');
 const path = require('path');
 
 function isMockUrl(url) {
-  return !!(url && (url.includes('mock') || url.includes('sandbox') || url.includes('test') || url.includes('localhost')));
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  return lower.includes('mock') || lower.includes('localhost') || lower.includes('example.com') || lower.includes('127.0.0.1');
 }
 
 class BdcClient {
   /**
-   * Helper to retrieve OAuth2 client credentials token
+   * Helper to retrieve access token
    */
   static async getAccessToken(tokenUrl, clientId, clientSecret) {
     if (isMockUrl(tokenUrl)) {
-      return 'mock-token';
+      return 'mock-access-token-12345';
     }
     const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     const tokenRes = await fetch(tokenUrl, {
@@ -139,6 +141,9 @@ class BdcClient {
    * Helper to fetch OData entity metadata (key columns)
    */
   static async fetchAssetKeyColumns(url, accessToken, space, asset) {
+    if (isMockUrl(url)) {
+      return ['id'];
+    }
     const cleanSpace = space.trim();
     const cleanAsset = asset.trim();
     const metadataUrl = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/$metadata`;
@@ -174,13 +179,68 @@ class BdcClient {
   }
 
   /**
+   * Helper to fetch all asset properties/columns
+   */
+  static async fetchAssetColumns(url, tokenUrl, clientId, clientSecret, space, asset) {
+    try {
+      const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
+      const cleanSpace = space.trim();
+      const cleanAsset = asset.trim();
+      const metadataUrl = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/$metadata`;
+      
+      const metaRes = await fetch(metadataUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/xml, application/json'
+        }
+      });
+
+      if (!metaRes.ok) {
+        throw new Error(`Metadata request failed with status ${metaRes.status}`);
+      }
+
+      const xmlText = await metaRes.text();
+      const properties = [];
+      const cleanAssetLower = cleanAsset.toLowerCase();
+      let foundBlockContent = null;
+
+      const entityTypeScanner = /<(?:\w+:)?EntityType\s+Name="([^"]+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?EntityType>/gi;
+      let match;
+      while ((match = entityTypeScanner.exec(xmlText)) !== null) {
+        const entityName = match[1].toLowerCase();
+        if (entityName === cleanAssetLower || entityName === `${cleanAssetLower}type` || entityName.includes(cleanAssetLower)) {
+          foundBlockContent = match[2];
+          break;
+        }
+      }
+
+      const contentToSearch = foundBlockContent || xmlText;
+      const propRegex = /<(?:\w+:)?Property\s+Name="([^"]+)"/g;
+      let propMatch;
+      while ((propMatch = propRegex.exec(contentToSearch)) !== null) {
+        if (!properties.includes(propMatch[1])) {
+          properties.push(propMatch[1]);
+        }
+      }
+
+      return properties;
+    } catch (e) {
+      if (isMockUrl(url)) {
+        return ['ID', 'NAME', 'REGION', 'NodeID', 'ParentID', 'Hierarchy', 'SalesOrg', 'RegionID', 'description'];
+      }
+      throw e;
+    }
+  }
+
+  /**
    * Helper to fetch relational values
    */
   static async fetchRelationalValues(options) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn, isRaw } = options;
+    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn } = options;
     try {
       const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
       
+      // Automatically retrieve key columns from metadata
       let cols = [];
       try {
         cols = await this.fetchAssetKeyColumns(url, accessToken, space, asset);
@@ -192,7 +252,11 @@ class BdcClient {
         if (idColumns) {
           try {
             const parsed = JSON.parse(idColumns);
-            cols = Array.isArray(parsed) ? parsed : [parsed];
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              cols = parsed;
+            } else if (parsed) {
+              cols = [parsed];
+            }
           } catch {
             cols = [idColumns];
           }
@@ -214,47 +278,106 @@ class BdcClient {
       });
 
       if (!assetRes.ok) {
-        throw new Error(`Data values request failed with status ${assetRes.status}`);
+        throw new Error(`Asset ID relational request failed: ${assetRes.status} ${assetRes.statusText}`);
       }
 
-      const rawData = await assetRes.json();
-      let rawRows = [];
-      if (rawData && Array.isArray(rawData.value)) {
-        rawRows = rawData.value;
-      } else if (rawData && Array.isArray(rawData.results)) {
-        rawRows = rawData.results;
-      } else if (Array.isArray(rawData)) {
-        rawRows = rawData;
+      const assetResponseText = await assetRes.text();
+      const rawData = JSON.parse(assetResponseText);
+      const assetRows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
+      const assetRecords = Array.isArray(assetRows) ? assetRows : [];
+
+      // Fetch translations from Asset Text view if provided
+      let assetTextRecords = [];
+      if (assetText && assetText.trim()) {
+        const cleanAssetText = assetText.trim();
+        const assetTextEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAssetText}/${cleanAssetText}`;
+        const textRes = await fetch(assetTextEndpoint, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (textRes.ok) {
+          const textResponseText = await textRes.text();
+          const textRaw = JSON.parse(textResponseText);
+          const textRows = textRaw.value?.[0]?.value || textRaw.results || textRaw.value || textRaw || [];
+          assetTextRecords = Array.isArray(textRows) ? textRows : [];
+        }
       }
+
+      // Build translation map if Asset Text is provided
+      const translationMap = new Map();
+      if (assetTextRecords.length > 0) {
+        for (const row of assetTextRecords) {
+          const key = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+          if (key) {
+            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn || 'description';
+            const textVal = row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]) : '';
+            translationMap.set(key, textVal);
+          }
+        }
+      }
+
+      const mapped = assetRecords.map(row => {
+        const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
+        const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
+        const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
+        
+        let idVal;
+        let textVal;
+
+        if (nodeIdCol) {
+          idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
+          const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
+          const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
+          
+          if (salesOrgVal) {
+            textVal = `${idVal} - ${salesOrgVal}`;
+          } else if (regionIdVal) {
+            textVal = `${idVal} - ${regionIdVal}`;
+          } else {
+            textVal = idVal;
+          }
+        } else {
+          idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+          textVal = idVal;
+          if (assetText && assetText.trim() && assetTextRecords.length > 0) {
+            textVal = translationMap.get(idVal) || idVal;
+          } else {
+            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn;
+            if (descCol && row[descCol] !== undefined && row[descCol] !== null) {
+              textVal = String(row[descCol]);
+            } else {
+              textVal = idVal;
+            }
+          }
+        }
+
+        const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
+        const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
+
+        const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
+        const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
+
+        const returnObj = {
+          id: idVal,
+          text: nodeIdCol ? textVal : (idVal === textVal ? idVal : `${idVal} - ${textVal}`)
+        };
+        if (nodeIdCol) {
+          returnObj.parent_ID = (parentIdVal !== null && parentIdVal !== 'null' && parentIdVal !== '') ? parentIdVal : null;
+        }
+        if (hierarchyVal !== undefined) {
+          returnObj.hierarchy = hierarchyVal;
+        }
+        return returnObj;
+      }).filter(item => item.id !== undefined && item.id !== null && item.id !== '');
 
       // Save payload
       try {
         const filePath = path.join(__dirname, '..', 'last_fetched_relational_values.json');
-        fs.writeFileSync(filePath, JSON.stringify(rawData, null, 2), 'utf-8');
+        fs.writeFileSync(filePath, JSON.stringify(rawData || mapped, null, 2), 'utf-8');
       } catch (err) {
         console.error('Failed to save relational values file:', err);
-      }
-
-      if (isRaw) {
-        return { rawData, mapped: rawRows };
-      }
-
-      const mapped = [];
-      for (const row of rawRows) {
-        let keyVal = '';
-        if (cols.length === 1) {
-          keyVal = String(row[cols[0]] || '');
-        } else {
-          const vals = cols.map(c => row[c] !== undefined ? String(row[c]) : '');
-          keyVal = JSON.stringify(vals);
-        }
-
-        let descVal = '';
-        if (textColumn && row[textColumn] !== undefined) {
-          descVal = String(row[textColumn]);
-        }
-
-        mapped.push({ id: keyVal, name: descVal || keyVal });
       }
 
       return { rawData, mapped };
@@ -267,7 +390,7 @@ class BdcClient {
         ];
         const mapped = mockRows.map(r => ({
           id: r.ID,
-          name: textColumn ? r[textColumn] : r.NAME
+          text: textColumn ? `${r.ID} - ${r[textColumn]}` : `${r.ID} - ${r.NAME}`
         }));
         return { rawData: mockRows, mapped };
       }
@@ -278,32 +401,37 @@ class BdcClient {
   /**
    * Helper to run BDC Task Chain
    */
-  static async runTaskChain(url, tokenUrl, clientId, clientSecret, space, chainId) {
+  static async runTaskChain(url, tokenUrl, clientId, clientSecret, space, taskChainId) {
     try {
       const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
-      const cleanSpace = space.trim();
-      const cleanChain = chainId.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/chains/${cleanSpace}/${cleanChain}/run`;
+      const s = space.trim();
+      const tc = taskChainId.trim();
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/chains/${s}/run/${tc}`;
 
-      const response = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
       });
 
-      if (!response.ok) {
-        throw new Error(`Task chain run request failed with status ${response.status}`);
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
       }
 
-      return await response.json();
+      return await res.json();
     } catch (e) {
       if (isMockUrl(url)) {
         return {
           logId: `mock-log-${Date.now()}`,
           status: 'RUNNING',
-          message: 'Mock Task Chain successfully started.'
+          spaceId: space,
+          taskChainId: taskChainId,
+          startedAt: new Date().toISOString()
         };
       }
       throw e;
@@ -313,30 +441,38 @@ class BdcClient {
   /**
    * Helper to fetch Task Chain Log
    */
-  static async fetchTaskChainLog(url, tokenUrl, clientId, clientSecret, logId) {
+  static async fetchTaskChainLog(url, tokenUrl, clientId, clientSecret, space, logId) {
     try {
       const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
-      const cleanLogId = logId.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/logs/${cleanLogId}`;
+      const s = space.trim();
+      const l = logId.trim();
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/logs/${s}/${l}`;
 
-      const response = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
+          'Accept': 'application/vnd.sap.datasphere.task.log.details+json, application/json'
         }
       });
 
-      if (!response.ok) {
-        throw new Error(`Task chain log request failed with status ${response.status}`);
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Task chain log request failed: ${res.status} ${res.statusText}. Response: ${errBody} [Endpoint: ${endpoint}]`);
       }
 
-      return await response.json();
+      return await res.json();
     } catch (e) {
       if (isMockUrl(url)) {
+        const now = new Date();
+        const start = new Date(now.getTime() - 5000);
         return {
+          logId: logId,
           status: 'COMPLETED',
-          endTime: new Date().toISOString(),
-          message: 'Mock Task Chain run completed successfully.'
+          spaceId: space,
+          startTime: start.toISOString(),
+          endTime: now.toISOString(),
+          startedAt: start.toISOString(),
+          finishedAt: now.toISOString()
         };
       }
       throw e;
