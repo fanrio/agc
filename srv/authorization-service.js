@@ -222,6 +222,10 @@ module.exports = cds.service.impl(async function () {
     const hana = require('@sap/hana-client');
 
     for (const setting of bdcSettings) {
+      if (!setting.username || !/^[a-zA-Z0-9_]+$/.test(setting.username)) {
+        console.error(`Invalid schema name/username for HANA sync: [${setting.username}] - potential SQL injection blocked`);
+        continue;
+      }
       const conn = hana.createConnection();
       const connParams = {
         serverNode: `${setting.host}:${setting.port || 443}`,
@@ -511,6 +515,9 @@ module.exports = cds.service.impl(async function () {
       }
       if (!setting.username || !setting.password) {
         return { success: false, message: 'Failed: User and Password are required for SAP Hana connection' };
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(setting.username)) {
+        return { success: false, message: 'Failed: Invalid schema/username format: potential SQL injection blocked' };
       }
 
       // Real database connectivity check using the official @sap/hana-client library

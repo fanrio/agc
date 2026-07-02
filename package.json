@@ -7,7 +7,7 @@
     "dev:ui": "npm run dev --prefix app/catalog",
     "dev": "concurrently --names CAP,UI --prefix-colors cyan,magenta \"npm run dev:cap\" \"npm run dev:ui\"",
     "build": "npm run build --prefix app/catalog && cds build",
-    "test": "node test_taskchain_action.js"
+    "test": "node --test test/backend_tests.test.js && node --test test/dynamic_generation.test.js"
   },
   "dependencies": {
     "@cap-js/sqlite": "^2.4.0",
