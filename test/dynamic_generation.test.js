@@ -106,4 +106,12 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: customerId }));
     assert.strictEqual(map, undefined, 'Ledger mapping should be deleted');
   });
+
+  // Redeploy database to restore seed data for the developer workspace
+  const { execSync } = require('child_process');
+  try {
+    execSync('npx cds deploy', { stdio: 'ignore' });
+  } catch (e) {
+    console.error('Failed to redeploy database after tests:', e.message);
+  }
 });
