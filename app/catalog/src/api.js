@@ -92,3 +92,15 @@ export const getReplications            = ()             => request('GET',    '/
 export const triggerReplication         = ()             => request('POST',   '/triggerReplication', {});
 export const checkReplicationStatuses   = ()             => request('POST',   '/checkReplicationStatuses', {});
 
+// Dynamic Rules & Customers
+export const getDynamicRules = () => request('GET', '/DynamicGenerationRules?$expand=templateRole');
+export const createDynamicRule = (body) => request('POST', '/DynamicGenerationRules', body);
+export const updateDynamicRule = (id, body) => request('PATCH', `/DynamicGenerationRules('${id}')`, body);
+export const deleteDynamicRule = (id) => request('DELETE', `/DynamicGenerationRules('${id}')`);
+export const syncDynamicRule = (ruleId) => request('POST', '/syncDynamicRule', { ruleId });
+
+export const getCustomers = () => request('GET', '/Customers');
+export const createCustomer = (body) => request('POST', '/Customers', body);
+export const updateCustomer = (id, body) => request('PATCH', `/Customers('${id}')`, body);
+export const deleteCustomer = (id) => request('DELETE', `/Customers('${id}')`);
+

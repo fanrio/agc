@@ -23,6 +23,9 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity AuditLogs        as projection on db.AuditLogs;
   entity AppAuthorizations as projection on db.AppAuthorizations;
   entity Replications     as projection on db.Replications;
+  entity Customers        as projection on db.Customers;
+  entity DynamicGenerationRules as projection on db.DynamicGenerationRules;
+  entity GeneratedResourceMap   as projection on db.GeneratedResourceMap;
 
   action triggerReplication() returns {
     success : Boolean;
@@ -191,4 +194,9 @@ service AuthorizationService @(path: '/odata/v4/auth') {
     space        : String,
     asset        : String
   ) returns LargeString;
+
+  action syncDynamicRule(ruleId : UUID) returns {
+    success : Boolean;
+    message : String;
+  };
 }

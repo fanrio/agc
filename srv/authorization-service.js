@@ -1,5 +1,6 @@
 const cds = require('@sap/cds');
 const { resolveEffectiveRestrictions, evaluateRestriction } = require('./lib/resolveEffectiveRestrictions');
+const { syncDynamicRule } = require('./lib/dynamicSync');
 
 function isMockUrl(url) {
   return !!(url && (url.includes('mock') || url.includes('sandbox') || url.includes('test') || url.includes('localhost')));
@@ -7,6 +8,32 @@ function isMockUrl(url) {
 
 module.exports = cds.service.impl(async function () {
   const { OrgNodes, OrgNodeAttributes, Roles, Restrictions, RoleAssignments, RoleInheritance, RestrictionFields, BdcSettings, AuditLogs, Replications } = this.entities;
+
+  // DRAGE OData action and automated master data hooks
+  this.on('syncDynamicRule', async (req) => {
+    const { ruleId } = req.data;
+    try {
+      await syncDynamicRule(ruleId);
+      return { success: true, message: 'Reconciliation rule execution completed successfully' };
+    } catch (err) {
+      return { success: false, message: err.message || 'Rule sync execution failed' };
+    }
+  });
+
+  this.after(['CREATE', 'UPDATE', 'DELETE'], 'Customers', async (data, req) => {
+    try {
+      const activeRules = await cds.db.run(
+        SELECT.from('fanrio.auth.DynamicGenerationRules')
+          .where({ isActive: true })
+          .and("sourceEntity = 'fanrio.auth.Customers' or sourceEntity = 'Customers'")
+      );
+      for (const rule of activeRules) {
+        await syncDynamicRule(rule.ID);
+      }
+    } catch (err) {
+      console.error('Failed to trigger automatic dynamic rules synchronization:', err);
+    }
+  });
 
   // Helper to add role change to replication list
   async function _queueReplication(roleName, environmentId, user) {
@@ -51,6 +78,20 @@ module.exports = cds.service.impl(async function () {
   });
   // Auto-generate UUID keys for Roles if not provided by client
   this.before('CREATE', 'Roles', (req) => {
+    if (!req.data.ID) {
+      req.data.ID = cds.utils.uuid();
+    }
+  });
+
+  // Auto-generate UUID keys for DynamicGenerationRules if not provided by client
+  this.before('CREATE', 'DynamicGenerationRules', (req) => {
+    if (!req.data.ID) {
+      req.data.ID = cds.utils.uuid();
+    }
+  });
+
+  // Auto-generate UUID keys for GeneratedResourceMap if not provided by client
+  this.before('CREATE', 'GeneratedResourceMap', (req) => {
     if (!req.data.ID) {
       req.data.ID = cds.utils.uuid();
     }

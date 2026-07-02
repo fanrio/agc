@@ -145,3 +145,41 @@ entity Replications : cuid {
   runId            : String(100);
 }
 
+// ---------------------------------------------------------------------------
+// Dynamic Role & Assignment Generation
+// ---------------------------------------------------------------------------
+
+entity Customers : managed {
+  key ID          : String(50); // e.g. 'C1001'
+  name            : String(255);
+  responsibleUser : String(200); // User email/ID
+  status          : String(20) @default: 'ACTIVE';
+}
+
+entity DynamicGenerationRules : managed {
+  key ID                  : String(36) @default : 'uuid()';
+  code                    : String(50) not null;                 // e.g. 'CUST_RESP'
+  description             : String(255);
+  isActive                : Boolean @default : true;
+
+  sourceType              : String(20) not null;                 // 'LOCAL_DB' | 'HANA_VIEW' | 'ODATA_SERVICE'
+  sourceEntity            : String(255) not null;                // e.g. 'fanrio.auth.Customers'
+  sourceKeyField          : String(100) not null;                // e.g. 'ID'
+  sourceResponsibleField  : String(100) not null;                // e.g. 'responsibleUser'
+  sourceFilterCondition   : String(500);
+
+  generationMode          : String(30) not null;                 // 'USER_CONSOLIDATED_ROLE' | 'TEMPLATE_ASSIGNMENT'
+  templateRole            : Association to Roles;
+  targetRestrictionField  : String(100);
+  filterType              : String(20) @default : 'MULTI_VALUE';
+}
+
+entity GeneratedResourceMap : cuid, managed {
+  rule                    : Association to DynamicGenerationRules not null;
+  masterRecordKey         : String(255) not null;                // e.g. 'C1001'
+  userId                  : String(200) not null;
+  generatedRole           : Association to Roles;
+  generatedRestriction    : Association to Restrictions;
+  generatedAssignment     : Association to RoleAssignments;
+}
+
