@@ -168,17 +168,26 @@ export default function Wizard({ context = {}, onDone, permissions }) {
       api.getRoles().then(all => {
         const role = all.find(r => r.ID === context.roleId);
         if (role) {
-          setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : 'SINGLE');
-          setRoleName(role.name);
-          setDescription(role.description || '');
-          setOrgNode(role.orgNode_ID || '');
-          setSelectedParentIds(role.parentRoles ? role.parentRoles.map(pr => pr.parent.ID) : []);
-          setRestrictions(role.ownRestrictions || []);
-          setOriginalRestrictions(role.ownRestrictions || []);
-          setApprovers(role.approvers || []);
-          setCritical(!!role.critical);
-          setOriginalCritical(!!role.critical);
-          setEnvironmentId(role.environment_ID || 'D');
+          try {
+            setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : 'SINGLE');
+            setRoleName(role.name || '');
+            setDescription(role.description || '');
+            setOrgNode(role.orgNode_ID || '');
+            
+            const parentIds = role.parentRoles 
+              ? role.parentRoles.map(pr => pr.parent?.ID || pr.parent_ID).filter(Boolean)
+              : [];
+            setSelectedParentIds(parentIds);
+            
+            setRestrictions(role.ownRestrictions || []);
+            setOriginalRestrictions(role.ownRestrictions || []);
+            setApprovers(role.approvers || []);
+            setCritical(!!role.critical);
+            setOriginalCritical(!!role.critical);
+            setEnvironmentId(role.environment_ID || 'D');
+          } catch (err) {
+            console.error('Error populating role details in wizard:', err);
+          }
         }
         setLoading(false);
       }).catch(e => { console.error(e); setLoading(false); });
