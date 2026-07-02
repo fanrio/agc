@@ -2,6 +2,12 @@
 const mockHana = {
   createConnection: () => ({
     connect: (params, cb) => cb(null),
+    setAutoCommit: (auto, cb) => cb(null),
+    commit: (cb) => cb(null),
+    rollback: (cb) => cb(null),
+    prepare: (sql, cb) => cb(null, {
+      exec: (params, cb) => cb(null)
+    }),
     exec: (sql, cb) => {
       if (sql.includes('VIEWS')) {
         cb(null, [
@@ -21,6 +27,10 @@ require('module')._cache[require.resolve('@sap/hana-client')] = {
   loaded: true,
   exports: mockHana
 };
+
+// Apply driver dependency injection
+const HanaClient = require('./../srv/lib/hanaClient');
+HanaClient.setDriver(mockHana);
 
 // Mock global.fetch to intercept external BDC/Datasphere calls
 const originalFetch = global.fetch;

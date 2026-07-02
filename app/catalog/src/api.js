@@ -69,7 +69,7 @@ export const fetchBdcAssetColumns = (url, tokenUrl, clientId, clientSecret, spac
 export const generateOrgRole   = (orgNodeId)    => request('POST', '/generateOrgRole', { orgNodeId });
 export const generateAllOrgRoles = ()           => request('POST', '/generateAllOrgRoles');
 export const resolveEffective   = (roleId)      => request('POST', '/resolveEffectiveRestrictions', { roleId });
-export const simulateAccess     = (roleId, rows) => request('POST', '/simulateAccess', { roleId, sampleData: JSON.stringify(rows) });
+export const simulateAccess     = (roleId, rows, restrictions) => request('POST', '/simulateAccess', { roleId, sampleData: JSON.stringify(rows), restrictions: restrictions ? JSON.stringify(restrictions) : undefined });
 export const searchLdapUsers    = (query)        => request('POST', '/searchLdapUsers', { query });
 export const fetchRawBdcSpaces  = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchRawBdcSpaces', { url, tokenUrl, clientId, clientSecret });
 export const fetchRawBdcAssets  = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchRawBdcAssets', { url, tokenUrl, clientId, clientSecret });

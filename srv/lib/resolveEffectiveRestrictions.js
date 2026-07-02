@@ -1,4 +1,18 @@
 /**
+ * safeJsonParse
+ * Wrap JSON parsing to prevent runtime syntax crashes
+ */
+function safeJsonParse(val, fallback = []) {
+  if (!val) return fallback;
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    console.error(`JSON Parse failed for value: ${val}`, e);
+    return fallback;
+  }
+}
+
+/**
  * resolveEffectiveRestrictions
  * Recursively walks the parentRole chain and accumulates all restrictions.
  * Tags each restriction with its source role.
@@ -68,15 +82,19 @@ function evaluateRestriction(restriction, dataRow) {
       break;
 
     case 'MULTI_VALUE': {
-      const allowed = JSON.parse(restriction.value);
-      if (!allowed.includes(cellValue)) {
+      const allowed = safeJsonParse(restriction.value, []);
+      if (!Array.isArray(allowed) || !allowed.includes(cellValue)) {
         return { passed: false, reason: `${restriction.field} must be one of [${allowed.join(', ')}], got '${cellValue}'` };
       }
       break;
     }
 
     case 'RANGE': {
-      const { from, to } = JSON.parse(restriction.value);
+      const parsed = safeJsonParse(restriction.value, null);
+      if (!parsed || parsed.from === undefined || parsed.to === undefined) {
+        return { passed: false, reason: `Invalid range specification in restriction` };
+      }
+      const { from, to } = parsed;
       const num = parseFloat(cellValue);
       if (isNaN(num) || num < from || num > to) {
         return { passed: false, reason: `${restriction.field} must be between ${from} and ${to}, got '${cellValue}'` };
@@ -85,7 +103,6 @@ function evaluateRestriction(restriction, dataRow) {
     }
 
     case 'PATTERN': {
-      // Convert SQL LIKE pattern to regex
       const pattern = restriction.value
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/%/g, '.*')
@@ -98,7 +115,6 @@ function evaluateRestriction(restriction, dataRow) {
     }
 
     case 'HIERARCHY':
-      // In mock mode we simply pass hierarchy checks (requires live org tree traversal in production)
       break;
 
     default:

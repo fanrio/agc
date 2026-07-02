@@ -1,5 +1,15 @@
 const cds = require('@sap/cds');
 
+function safeJsonParse(val, fallback = []) {
+  if (!val) return fallback;
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    console.error(`JSON Parse failed for value: ${val}`, e);
+    return fallback;
+  }
+}
+
 /**
  * Synchronizes assignments and dynamic roles for a specific rule.
  */
@@ -10,6 +20,12 @@ async function syncDynamicRule(ruleId) {
   // 1. Fetch the active rule configuration
   const rule = await db.run(SELECT.one.from(DynamicGenerationRules).where({ ID: ruleId, isActive: true }));
   if (!rule) throw new Error(`Active Dynamic Rule ${ruleId} not found`);
+
+  // Whitelist check
+  const ALLOWED_ENTITIES = ['fanrio.auth.Customers', 'Customers'];
+  if (!ALLOWED_ENTITIES.includes(rule.sourceEntity)) {
+    throw new Error(`Dynamic sync is not permitted for entity: ${rule.sourceEntity}`);
+  }
 
   // 2. Fetch master data records based on configured sourceEntity and sourceFilterCondition
   let query = SELECT.from(rule.sourceEntity);
@@ -103,12 +119,14 @@ async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings,
     }));
   }
 
-  // Update GeneratedResourceMap ledger and audit log creations
+  // Update GeneratedResourceMap ledger and audit log creations in bulk
+  const newMaps = [];
+  const newAuditLogs = [];
   for (const key of keys) {
     const existingMap = activeMappings.find(m => m.masterRecordKey === key && m.userId === userId);
     if (!existingMap) {
       const mapId = cds.utils.uuid();
-      await db.run(INSERT.into(GeneratedResourceMap).entries({
+      newMaps.push({
         ID: mapId,
         rule_ID: rule.ID,
         masterRecordKey: key,
@@ -116,10 +134,9 @@ async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings,
         generatedRole_ID: roleId,
         generatedRestriction_ID: restrictionId,
         generatedAssignment_ID: assignmentId
-      }));
+      });
 
-      // Log creation in AuditLogs
-      await db.run(INSERT.into(AuditLogs).entries({
+      newAuditLogs.push({
         ID: cds.utils.uuid(),
         entityName: 'DynamicGenerationRules',
         action: 'CREATE',
@@ -134,8 +151,13 @@ async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings,
           assignmentId: assignmentId,
           reason: `Auto-assigned master record ${key} to responsible user ${userId}`
         })
-      }));
+      });
     }
+  }
+
+  if (newMaps.length > 0) {
+    await db.run(INSERT.into(GeneratedResourceMap).entries(newMaps));
+    await db.run(INSERT.into(AuditLogs).entries(newAuditLogs));
   }
 }
 
@@ -162,21 +184,22 @@ async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, A
     }));
   }
 
-  // Update GeneratedResourceMap ledger and audit log creations
+  // Update GeneratedResourceMap ledger and audit log creations in bulk
+  const newMaps = [];
+  const newAuditLogs = [];
   for (const key of keys) {
     const existingMap = activeMappings.find(m => m.masterRecordKey === key && m.userId === userId);
     if (!existingMap) {
       const mapId = cds.utils.uuid();
-      await db.run(INSERT.into(GeneratedResourceMap).entries({
+      newMaps.push({
         ID: mapId,
         rule_ID: rule.ID,
         masterRecordKey: key,
         userId: userId,
         generatedAssignment_ID: assignmentId
-      }));
+      });
 
-      // Log in AuditLogs
-      await db.run(INSERT.into(AuditLogs).entries({
+      newAuditLogs.push({
         ID: cds.utils.uuid(),
         entityName: 'DynamicGenerationRules',
         action: 'CREATE',
@@ -190,8 +213,13 @@ async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, A
           assignmentId: assignmentId,
           reason: `Assigned static template role to user ${userId} for master record ${key}`
         })
-      }));
+      });
     }
+  }
+
+  if (newMaps.length > 0) {
+    await db.run(INSERT.into(GeneratedResourceMap).entries(newMaps));
+    await db.run(INSERT.into(AuditLogs).entries(newAuditLogs));
   }
 }
 

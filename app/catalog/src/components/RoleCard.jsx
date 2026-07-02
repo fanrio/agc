@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, 
-  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions 
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert 
 } from '@mui/material';
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
@@ -9,6 +9,15 @@ import { RestrictionDisplay } from './RestrictionBuilder';
 import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction } from '../utils/helpers';
 
 export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact, permissions }) {
+  if (depth > 10) {
+    return (
+      <Box sx={{ pl: depth * 2, mb: 1 }}>
+        <Alert severity="error">
+          Circular dependency or excessive nesting detected.
+        </Alert>
+      </Box>
+    );
+  }
   const [expanded, setExpanded] = useState(depth < 1);
   const [showEffective, setShowEffective] = useState(false);
   const [effective, setEffective] = useState(null);

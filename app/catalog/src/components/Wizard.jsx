@@ -240,23 +240,20 @@ export default function Wizard({ context = {}, onDone, permissions }) {
 
   async function runSimulation() {
     let rows;
-    try { rows = JSON.parse(simRows); } catch { setSnackbar({ open: true, message: 'Invalid JSON in sample data', severity: 'error' }); return; }
+    try { 
+      rows = JSON.parse(simRows); 
+    } catch { 
+      setSnackbar({ open: true, message: 'Invalid JSON in sample data', severity: 'error' }); 
+      return; 
+    }
     setLoading(true);
     try {
-      const allRestrictions = [...inherited, ...restrictions.map(r => ({ ...r, isOwn: true, sourceRoleName: 'This Role' }))];
-      const results = rows.map((row, idx) => {
-        for (const r of allRestrictions) {
-          const val = row[r.field];
-          if (val === undefined) return { rowIndex: idx, passed: false, reason: `Field '${r.field}' missing` };
-          if (r.filterType === 'SINGLE_VALUE' && String(val) !== r.value) return { rowIndex: idx, passed: false, reason: `${r.field} must be '${r.value}'` };
-          if (r.filterType === 'MULTI_VALUE') { const arr = JSON.parse(r.value); if (!arr.includes(String(val))) return { rowIndex: idx, passed: false, reason: `${r.field} not in allowed list` }; }
-          if (r.filterType === 'RANGE') { const rng = JSON.parse(r.value); const n = parseFloat(val); if (isNaN(n) || n < rng.from || n > rng.to) return { rowIndex: idx, passed: false, reason: `${r.field} out of range` }; }
-          if (r.filterType === 'PATTERN') { const p = r.value.replace(/%/g,'.*').replace(/_/g,'.'); if (!new RegExp(`^${p}$`,'i').test(String(val))) return { rowIndex: idx, passed: false, reason: `${r.field} doesn't match pattern` }; }
-        }
-        return { rowIndex: idx, passed: true, reason: 'All restrictions satisfied' };
-      });
+      const allRestrictions = [...inherited, ...restrictions];
+      const results = await api.simulateAccess(null, rows, allRestrictions);
       setSimResults(results);
-    } catch(e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
+    } catch(e) { 
+      setSnackbar({ open: true, message: e.message, severity: 'error' }); 
+    }
     setLoading(false);
   }
 

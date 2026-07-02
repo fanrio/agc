@@ -23,6 +23,7 @@ vi.mock('../../api', () => ({
   createRoleApprover: vi.fn(),
   createAssignment: vi.fn(),
   searchLdapUsers: vi.fn(),
+  simulateAccess: vi.fn(),
   fetchBdcRelationalValues: vi.fn(() => Promise.resolve([])),
 }));
 
@@ -263,6 +264,9 @@ describe('Wizard Component - Expanded Tests', () => {
 
   // --- Step 3 ---
   it('handles Step 3 simulation run and result rendering', async () => {
+    api.simulateAccess.mockResolvedValue([
+      { rowIndex: 0, passed: true, reason: 'All restrictions satisfied' }
+    ]);
     render(<Wizard onDone={() => {}} />);
 
     // Fill in role name

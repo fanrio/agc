@@ -1,6 +1,13 @@
-const hana = require('@sap/hana-client');
+let hanaDriver = require('@sap/hana-client');
 
 class HanaClient {
+  /**
+   * Set dynamic custom driver mock/spy for testing
+   */
+  static setDriver(customDriver) {
+    hanaDriver = customDriver;
+  }
+
   static getParams(setting) {
     return {
       serverNode: `${setting.host}:${setting.port || 443}`,
@@ -23,7 +30,7 @@ class HanaClient {
    */
   static async execute(setting, sql, params = []) {
     this.validateUsername(setting.username);
-    const conn = hana.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
@@ -50,7 +57,7 @@ class HanaClient {
    */
   static async testConnectionAndCreateTable(setting) {
     this.validateUsername(setting.username);
-    const conn = hana.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve) => {
@@ -61,13 +68,13 @@ class HanaClient {
         }
 
         const createSql = `CREATE TABLE "${setting.username}"."authoriziation_flat" (
-          "ID" VARCHAR(100) PRIMARY KEY,
-          "USER" VARCHAR(150),
-          "ROLE" VARCHAR(150),
-          "FIELD" VARCHAR(50),
-          "OPERATOR" VARCHAR(2),
-          "LOW" VARCHAR(1333),
-          "HIGH" VARCHAR(1333)
+           "ID" VARCHAR(100) PRIMARY KEY,
+           "USER" VARCHAR(150),
+           "ROLE" VARCHAR(150),
+           "FIELD" VARCHAR(50),
+           "OPERATOR" VARCHAR(2),
+           "LOW" VARCHAR(1333),
+           "HIGH" VARCHAR(1333)
         )`;
 
         conn.exec(createSql, (execErr) => {
@@ -91,11 +98,11 @@ class HanaClient {
   }
 
   /**
-   * Performs flat table synchronization for a role assignment
+   * Performs flat table synchronization for a role assignment with transaction safety
    */
   static async syncAssignment(setting, assignmentId, isDelete, restrictions) {
     this.validateUsername(setting.username);
-    const conn = hana.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
@@ -104,58 +111,85 @@ class HanaClient {
           return reject(new Error(`Failed to connect to HANA database [${setting.systemName}] for sync: ${err.message}`));
         }
 
-        const deleteSql = `DELETE FROM "${setting.username}"."authoriziation_flat" WHERE "ID" LIKE ?`;
-        
-        conn.prepare(deleteSql, (prepErr, stmt) => {
-          if (prepErr) {
+        // Set auto-commit off to start transactional boundary
+        conn.setAutoCommit(false, (autoCommitErr) => {
+          if (autoCommitErr) {
             conn.disconnect();
-            return reject(new Error(`Failed to prepare delete query: ${prepErr.message}`));
+            return reject(new Error(`Failed to disable auto-commit: ${autoCommitErr.message}`));
           }
 
-          stmt.exec([`${assignmentId}%`], (execErr) => {
-            if (execErr) {
-              console.error("Failed to execute delete sync query:", execErr);
+          const rollbackAndReject = (errorMsg) => {
+            conn.rollback(() => {
+              conn.disconnect(() => {
+                reject(new Error(errorMsg));
+              });
+            });
+          };
+
+          const deleteSql = `DELETE FROM "${setting.username}"."authoriziation_flat" WHERE "ID" LIKE ?`;
+          
+          conn.prepare(deleteSql, (prepErr, stmt) => {
+            if (prepErr) {
+              return rollbackAndReject(`Failed to prepare delete query: ${prepErr.message}`);
             }
 
-            if (isDelete || restrictions.length === 0) {
-              conn.disconnect(() => resolve());
-            } else {
-              const insertSql = `INSERT INTO "${setting.username}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
-              
-              conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
-                if (insertPrepErr) {
-                  conn.disconnect();
-                  return reject(new Error(`Failed to prepare insert query: ${insertPrepErr.message}`));
-                }
+            stmt.exec([`${assignmentId}%`], (execErr) => {
+              if (execErr) {
+                return rollbackAndReject(`Failed to execute delete sync query: ${execErr.message}`);
+              }
 
-                let insertCount = 0;
-
-                const checkAndResolve = () => {
-                  if (insertCount === restrictions.length) {
-                    conn.disconnect(() => resolve());
+              if (isDelete || restrictions.length === 0) {
+                conn.commit((commitErr) => {
+                  if (commitErr) {
+                    return rollbackAndReject(`Failed to commit delete transaction: ${commitErr.message}`);
                   }
-                };
+                  conn.disconnect(() => resolve());
+                });
+              } else {
+                const insertSql = `INSERT INTO "${setting.username}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
+                
+                conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
+                  if (insertPrepErr) {
+                    return rollbackAndReject(`Failed to prepare insert query: ${insertPrepErr.message}`);
+                  }
 
-                restrictions.forEach((r, idx) => {
-                  const id = `${assignmentId}_${idx}`;
-                  insertStmt.exec([
-                    id,
-                    r.userId,
-                    r.roleName,
-                    r.field,
-                    r.operator,
-                    r.low,
-                    r.high || ''
-                  ], (insertExecErr) => {
-                    if (insertExecErr) {
-                      console.error(`Failed to insert restriction row for ID ${id}:`, insertExecErr);
+                  let insertCount = 0;
+                  let failed = false;
+
+                  const checkAndResolve = () => {
+                    if (failed) return;
+                    if (insertCount === restrictions.length) {
+                      conn.commit((commitErr) => {
+                        if (commitErr) {
+                          return rollbackAndReject(`Failed to commit insert transaction: ${commitErr.message}`);
+                        }
+                        conn.disconnect(() => resolve());
+                      });
                     }
-                    insertCount++;
-                    checkAndResolve();
+                  };
+
+                  restrictions.forEach((r, idx) => {
+                    const id = `${assignmentId}_${idx}`;
+                    insertStmt.exec([
+                      id,
+                      r.userId,
+                      r.roleName,
+                      r.field,
+                      r.operator,
+                      r.low,
+                      r.high || ''
+                    ], (insertExecErr) => {
+                      if (insertExecErr) {
+                        failed = true;
+                        return rollbackAndReject(`Failed to insert restriction row for ID ${id}: ${insertExecErr.message}`);
+                      }
+                      insertCount++;
+                      checkAndResolve();
+                    });
                   });
                 });
-              });
-            }
+              }
+            });
           });
         });
       });

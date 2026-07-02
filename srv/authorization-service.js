@@ -401,7 +401,7 @@ module.exports = cds.service.impl(async function () {
   // simulateAccess
   // ---------------------------------------------------------------------------
   this.on('simulateAccess', async (req) => {
-    const { roleId, sampleData } = req.data;
+    const { roleId, sampleData, restrictions } = req.data;
     const db = cds.db;
 
     let rows;
@@ -411,15 +411,34 @@ module.exports = cds.service.impl(async function () {
       return req.error(400, 'sampleData must be a valid JSON array string');
     }
 
-    const allRoles = await db.run(SELECT.from(Roles));
-    const allRestrictions = await db.run(SELECT.from(Restrictions));
-    const allInheritances = await db.run(SELECT.from(RoleInheritance));
+    let effectiveRestrictions = [];
+    if (roleId) {
+      const allRoles = await db.run(SELECT.from(Roles));
+      const allRestrictions = await db.run(SELECT.from(Restrictions));
+      const allInheritances = await db.run(SELECT.from(RoleInheritance));
 
-    let effectiveRestrictions;
-    try {
-      effectiveRestrictions = resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
-    } catch (e) {
-      return req.error(400, e.message);
+      try {
+        effectiveRestrictions = resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
+      } catch (e) {
+        return req.error(400, e.message);
+      }
+    }
+
+    if (restrictions) {
+      try {
+        const parsedRest = JSON.parse(restrictions);
+        if (Array.isArray(parsedRest)) {
+          parsedRest.forEach(r => {
+            effectiveRestrictions.push({
+              field: r.field,
+              filterType: r.filterType,
+              value: r.value
+            });
+          });
+        }
+      } catch (e) {
+        return req.error(400, 'restrictions must be a valid JSON array string');
+      }
     }
 
     return rows.map((row, idx) => {

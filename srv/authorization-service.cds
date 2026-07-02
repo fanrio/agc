@@ -180,7 +180,7 @@ service AuthorizationService @(path: '/odata/v4/auth') {
    * Simulates access for a role against sample data rows.
    * Returns pass/fail per row with reason.
    */
-  action simulateAccess(roleId : UUID, sampleData : String) returns array of {
+  action simulateAccess(roleId : UUID, sampleData : String, restrictions : String) returns array of {
     rowIndex : Integer;
     passed   : Boolean;
     reason   : String;
