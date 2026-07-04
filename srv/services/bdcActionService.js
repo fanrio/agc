@@ -125,6 +125,16 @@ function makeTestBdcConnectionHandler(cds, entities, HanaClient) {
     if (isMockUrl(setting.url)) {
       return { success: true, message: `Successfully connected to Business Data Cloud System [${setting.systemName}] at ${setting.url}. Connection state: ACTIVE.` };
     }
+
+    // Real credential test for OAuth
+    if (setting.authType === 'OAUTH') {
+      try {
+        await BdcClient.getAccessToken(setting.tokenUrl, setting.clientId, setting.clientSecret);
+      } catch (e) {
+        return { success: false, message: `OAuth Token Request Failed: ${e.message}. Please check Client ID, Client Secret, and Token URL.` };
+      }
+    }
+
     try {
       const testUrl = `${setting.url.replace(/\/$/, '')}/$metadata`;
       const res = await fetch(testUrl, {

@@ -9,13 +9,18 @@ class BdcClient {
       return 'mock-access-token-12345';
     }
     const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const bodyParams = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret
+    });
     const tokenRes = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Authorization': authHeader,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: 'grant_type=client_credentials'
+      body: bodyParams.toString()
     });
 
     if (!tokenRes.ok) {
