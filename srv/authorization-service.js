@@ -1,17 +1,80 @@
-const cds = require('@sap/cds');
-const { resolveEffectiveRestrictions, evaluateRestriction } = require('./lib/resolveEffectiveRestrictions');
-const { syncDynamicRule } = require('./lib/dynamicSync');
-const HanaClient = require('./lib/hanaClient');
-const BdcClient = require('./lib/bdcClient');
+'use strict';
 
-function isMockUrl(url) {
-  return !!(url && (url.includes('mock') || url.includes('sandbox') || url.includes('test') || url.includes('localhost')));
-}
+/**
+ * AuthorizationService — wiring layer
+ *
+ * This file is intentionally thin. Its only job is to wire up all handlers,
+ * services, and OData actions into the CAP service instance.
+ *
+ * Business logic lives in:
+ *   srv/handlers/      — entity CRUD event hooks (roles, assignments, restrictions)
+ *   srv/services/      — domain services (HANA replication, BDC proxy, org generator, etc.)
+ *   srv/lib/           — pure utility modules (hanaClient, bdcClient, urlUtils, etc.)
+ */
+
+const cds = require('@sap/cds');
+
+// Lib
+const HanaClient = require('./lib/hanaClient');
+const BdcClient  = require('./lib/bdcClient');
+const { syncDynamicRule } = require('./lib/dynamicSync');
+const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
+
+// Services
+const { syncAssignmentToHana, syncRoleAssignmentsToHana } = require('./services/hanaReplicationService');
+const { queueReplication, checkAndUpdateRunningReplications, makeTriggerReplicationHandler } = require('./services/replicationQueueService');
+const { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler } = require('./services/orgRoleGeneratorService');
+const { makeResolveEffectiveRestrictionsHandler, makeSimulateAccessHandler } = require('./services/accessActionService');
+const {
+  makeTestBdcConnectionHandler,
+  makeFetchBdcSpacesHandler,
+  makeFetchBdcAssetsHandler,
+  makeFetchBdcRelationalValuesHandler,
+  makeFetchBdcAssetColumnsHandler,
+  makeFetchRawBdcSpacesHandler,
+  makeFetchRawBdcAssetsHandler,
+  makeFetchRawBdcRelationalValuesHandler,
+  makeFetchRawBdcAssetColumnsHandler,
+  makeFetchBdcAssociationsHandler,
+  makeFetchRawHanaViewsHandler,
+  makeRunBdcTaskChainHandler,
+  makeFetchBdcTaskChainLogHandler,
+  makeSearchLdapUsersHandler
+} = require('./services/bdcActionService');
+
+// Handlers
+const { registerRoleHandlers }        = require('./handlers/roleHandlers');
+const { registerAssignmentHandlers }  = require('./handlers/assignmentHandlers');
+const { registerRestrictionHandlers } = require('./handlers/restrictionHandlers');
 
 module.exports = cds.service.impl(async function () {
-  const { OrgNodes, OrgNodeAttributes, Roles, Restrictions, RoleAssignments, RoleInheritance, RestrictionFields, BdcSettings, AuditLogs, Replications } = this.entities;
+  const entities = this.entities;
+  const {
+    OrgNodes, OrgNodeAttributes, Roles, Restrictions,
+    RoleAssignments, RoleInheritance, RestrictionFields,
+    BdcSettings, AuditLogs, Replications, DynamicGenerationRules
+  } = entities;
 
-  // DRAGE OData action and automated master data hooks
+  // ---------------------------------------------------------------------------
+  // Shared dependency bundles
+  // ---------------------------------------------------------------------------
+
+  /** Bound syncAssignmentToHana with cds + HanaClient + entities injected */
+  const boundSyncAssignment = (assignmentId, userId, roleId, isDelete) =>
+    syncAssignmentToHana(cds, HanaClient, entities, assignmentId, userId, roleId, isDelete);
+
+  /** Bound syncRoleAssignmentsToHana */
+  const boundSyncRoleAssignments = (roleId) =>
+    syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId);
+
+  /** Bound queueReplication */
+  const boundQueueReplication = (roleName, environmentId, user) =>
+    queueReplication(cds, Replications, roleName, environmentId, user);
+
+  // ---------------------------------------------------------------------------
+  // DRAGE — Dynamic Role & Assignment Generation Engine
+  // ---------------------------------------------------------------------------
+
   this.on('syncDynamicRule', async (req) => {
     const { ruleId } = req.data;
     try {
@@ -25,7 +88,7 @@ module.exports = cds.service.impl(async function () {
   this.after(['CREATE', 'UPDATE', 'DELETE'], 'Customers', async (data, req) => {
     try {
       const activeRules = await cds.db.run(
-        SELECT.from('fanrio.auth.DynamicGenerationRules')
+        SELECT.from(DynamicGenerationRules)
           .where({ isActive: true })
           .and("sourceEntity = 'fanrio.auth.Customers' or sourceEntity = 'Customers'")
       );
@@ -33,1477 +96,79 @@ module.exports = cds.service.impl(async function () {
         await syncDynamicRule(rule.ID);
       }
     } catch (err) {
-      console.error('Failed to trigger automatic dynamic rules synchronization:', err);
-    }
-  });
-
-  // Helper to add role change to replication list
-  async function _queueReplication(roleName, environmentId, user) {
-    if (!roleName) return;
-    try {
-      const envId = environmentId || 'D';
-      // Check if there is already a pending 'Open' replication for this role in this environment
-      const existing = await cds.db.run(SELECT.one.from(Replications).where({
-        replicationRoles: roleName,
-        environment_ID: envId,
-        status: 'Open'
-      }));
-      if (existing) {
-        return; // Already queued, avoid duplicates
-      }
-
-      await cds.db.run(INSERT.into(Replications).entries({
-        ID: cds.utils.uuid(),
-        replicationDate: new Date().toISOString(),
-        status: 'Open',
-        replicationRoles: roleName,
-        environment_ID: envId,
-        user: user || 'system'
-      }));
-    } catch (err) {
-      console.error('Failed to queue replication for role change:', err);
-    }
-  }
-
-  // Auto-generate UUID keys for OrgNodes if not provided by client
-  this.before('CREATE', 'OrgNodes', (req) => {
-    if (!req.data.ID) {
-      req.data.ID = cds.utils.uuid();
-    }
-  });
-
-  // Auto-generate UUID keys for BdcSettings if not provided by client
-  this.before('CREATE', 'BdcSettings', (req) => {
-    if (!req.data.ID) {
-      req.data.ID = cds.utils.uuid();
-    }
-  });
-  // Auto-generate UUID keys for Roles if not provided by client
-  this.before('CREATE', 'Roles', (req) => {
-    if (!req.data.ID) {
-      req.data.ID = cds.utils.uuid();
-    }
-  });
-
-  // Auto-generate UUID keys for DynamicGenerationRules if not provided by client
-  this.before('CREATE', 'DynamicGenerationRules', (req) => {
-    if (!req.data.ID) {
-      req.data.ID = cds.utils.uuid();
-    }
-  });
-
-  // Auto-generate UUID keys for GeneratedResourceMap if not provided by client
-  this.before('CREATE', 'GeneratedResourceMap', (req) => {
-    if (!req.data.ID) {
-      req.data.ID = cds.utils.uuid();
-    }
-  });
-
-
-  // Ensure Role names are unique on CREATE
-  this.before('CREATE', 'Roles', async (req) => {
-    const { name } = req.data;
-    if (name) {
-      const existing = await cds.db.run(SELECT.one.from(Roles).where({ name }));
-      if (existing) {
-        return req.error(400, `A role with name "${name}" already exists.`);
-      }
-    }
-  });
-
-  // Ensure Role names are unique on UPDATE
-  this.before('UPDATE', 'Roles', async (req) => {
-    const { name } = req.data;
-    if (name) {
-      let id = req.data.ID;
-      if (!id && req.params && req.params.length > 0) {
-        const p = req.params[0];
-        id = typeof p === 'object' ? p.ID : p;
-      }
-      if (id) {
-        const current = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
-        if (current && current.name === name) {
-          return; // Name did not change, ignore uniqueness check
-        }
-        const existing = await cds.db.run(SELECT.one.from(Roles).where({ name }).and({ ID: { '!=': id } }));
-        if (existing) {
-          return req.error(400, `A role with name "${name}" already exists.`);
-        }
-      }
-    }
-  });
-
-  // Helper function to generate role for a single node
-  async function _generateRoleForNode(node, db) {
-    const roleName = `ROLE_ORG_${node.name.replace(/\s+/g, '_').toUpperCase()}`;
-
-    // Check if role already exists for this node
-    let role = await db.run(SELECT.one.from(Roles).where({ orgNode_ID: node.ID, type: 'ORG_BASED' }));
-    let roleId;
-    if (role) {
-      roleId = role.ID;
-      await db.run(UPDATE(Roles).set({ name: roleName }).where({ ID: roleId }));
-    } else {
-      roleId = cds.utils.uuid();
-      await db.run(INSERT.into(Roles).entries({
-        ID: roleId,
-        name: roleName,
-        type: 'ORG_BASED',
-        description: `Auto-generated from Org Node: ${node.name}`,
-        orgNode_ID: node.ID,
-      }));
-    }
-
-    // Find the associated restriction field directly from type_ID
-    let restrictionFieldName = 'OrgNode';
-    if (node.type_ID) {
-      const rf = await db.run(
-        SELECT.one.from(RestrictionFields)
-          .columns('name')
-          .where({ ID: node.type_ID })
-      );
-      if (rf) {
-        restrictionFieldName = rf.name;
-      }
-    }
-
-    // Set dynamic restriction: only the node name
-    await db.run(DELETE.from(Restrictions).where({ role_ID: roleId }));
-    await db.run(INSERT.into(Restrictions).entries({
-      ID: cds.utils.uuid(),
-      role_ID: roleId,
-      field: restrictionFieldName,
-      filterType: 'SINGLE_VALUE',
-      value: node.name,
-      sourceLabel: node.name,
-    }));
-
-    // Update node attribute for visibility
-    await db.run(DELETE.from(OrgNodeAttributes).where({ node_ID: node.ID, field: 'Role' }));
-    await db.run(INSERT.into(OrgNodeAttributes).entries({
-      ID: cds.utils.uuid(),
-      node_ID: node.ID,
-      field: 'Role',
-      value: roleName,
-    }));
-
-    return { roleId, roleName };
-  }
-
-  // Helper function to replicate role assignments to SAP HANA databases
-  async function _syncAssignmentToHana(assignmentId, userId, roleId, isDelete) {
-    const db = cds.db;
-
-    let role = null;
-    let restrictions = [];
-    if (!isDelete) {
-      role = await db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-      if (!role) return;
-      
-      const allRoles = await db.run(SELECT.from(Roles));
-      const allRestrictions = await db.run(SELECT.from(Restrictions));
-      const allInheritances = await db.run(SELECT.from(RoleInheritance));
-      
-      try {
-        const resolved = resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
-        restrictions = resolved.map(r => ({
-          ID: r.restrictionId,
-          field: r.field,
-          filterType: r.filterType,
-          value: r.value
-        }));
-      } catch (e) {
-        console.error("Failed resolving effective restrictions for replication:", e.message);
-        return;
-      }
-    }
-
-    const bdcSettings = await db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }));
-    if (bdcSettings.length === 0) return;
-
-    const entries = [];
-    if (!isDelete) {
-      for (const r of restrictions) {
-        let op = 'EQ';
-        let low = r.value;
-        let high = '';
-
-        if (r.filterType === 'SINGLE_VALUE') {
-          op = 'EQ';
-        } else if (r.filterType === 'RANGE') {
-          op = 'BT';
-          try {
-            const rangeObj = JSON.parse(r.value);
-            low = String(rangeObj.from || '');
-            high = String(rangeObj.to || '');
-          } catch (e) {}
-        } else if (r.filterType === 'PATTERN') {
-          op = 'CP';
-        }
-
-        if (r.filterType === 'MULTI_VALUE') {
-          let values = [r.value];
-          try {
-            values = JSON.parse(r.value);
-            if (!Array.isArray(values)) values = [r.value];
-          } catch (e) {}
-          for (let idx = 0; idx < values.length; idx++) {
-            entries.push({
-              userId,
-              roleName: role.name,
-              field: r.field,
-              operator: op,
-              low: String(values[idx]),
-              high
-            });
-          }
-        } else {
-          entries.push({
-            userId,
-            roleName: role.name,
-            field: r.field,
-            operator: op,
-            low,
-            high
-          });
-        }
-      }
-    }
-
-    for (const setting of bdcSettings) {
-      try {
-        await HanaClient.syncAssignment(setting, assignmentId, isDelete, entries);
-      } catch (err) {
-        console.error(`Hana sync failed for system [${setting.systemName}]:`, err.message);
-      }
-    }
-  }
-
-  // Helper to sync all assignments of a role (and its descendants) to HANA
-  async function _syncRoleAssignmentsToHana(roleId) {
-    const db = cds.db;
-    try {
-      const allInheritances = await db.run(SELECT.from(RoleInheritance));
-      
-      // Find all descendant roles recursively (child roles that inherit this parent role)
-      const roleIds = new Set([roleId]);
-      const queue = [roleId];
-      while (queue.length > 0) {
-        const currId = queue.shift();
-        const children = allInheritances.filter(ri => ri.parent_ID === currId);
-        for (const child of children) {
-          if (!roleIds.has(child.role_ID)) {
-            roleIds.add(child.role_ID);
-            queue.push(child.role_ID);
-          }
-        }
-      }
-
-      // Fetch and sync all assignments for all these roles
-      const assignments = await db.run(SELECT.from(RoleAssignments).where({ role_ID: { in: Array.from(roleIds) } }));
-      for (const assignment of assignments) {
-        try {
-          await _syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
-        } catch (e) {
-          console.error(`Failed to sync assignment ${assignment.ID} on role change:`, e);
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to sync role assignments for role ${roleId}:`, err);
-    }
-  }
-
-  // Sync role assignments to HANA and queue replication on CREATE
-  this.after('CREATE', 'RoleAssignments', async (assignment, req) => {
-    try {
-      await _syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
-    } catch (e) {
-      console.error("Failed to replicate assignment creation to HANA:", e);
-    }
-    try {
-      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
-      if (role) {
-        await _queueReplication(role.name, role.environment_ID, req?.user?.id);
-      }
-    } catch (err) {
-      console.error("Failed to queue replication for assignment creation:", err);
-    }
-  });
-
-  // Sync role assignments to HANA and queue replication on DELETE
-  this.before('DELETE', 'RoleAssignments', async (req) => {
-    try {
-      const id = req.data.ID || req.query.DELETE?.where?.[2]?.val || (req.params[0] && (req.params[0].ID || req.params[0]));
-      if (id) {
-        // Fetch assignment details before deletion to determine environment/role
-        const assignment = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
-        if (assignment) {
-          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
-          if (role) {
-            await _queueReplication(`${role.name} (ASSIGNMENT DELETED)`, role.environment_ID, req?.user?.id);
-          }
-        }
-        await _syncAssignmentToHana(id, null, null, true);
-      }
-    } catch (e) {
-      console.error("Failed to replicate assignment deletion:", e);
+      console.error('[AuthService] Failed to trigger dynamic rules synchronization:', err.message);
     }
   });
 
   // ---------------------------------------------------------------------------
-  // generateOrgRole
+  // UUID auto-generation (consolidated — same for all entities below)
   // ---------------------------------------------------------------------------
-  this.on('generateOrgRole', async (req) => {
-    const { orgNodeId } = req.data;
-    const db = cds.db;
-
-    const node = await db.run(SELECT.one.from(OrgNodes).where({ ID: orgNodeId }));
-    if (!node) return req.error(404, `OrgNode ${orgNodeId} not found`);
-
-    return _generateRoleForNode(node, db);
-  });
-
-  // ---------------------------------------------------------------------------
-  // generateAllOrgRoles
-  // ---------------------------------------------------------------------------
-  this.on('generateAllOrgRoles', async (req) => {
-    const db = cds.db;
-    const nodes = await db.run(SELECT.from(OrgNodes));
-
-    let count = 0;
-    for (const node of nodes) {
-      await _generateRoleForNode(node, db);
-      count++;
-    }
-
-    return { count };
-  });
-
-  // ---------------------------------------------------------------------------
-  // resolveEffectiveRestrictions
-  // ---------------------------------------------------------------------------
-  this.on('resolveEffectiveRestrictions', async (req) => {
-    const { roleId } = req.data;
-    const db = cds.db;
-
-    const allRoles = await db.run(SELECT.from(Roles));
-    const allRestrictions = await db.run(SELECT.from(Restrictions));
-    const allInheritances = await db.run(SELECT.from(RoleInheritance));
-
-    try {
-      return resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
-    } catch (e) {
-      return req.error(400, e.message);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // simulateAccess
-  // ---------------------------------------------------------------------------
-  this.on('simulateAccess', async (req) => {
-    const { roleId, sampleData, restrictions } = req.data;
-    const db = cds.db;
-
-    let rows;
-    try {
-      rows = JSON.parse(sampleData);
-    } catch {
-      return req.error(400, 'sampleData must be a valid JSON array string');
-    }
-
-    let effectiveRestrictions = [];
-    if (roleId) {
-      const allRoles = await db.run(SELECT.from(Roles));
-      const allRestrictions = await db.run(SELECT.from(Restrictions));
-      const allInheritances = await db.run(SELECT.from(RoleInheritance));
-
-      try {
-        effectiveRestrictions = resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
-      } catch (e) {
-        return req.error(400, e.message);
-      }
-    }
-
-    if (restrictions) {
-      try {
-        const parsedRest = JSON.parse(restrictions);
-        if (Array.isArray(parsedRest)) {
-          parsedRest.forEach(r => {
-            effectiveRestrictions.push({
-              field: r.field,
-              filterType: r.filterType,
-              value: r.value
-            });
-          });
-        }
-      } catch (e) {
-        return req.error(400, 'restrictions must be a valid JSON array string');
-      }
-    }
-
-    return rows.map((row, idx) => {
-      for (const restriction of effectiveRestrictions) {
-        const result = evaluateRestriction(restriction, row);
-        if (!result.passed) {
-          return { rowIndex: idx, passed: false, reason: result.reason };
-        }
-      }
-      return { rowIndex: idx, passed: true, reason: 'All restrictions satisfied' };
+  ['OrgNodes', 'BdcSettings', 'DynamicGenerationRules', 'GeneratedResourceMap'].forEach(entity => {
+    this.before('CREATE', entity, (req) => {
+      if (!req.data.ID) req.data.ID = cds.utils.uuid();
     });
   });
 
   // ---------------------------------------------------------------------------
-  // testBdcConnection
+  // Entity CRUD handlers (roles, assignments, restrictions)
   // ---------------------------------------------------------------------------
-  this.on('testBdcConnection', async (req) => {
-    const { settingId } = req.data;
-    const db = cds.db;
-    const { BdcSettings } = this.entities;
 
-    const setting = await db.run(SELECT.one.from(BdcSettings).where({ ID: settingId }));
-    if (!setting) return req.error(404, `BDC Setting with ID ${settingId} not found`);
+  const handlerDeps = {
+    cds,
+    queueReplication:          boundQueueReplication,
+    syncAssignmentToHana:      boundSyncAssignment,
+    syncRoleAssignmentsToHana: boundSyncRoleAssignments,
+    resolveEffectiveRestrictions
+  };
 
-    console.log('testBdcConnection retrieved setting:', JSON.stringify(setting, null, 2));
-
-    const type = setting.connectionType || 'OData';
-
-    if (type === 'SAP Hana') {
-      if (!setting.host) {
-        return { success: false, message: 'Failed: Hostname is required for SAP Hana connection' };
-      }
-      if (!setting.port) {
-        return { success: false, message: 'Failed: Port is required for SAP Hana connection' };
-      }
-      if (!setting.username || !setting.password) {
-        return { success: false, message: 'Failed: User and Password are required for SAP Hana connection' };
-      }
-      return await HanaClient.testConnectionAndCreateTable(setting);
-    } else {
-      if (!setting.url || !setting.url.startsWith('http')) {
-        return { success: false, message: `Failed: Invalid endpoint URL '${setting.url || ''}'` };
-      }
-
-      if (setting.authType === 'BASIC') {
-        if (!setting.username || !setting.password) {
-          return { success: false, message: 'Failed: Missing username or password for Basic Authentication' };
-        }
-      } else if (setting.authType === 'OAUTH') {
-        if (!setting.tokenUrl || !setting.clientId || !setting.clientSecret) {
-          return { success: false, message: 'Failed: Missing OAuth2 token URL, Client ID, or Client Secret' };
-        }
-      } else if (setting.authType === 'TOKEN') {
-        if (!setting.apiToken) {
-          return { success: false, message: 'Failed: Missing API Bearer Token' };
-        }
-      }
-
-      // Simulate validation request delay and success
-      await new Promise(resolve => setTimeout(resolve, 800));
-      return {
-        success: true,
-        message: `Successfully connected to Business Data Cloud System [${setting.systemName}] at ${setting.url}. Connection state: ACTIVE.`
-      };
-    }
-  });
-
-  this.on('fetchBdcSpaces', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
-    }
-    try {
-      return await BdcClient.fetchSpaces(url, tokenUrl, clientId, clientSecret);
-    } catch (e) {
-      return req.error(500, `Datasphere API Error: ${e.message}`);
-    }
-  });
-
-  this.on('fetchBdcAssets', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
-    }
-    try {
-      const { assetsList } = await BdcClient.fetchAssets(url, tokenUrl, clientId, clientSecret, space);
-      return assetsList;
-    } catch (e) {
-      return req.error(500, `Datasphere API Error: ${e.message}`);
-    }
-  });
-
-  this.on('fetchBdcRelationalValues', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    try {
-      const { mapped } = await BdcClient.fetchRelationalValues(req.data);
-      return mapped;
-    } catch (e) {
-      return req.error(500, `Datasphere API Error: ${e.message}`);
-    }
-  });
+  registerRoleHandlers(this, entities, handlerDeps);
+  registerAssignmentHandlers(this, entities, handlerDeps);
+  registerRestrictionHandlers(this, entities, handlerDeps);
 
   // ---------------------------------------------------------------------------
-  this.on('fetchBdcAssetColumns', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    try {
-      return await BdcClient.fetchAssetColumns(url, tokenUrl, clientId, clientSecret, space, asset);
-    } catch (e) {
-      return req.error(500, `Datasphere API Error: ${e.message}`);
-    }
-  });
+  // Org Role Generation actions
+  // ---------------------------------------------------------------------------
+
+  this.on('generateOrgRole',    makeGenerateOrgRoleHandler(cds, entities));
+  this.on('generateAllOrgRoles', makeGenerateAllOrgRolesHandler(cds, entities));
 
   // ---------------------------------------------------------------------------
-  // searchLdapUsers
+  // Access Resolution actions
   // ---------------------------------------------------------------------------
-  this.on('searchLdapUsers', async (req) => {
-    const { query } = req.data;
-    const users = [
-      { username: 'jdoe', displayName: 'John Doe', email: 'john.doe@fanrio.com', department: 'Finance' },
-      { username: 'asmith', displayName: 'Alice Smith', email: 'alice.smith@fanrio.com', department: 'Human Resources' },
-      { username: 'bobm', displayName: 'Bob Martin', email: 'bob.martin@fanrio.com', department: 'IT Operations' },
-      { username: 'cwhite', displayName: 'Charlie White', email: 'charlie.white@fanrio.com', department: 'Sales' },
-      { username: 'emiller', displayName: 'Emily Miller', email: 'emily.miller@fanrio.com', department: 'Global Operations' },
-      { username: 'dbrown', displayName: 'David Brown', email: 'david.brown@fanrio.com', department: 'Finance' },
-      { username: 'sjohnson', displayName: 'Sarah Johnson', email: 'sarah.johnson@fanrio.com', department: 'IT Development' },
-      { username: 'mgarcia', displayName: 'Maria Garcia', email: 'maria.garcia@fanrio.com', department: 'Sales' },
-      { username: 'rwilson', displayName: 'Robert Wilson', email: 'robert.wilson@fanrio.com', department: 'Security' },
-      { username: 'lharris', displayName: 'Linda Harris', email: 'linda.harris@fanrio.com', department: 'Human Resources' }
-    ];
-    if (!query || !query.trim()) return users;
-    const q = query.toLowerCase().trim();
-    return users.filter(u =>
-      u.username.toLowerCase().includes(q) ||
-      u.displayName.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      u.department.toLowerCase().includes(q)
-    );
-  });
 
-  // Helper to fetch OAuth token
-  async function _getOAuthToken(tokenUrl, clientId, clientSecret) {
-    return await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-  }
-
-  // Helper to fetch keys of an asset from OData metadata
-  async function _getAssetKeyColumns(url, accessToken, space, asset) {
-    if (isMockUrl(url)) {
-      return ['id'];
-    }
-    try {
-      const cleanSpace = space.trim();
-      const cleanAsset = asset.trim();
-      const metadataEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/$metadata`;
-      
-      const res = await fetch(metadataEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/xml, application/json'
-        }
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to fetch metadata: ${res.status}`);
-      }
-      const xml = await res.text();
-      
-      // Look for the entity type block
-      const cleanAssetLower = cleanAsset.toLowerCase();
-      let foundBlockContent = null;
-      const entityTypeScanner = /<(?:\w+:)?EntityType\s+Name="([^"]+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?EntityType>/gi;
-      let match;
-      while ((match = entityTypeScanner.exec(xml)) !== null) {
-        const entityName = match[1].toLowerCase();
-        if (entityName === cleanAssetLower || entityName === `${cleanAssetLower}type` || entityName.includes(cleanAssetLower)) {
-          foundBlockContent = match[2];
-          break;
-        }
-      }
-      
-      const contentToSearch = foundBlockContent || xml;
-      const keyBlockRegex = /<(?:\w+:)?Key>([\s\S]*?)<\/(?:\w+:)?Key>/i;
-      const keyBlockMatch = keyBlockRegex.exec(contentToSearch);
-      
-      const keys = [];
-      if (keyBlockMatch) {
-        const propRefRegex = /<(?:\w+:)?PropertyRef\s+Name="([^"]+)"/g;
-        let refMatch;
-        while ((refMatch = propRefRegex.exec(keyBlockMatch[1])) !== null) {
-          keys.push(refMatch[1]);
-        }
-      }
-      
-      if (keys.length > 0) {
-        return keys;
-      }
-      
-      // Fallback: scan all properties and look for "id"
-      const propRegex = /<(?:\w+:)?Property\s+Name="([^"]+)"/g;
-      let propMatch;
-      const properties = [];
-      while ((propMatch = propRegex.exec(contentToSearch)) !== null) {
-        properties.push(propMatch[1]);
-      }
-      const fallbackKey = properties.find(p => p.toLowerCase() === 'id') || properties[0] || 'id';
-      return [fallbackKey];
-    } catch (e) {
-      console.error(`Failed to automatically resolve key columns for asset ${asset}:`, e.message);
-      return ['id']; // default fallback
-    }
-  }
+  this.on('resolveEffectiveRestrictions', makeResolveEffectiveRestrictionsHandler(cds, entities));
+  this.on('simulateAccess',               makeSimulateAccessHandler(cds, entities));
 
   // ---------------------------------------------------------------------------
-  // fetchRawBdcSpaces
+  // BDC / HANA connection & data actions
   // ---------------------------------------------------------------------------
-  this.on('fetchRawBdcSpaces', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
-    }
-    try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
-      const res = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-      });
-      if (!res.ok) throw new Error(`Spaces request failed: ${res.status} [Endpoint: ${endpoint}]`);
-      const data = await res.json();
-      return JSON.stringify(data, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API Raw Error: ${e.message}`);
-    }
-  });
+
+  this.on('testBdcConnection',              makeTestBdcConnectionHandler(cds, entities, HanaClient));
+  this.on('fetchBdcSpaces',                 makeFetchBdcSpacesHandler(BdcClient));
+  this.on('fetchBdcAssets',                 makeFetchBdcAssetsHandler(BdcClient));
+  this.on('fetchBdcRelationalValues',       makeFetchBdcRelationalValuesHandler(BdcClient));
+  this.on('fetchBdcAssetColumns',           makeFetchBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchRawBdcSpaces',              makeFetchRawBdcSpacesHandler(BdcClient));
+  this.on('fetchRawBdcAssets',              makeFetchRawBdcAssetsHandler(BdcClient));
+  this.on('fetchRawBdcRelationalValues',    makeFetchRawBdcRelationalValuesHandler(BdcClient));
+  this.on('fetchRawBdcAssetColumns',        makeFetchRawBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchBdcAssociations',           makeFetchBdcAssociationsHandler(BdcClient));
+  this.on('fetchRawHanaViews',              makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
+  this.on('runBdcTaskChain',                makeRunBdcTaskChainHandler(BdcClient));
+  this.on('fetchBdcTaskChainLog',           makeFetchBdcTaskChainLogHandler(BdcClient));
+  this.on('searchLdapUsers',                makeSearchLdapUsersHandler());
 
   // ---------------------------------------------------------------------------
-  // fetchRawBdcAssets
+  // Replication actions
   // ---------------------------------------------------------------------------
-  this.on('fetchRawBdcAssets', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
-    }
-    try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
-      const res = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-      });
-      if (!res.ok) throw new Error(`Assets request failed: ${res.status} [Endpoint: ${endpoint}]`);
-      const data = await res.json();
-      return JSON.stringify(data, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API Raw Error: ${e.message}`);
-    }
-  });
 
-  // ---------------------------------------------------------------------------
-  // fetchRawBdcRelationalValues
-  // ---------------------------------------------------------------------------
-  this.on('fetchRawBdcRelationalValues', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim();
-      const a = asset.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`;
-      const res = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-      });
-      if (!res.ok) throw new Error(`Relational Values request failed: ${res.status} [Endpoint: ${endpoint}]`);
-      const data = await res.json();
-      return JSON.stringify(data, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API Raw Error: ${e.message}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // fetchRawBdcAssetColumns
-  // ---------------------------------------------------------------------------
-  this.on('fetchRawBdcAssetColumns', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    try {
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim();
-      const a = asset.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
-      const res = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
-      });
-      if (!res.ok) throw new Error(`Asset Columns Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
-      const data = await res.text();
-      return data;
-    } catch (e) {
-      return req.error(500, `Datasphere API Raw Error: ${e.message}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // fetchBdcAssociations
-  // ---------------------------------------------------------------------------
-  this.on('fetchBdcAssociations', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || space === undefined || asset === undefined) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    try {
-      const s = space ? space.trim() : '';
-      const a = asset ? asset.trim() : '';
-      
-      // If mock url, return mock associations
-      if (isMockUrl(url)) {
-        return JSON.stringify([
-          { name: "to_TextTable", targetType: "MY_SPACE.COMPANY_TEXT" },
-          { name: "to_HierarchyDirectory", targetType: "MY_SPACE.MY_HIERARCHY_DIRECTORY" }
-        ], null, 2);
-      }
-      
-      const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-      const analyticalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/analytical/${s}/${a}/$metadata`;
-      
-      let res;
-      let endpoint = analyticalEndpoint;
-      try {
-        res = await fetch(analyticalEndpoint, {
-          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
-        });
-      } catch (err) {
-        console.warn(`Analytical endpoint fetch failed: ${err.message}. Trying relational fallback.`);
-      }
-
-      if (!res || !res.ok) {
-        const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
-        endpoint = relationalEndpoint;
-        res = await fetch(relationalEndpoint, {
-          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' }
-        });
-      }
-
-      if (!res.ok) throw new Error(`Asset Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
-      const xml = await res.text();
-      
-      const associations = [];
-      const navPropRegex = /<NavigationProperty\b[^>]*>/g;
-      const nameRegex = /\bName="([^"]+)"/;
-      const typeRegex = /\bType="([^"]+)"/;
-      
-      let match;
-      while ((match = navPropRegex.exec(xml)) !== null) {
-        const tagContent = match[0];
-        const nameMatch = nameRegex.exec(tagContent);
-        const typeMatch = typeRegex.exec(tagContent);
-        if (nameMatch && typeMatch) {
-          associations.push({
-            name: nameMatch[1],
-            targetType: typeMatch[1]
-          });
-        }
-      }
-      
-      return JSON.stringify(associations, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API fetchBdcAssociations Error: ${e.message}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // fetchRawHanaViews
-  // ---------------------------------------------------------------------------
-  this.on('fetchRawHanaViews', async (req) => {
-    const { settingId } = req.data;
-    const db = cds.db;
-    const { BdcSettings } = this.entities;
-
-    const setting = await db.run(SELECT.one.from(BdcSettings).where({ ID: settingId }));
-    if (!setting) return req.error(404, `BDC Setting with ID ${settingId} not found`);
-
-    try {
-      const query = `
-        SELECT SCHEMA_NAME, VIEW_NAME 
-        FROM VIEWS 
-        WHERE SCHEMA_NAME NOT IN ('SYS', '_SYS_BI', '_SYS_BIC', '_SYS_STATISTICS', '_SYS_XS')
-        ORDER BY SCHEMA_NAME, VIEW_NAME
-      `;
-      const rows = await HanaClient.execute(setting, query);
-      return JSON.stringify(rows, null, 2);
-    } catch (err) {
-      return req.error(500, err.message);
-    }
-  });
-
-  // Helper to check and update running replication statuses
-  async function _checkAndUpdateRunningReplications(db) {
-    const runningReps = await db.run(SELECT.from(Replications).where({ status: 'Running' }));
-    if (runningReps.length === 0) {
-      return { success: true, message: 'No running replications.' };
-    }
-
-    const runIds = Array.from(new Set(runningReps.map(r => r.runId).filter(Boolean)));
-    const results = [];
-    const errors = [];
-
-    for (const runId of runIds) {
-      try {
-        const repSample = runningReps.find(r => r.runId === runId);
-        const envId = repSample ? repSample.environment_ID : 'D';
-
-        const activeSetting = await db.run(SELECT.one.from(BdcSettings).where({
-          connectionType: 'OData',
-          isActive: true,
-          environment_ID: envId
-        }));
-
-        if (!activeSetting) {
-          errors.push(`Run ${runId}: No active BDC connection configured for environment: ${envId}`);
-          continue;
-        }
-
-        const { url, tokenUrl, clientId, clientSecret, space } = activeSetting;
-        if (!url || !tokenUrl || !clientId || !clientSecret || !space) {
-          errors.push(`Run ${runId}: Active BDC connection for environment ${envId} is missing parameters.`);
-          continue;
-        }
-
-        let status = 'RUNNING';
-        let finishedAt = null;
-
-        if (isMockUrl(url)) {
-          if (runId && runId.includes('complete')) {
-            status = 'COMPLETED';
-            finishedAt = new Date().toISOString();
-          } else {
-            // Mock URL fallback logic: complete mock runs after 10 seconds
-            const startedMs = parseInt(runId.replace('mock-log-', '')) || Date.now();
-            if (Date.now() - startedMs > 10000) {
-              status = 'COMPLETED';
-              finishedAt = new Date().toISOString();
-            } else {
-              status = 'RUNNING';
-            }
-          }
-        } else {
-          const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-          const s = space.trim();
-          const l = runId.trim();
-          const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/logs/${s}/${l}`;
-
-          const res = await fetch(endpoint, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/vnd.sap.datasphere.task.log.details+json, application/json'
-            }
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            status = data.status || 'RUNNING';
-            finishedAt = data.endTime || data.finishedAt || data.endedAt || new Date().toISOString();
-          } else {
-            const errBody = await res.text().catch(() => '');
-            throw new Error(`Log request failed with status ${res.status}: ${errBody}`);
-          }
-        }
-
-        if (status === 'COMPLETED') {
-          await db.run(UPDATE(Replications)
-            .set({ 
-              status: 'Success', 
-              replicationDate: finishedAt || new Date().toISOString(),
-              endTime: finishedAt || new Date().toISOString()
-            })
-            .where({ runId: runId, status: 'Running' }));
-          results.push(`Run ${runId} completed successfully.`);
-        } else if (status === 'FAILED' || status === 'ABORTED') {
-          await db.run(UPDATE(Replications)
-            .set({ 
-              status: 'Failed', 
-              replicationDate: finishedAt || new Date().toISOString(),
-              endTime: finishedAt || new Date().toISOString()
-            })
-            .where({ runId: runId, status: 'Running' }));
-          results.push(`Run ${runId} failed or aborted.`);
-        } else {
-          results.push(`Run ${runId} is still running.`);
-        }
-      } catch (err) {
-        errors.push(`Run ${runId} check failed: ${err.message}`);
-      }
-    }
-
-    if (errors.length > 0) {
-      return {
-        success: false,
-        message: `Checked statuses with partial errors. Results: [${results.join('; ')}]. Errors: [${errors.join('; ')}]`
-      };
-    }
-    return {
-      success: true,
-      message: `Checked statuses: ${results.join('; ')}`
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // checkReplicationStatuses
-  // ---------------------------------------------------------------------------
   this.on('checkReplicationStatuses', async (req) => {
-    const db = cds.db;
     try {
-      return await _checkAndUpdateRunningReplications(db);
+      return await checkAndUpdateRunningReplications(cds, entities, BdcClient);
     } catch (e) {
       return req.error(500, `Failed to check replication statuses: ${e.message}`);
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // triggerReplication
-  // ---------------------------------------------------------------------------
-  this.on('triggerReplication', async (req) => {
-    const db = cds.db;
-    
-    // 1. Check/update status of any currently 'Running' task chains before starting new ones
-    await _checkAndUpdateRunningReplications(db).catch(err => {
-      console.error('Error auto-refreshing running replication statuses:', err);
-    });
-    
-    // 2. Fetch all pending open or failed replications
-    const openReps = await db.run(SELECT.from(Replications).where({ status: { in: ['Open', 'Failed'] } }));
-    console.log("DEBUG triggerReplication openReps:", JSON.stringify(openReps));
-    if (openReps.length === 0) {
-      return { success: true, message: 'No pending or failed changes to replicate.' };
-    }
-
-    // 3. Identify the unique environments of those open changes
-    const envIds = Array.from(new Set(openReps.map(r => r.environment_ID).filter(Boolean)));
-    
-    // If somehow no environments are set, fallback to Development
-    if (envIds.length === 0) {
-      envIds.push('D');
-    }
-
-    const results = [];
-    const errors = [];
-
-    // 4. For each environment, trigger the corresponding BDC task chain
-    for (const envId of envIds) {
-      const activeSetting = await db.run(SELECT.one.from(BdcSettings).where({ 
-        connectionType: 'OData', 
-        isActive: true, 
-        environment_ID: envId 
-      }));
-
-      if (!activeSetting) {
-        errors.push(`No active BDC connection configured for environment: ${envId}`);
-        continue;
-      }
-
-      const { url, tokenUrl, clientId, clientSecret, space, taskChainFlat } = activeSetting;
-      if (!url || !tokenUrl || !clientId || !clientSecret || !space || !taskChainFlat) {
-        errors.push(`Active BDC connection for environment ${envId} is missing parameters.`);
-        continue;
-      }
-
-      try {
-        const runStartTime = new Date().toISOString();
-        const token = await _getOAuthToken(tokenUrl, clientId, clientSecret);
-        const s = space.trim();
-        const tc = taskChainFlat.trim();
-        const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/tasks/chains/${s}/run/${tc}`;
-        
-        let success = false;
-        let responseData = null;
-
-        if (isMockUrl(url)) {
-          success = true;
-          responseData = {
-            logId: `mock-log-${Date.now()}`,
-            status: 'RUNNING',
-            spaceId: space,
-            taskChainId: taskChainFlat,
-            startedAt: runStartTime
-          };
-        } else {
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({})
-          });
-          if (res.ok) {
-            success = true;
-            responseData = await res.json().catch(() => ({}));
-          } else {
-            const errBody = await res.text().catch(() => '');
-            throw new Error(`Task chain run request failed: ${res.status} ${res.statusText}. Response: ${errBody}`);
-          }
-        }
-
-        const runUser = req?.user?.id || 'system';
-        const finalLogId = responseData && (responseData.logId || responseData.runId || `run-${Date.now()}`);
-
-        if (success) {
-          // Change status of open or failed replications in this environment to 'Running' (with startTime and runId)
-          await db.run(UPDATE(Replications)
-            .set({ 
-              status: 'Running', 
-              replicationDate: runStartTime,
-              startTime: runStartTime,
-              user: runUser,
-              runId: String(finalLogId)
-            })
-            .where({ environment_ID: envId, status: { in: ['Open', 'Failed'] } }));
-          results.push(`Environment ${envId}: Started replication (Run ID: ${finalLogId}) via connection ${activeSetting.systemName}`);
-        } else {
-          errors.push(`Environment ${envId}: Replication failed to trigger.`);
-        }
-      } catch (e) {
-        console.error("DEBUG CATCH EXCEPTION:", e);
-        errors.push(`Environment ${envId} Error: ${e.message}`);
-      }
-    }
-
-    if (errors.length > 0) {
-      console.error("DEBUG triggerReplication errors:", errors);
-      if (results.length > 0) {
-        return { 
-          success: false, 
-          message: `Partial replication. Successes: [${results.join('; ')}]. Errors: [${errors.join('; ')}]` 
-        };
-      } else {
-        return req.error(500, `Replication failed: ${errors.join('; ')}`);
-      }
-    }
-
-    return { success: true, message: `All environments replicated: ${results.join('; ')}` };
-  });
-
-  // ---------------------------------------------------------------------------
-  // runBdcTaskChain
-  // ---------------------------------------------------------------------------
-  this.on('runBdcTaskChain', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, taskChainId } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !taskChainId) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or taskChainId');
-    }
-    try {
-      const data = await BdcClient.runTaskChain(url, tokenUrl, clientId, clientSecret, space, taskChainId);
-      return JSON.stringify(data, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API runBdcTaskChain Error: ${e.message}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // fetchBdcTaskChainLog
-  // ---------------------------------------------------------------------------
-  this.on('fetchBdcTaskChainLog', async (req) => {
-    const { url, tokenUrl, clientId, clientSecret, space, logId } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !logId) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or logId');
-    }
-    try {
-      const data = await BdcClient.fetchTaskChainLog(url, tokenUrl, clientId, clientSecret, space, logId);
-      return JSON.stringify(data, null, 2);
-    } catch (e) {
-      return req.error(500, `Datasphere API fetchBdcTaskChainLog Error: ${e.message}`);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Audit Logs - Roles
-  // ---------------------------------------------------------------------------
-  this.after('CREATE', 'Roles', async (role, req) => {
-    try {
-      await cds.db.run(INSERT.into(AuditLogs).entries({
-        ID: cds.utils.uuid(),
-        entityName: 'Roles',
-        action: 'CREATE',
-        recordId: role.ID,
-        targetName: role.name,
-        details: JSON.stringify(role)
-      }));
-      await _queueReplication(role.name, role.environment_ID, req?.user?.id);
-    } catch (err) {
-      console.error('Audit Log failed for Roles CREATE:', err);
-    }
-  });
-
-  this.before('UPDATE', 'Roles', async (req) => {
-    try {
-      let id = req.data.ID;
-      if (!id && req.params && req.params.length > 0) {
-        const p = req.params[0];
-        id = typeof p === 'object' ? p.ID : p;
-      }
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
-        if (beforeState) {
-          req.context = req.context || {};
-          req.context.beforeStateRole = beforeState;
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log capture before Roles UPDATE failed:', err);
-    }
-  });
-
-  this.after('UPDATE', 'Roles', async (res, req) => {
-    try {
-      let id = req.data.ID;
-      if (!id && req.params && req.params.length > 0) {
-        const p = req.params[0];
-        id = typeof p === 'object' ? p.ID : p;
-      }
-      if (id) {
-        const afterState = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
-        const beforeState = req.context?.beforeStateRole;
-        
-        const diff = {};
-        if (beforeState && afterState) {
-          for (const key of Object.keys(afterState)) {
-            if (['modifiedAt', 'modifiedBy'].includes(key)) continue;
-            if (JSON.stringify(beforeState[key]) !== JSON.stringify(afterState[key])) {
-              diff[key] = { old: beforeState[key], new: afterState[key] };
-            }
-          }
-        }
-
-        if (Object.keys(diff).length > 0) {
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'Roles',
-            action: 'UPDATE',
-            recordId: id,
-            targetName: afterState ? afterState.name : (beforeState ? beforeState.name : 'Unknown Role'),
-            details: JSON.stringify(diff)
-          }));
-          await _queueReplication(
-            afterState ? afterState.name : (beforeState ? beforeState.name : 'Unknown Role'),
-            afterState ? afterState.environment_ID : (beforeState ? beforeState.environment_ID : 'D'),
-            req?.user?.id
-          );
-        }
-        await _syncRoleAssignmentsToHana(id);
-      }
-    } catch (err) {
-      console.error('Audit Log failed for Roles UPDATE:', err);
-    }
-  });
-
-  this.before('DELETE', 'Roles', async (req) => {
-    try {
-      let id = req.data.ID || req.query.DELETE?.where?.[2]?.val || (req.params[0] && (req.params[0].ID || req.params[0]));
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
-        if (beforeState) {
-          // Log parent deletion
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'Roles',
-            action: 'DELETE',
-            recordId: id,
-            targetName: beforeState.name,
-            details: JSON.stringify(beforeState)
-          }));
-          await _queueReplication(`${beforeState.name} (DELETED)`, beforeState.environment_ID, req?.user?.id);
-
-          // Handle recursive descendant and assignment deletions
-          req.context = req.context || {};
-          if (!req.context.inCascadingDelete) {
-            req.context.inCascadingDelete = true;
-
-            const allInheritances = await cds.db.run(SELECT.from(RoleInheritance));
-            const descendantRoleIds = [];
-            const queue = [id];
-            const visited = new Set([id]);
-            while (queue.length > 0) {
-              const curr = queue.shift();
-              const children = allInheritances.filter(ri => ri.parent_ID === curr);
-              for (const child of children) {
-                if (!visited.has(child.role_ID)) {
-                  visited.add(child.role_ID);
-                  descendantRoleIds.push(child.role_ID);
-                  queue.push(child.role_ID);
-                }
-              }
-            }
-
-            // 1. Delete all assignments associated with the parent role and descendants
-            const allRoleIds = [id, ...descendantRoleIds];
-            const assignments = await cds.db.run(SELECT.from(RoleAssignments).where({ role_ID: { in: allRoleIds } }));
-            for (const assignment of assignments) {
-              // Using this.run to trigger hooks (audit logs & HANA sync)
-              await this.run(DELETE.from(RoleAssignments).where({ ID: assignment.ID }));
-            }
-
-            // 2. Delete all inheritances involving these roles
-            await cds.db.run(DELETE.from(RoleInheritance).where({
-              or: [
-                { role_ID: { in: allRoleIds } },
-                { parent_ID: { in: allRoleIds } }
-              ]
-            }));
-
-            // 3. Delete descendant roles recursively (triggering hooks for audit log and compositions)
-            for (const descId of descendantRoleIds) {
-              await this.run(DELETE.from(Roles).where({ ID: descId }));
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for Roles DELETE:', err);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Validation & Audit Logs - Role Assignments
-  // ---------------------------------------------------------------------------
-  this.before('CREATE', 'RoleAssignments', async (req) => {
-    const { role_ID } = req.data;
-    if (role_ID) {
-      const allRoles = await cds.db.run(SELECT.from(Roles));
-      const allRestrictions = await cds.db.run(SELECT.from(Restrictions));
-      const allInheritances = await cds.db.run(SELECT.from(RoleInheritance));
-      try {
-        const resolved = resolveEffectiveRestrictions(role_ID, allRoles, allRestrictions, allInheritances);
-        if (resolved.length === 0) {
-          return req.error(400, 'Cannot assign a role that has no restrictions.');
-        }
-      } catch (e) {
-        return req.error(400, e.message);
-      }
-    }
-  });
-
-  this.after('CREATE', 'RoleAssignments', async (assignment) => {
-    try {
-      await cds.db.run(INSERT.into(AuditLogs).entries({
-        ID: cds.utils.uuid(),
-        entityName: 'RoleAssignments',
-        action: 'CREATE',
-        recordId: assignment.ID,
-        targetName: assignment.userName || assignment.userId,
-        details: JSON.stringify(assignment)
-      }));
-    } catch (err) {
-      console.error('Audit Log failed for RoleAssignments CREATE:', err);
-    }
-  });
-
-  this.before('UPDATE', 'RoleAssignments', async (req) => {
-    try {
-      let id = req.data.ID || req.params[0]?.ID || req.params[0];
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
-        if (beforeState) {
-          req.context = req.context || {};
-          req.context.beforeStateAssignment = beforeState;
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log capture before RoleAssignments UPDATE failed:', err);
-    }
-  });
-
-  this.after('UPDATE', 'RoleAssignments', async (res, req) => {
-    try {
-      let id = req.data.ID || req.params[0]?.ID || req.params[0];
-      if (id) {
-        const afterState = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
-        const beforeState = req.context?.beforeStateAssignment;
-        
-        const diff = {};
-        if (beforeState && afterState) {
-          for (const key of Object.keys(afterState)) {
-            if (JSON.stringify(beforeState[key]) !== JSON.stringify(afterState[key])) {
-              diff[key] = { old: beforeState[key], new: afterState[key] };
-            }
-          }
-        }
-
-        if (Object.keys(diff).length > 0) {
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'RoleAssignments',
-            action: 'UPDATE',
-            recordId: id,
-            targetName: afterState ? (afterState.userName || afterState.userId) : (beforeState ? (beforeState.userName || beforeState.userId) : 'Unknown User'),
-            details: JSON.stringify(diff)
-          }));
-        }
-
-        // Queue replication for updated assignment
-        if (afterState) {
-          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: afterState.role_ID }));
-          if (role) {
-            await _queueReplication(role.name, role.environment_ID, req?.user?.id);
-          }
-        }
-        if (beforeState && beforeState.role_ID !== afterState?.role_ID) {
-          const oldRole = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
-          if (oldRole) {
-            await _queueReplication(oldRole.name, oldRole.environment_ID, req?.user?.id);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for RoleAssignments UPDATE:', err);
-    }
-  });
-
-  this.before('DELETE', 'RoleAssignments', async (req) => {
-    try {
-      let id = req.data.ID || req.query.DELETE?.where?.[2]?.val || (req.params[0] && (req.params[0].ID || req.params[0]));
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
-        if (beforeState) {
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'RoleAssignments',
-            action: 'DELETE',
-            recordId: id,
-            targetName: beforeState.userName || beforeState.userId,
-            details: JSON.stringify(beforeState)
-          }));
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for RoleAssignments DELETE:', err);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Audit Logs & Replications - Restrictions (Consolidated under Roles)
-  // ---------------------------------------------------------------------------
-  this.after('CREATE', 'Restrictions', async (restriction, req) => {
-    try {
-      if (restriction.role_ID) {
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: restriction.role_ID }));
-        const roleName = role ? role.name : 'Unknown Role';
-        const details = {
-          "Restriction Added": {
-            old: "",
-            new: `Field: ${restriction.field}, Type: ${restriction.filterType}, Value: ${restriction.value}`
-          }
-        };
-        await cds.db.run(INSERT.into(AuditLogs).entries({
-          ID: cds.utils.uuid(),
-          entityName: 'Roles',
-          action: 'UPDATE',
-          recordId: restriction.role_ID,
-          targetName: roleName,
-          details: JSON.stringify(details)
-        }));
-        await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-        if (restriction.role_ID) {
-          await _syncRoleAssignmentsToHana(restriction.role_ID);
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for Restrictions CREATE:', err);
-    }
-  });
-
-  this.before('UPDATE', 'Restrictions', async (req) => {
-    try {
-      let id = req.data.ID || req.params[0]?.ID || req.params[0];
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
-        if (beforeState) {
-          req.context = req.context || {};
-          req.context.beforeStateRestriction = beforeState;
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log capture before Restrictions UPDATE failed:', err);
-    }
-  });
-
-  this.after('UPDATE', 'Restrictions', async (res, req) => {
-    try {
-      let id = req.data.ID || req.params[0]?.ID || req.params[0];
-      if (id) {
-        const afterState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
-        const beforeState = req.context?.beforeStateRestriction;
-        
-        let hasChanges = false;
-        if (beforeState && afterState) {
-          if (beforeState.filterType !== afterState.filterType || beforeState.value !== afterState.value || beforeState.field !== afterState.field) {
-            hasChanges = true;
-          }
-        }
-
-        if (hasChanges && beforeState.role_ID) {
-          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
-          const roleName = role ? role.name : 'Unknown Role';
-          const details = {
-            [`Restriction Changed (${beforeState.field})`]: {
-              old: `Type: ${beforeState.filterType}, Value: ${beforeState.value}`,
-              new: `Type: ${afterState.filterType}, Value: ${afterState.value}`
-            }
-          };
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'Roles',
-            action: 'UPDATE',
-            recordId: beforeState.role_ID,
-            targetName: roleName,
-            details: JSON.stringify(details)
-          }));
-          await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-          if (beforeState && beforeState.role_ID) {
-            await _syncRoleAssignmentsToHana(beforeState.role_ID);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for Restrictions UPDATE:', err);
-    }
-  });
-
-  this.before('DELETE', 'Restrictions', async (req) => {
-    try {
-      let id = req.data.ID || req.query.DELETE?.where?.[2]?.val || (req.params[0] && (req.params[0].ID || req.params[0]));
-      if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
-        if (beforeState && beforeState.role_ID) {
-          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
-          const roleName = role ? role.name : 'Unknown Role';
-          const details = {
-            "Restriction Deleted": {
-              old: `Field: ${beforeState.field}, Type: ${beforeState.filterType}, Value: ${beforeState.value}`,
-              new: ""
-            }
-          };
-          await cds.db.run(INSERT.into(AuditLogs).entries({
-            ID: cds.utils.uuid(),
-            entityName: 'Roles',
-            action: 'UPDATE',
-            recordId: beforeState.role_ID,
-            targetName: roleName,
-            details: JSON.stringify(details)
-          }));
-          await _queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-          if (beforeState && beforeState.role_ID) {
-            await _syncRoleAssignmentsToHana(beforeState.role_ID);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Audit Log failed for Restrictions DELETE:', err);
-    }
-  });
-
+  this.on('triggerReplication', makeTriggerReplicationHandler(cds, entities, BdcClient));
 });
