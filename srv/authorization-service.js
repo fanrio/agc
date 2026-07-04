@@ -142,7 +142,7 @@ module.exports = cds.service.impl(async function () {
   // BDC / HANA connection & data actions
   // ---------------------------------------------------------------------------
 
-  this.on('testBdcConnection',              makeTestBdcConnectionHandler(cds, entities, HanaClient));
+  this.on('testBdcConnection',              makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient));
   this.on('fetchBdcSpaces',                 makeFetchBdcSpacesHandler(BdcClient));
   this.on('fetchBdcAssets',                 makeFetchBdcAssetsHandler(BdcClient));
   this.on('fetchBdcRelationalValues',       makeFetchBdcRelationalValuesHandler(BdcClient));

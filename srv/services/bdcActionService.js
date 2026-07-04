@@ -90,7 +90,7 @@ async function _getAssetKeyColumns(url, accessToken, space, asset) {
 // Handler factories
 // ---------------------------------------------------------------------------
 
-function makeTestBdcConnectionHandler(cds, entities, HanaClient) {
+function makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient) {
   return async function testBdcConnectionHandler(req) {
     const { settingId } = req.data;
     const { BdcSettings } = entities;
