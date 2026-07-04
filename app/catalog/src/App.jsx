@@ -181,7 +181,7 @@ export default function App() {
       <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
         {activeNav === 'home'        && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} permissions={permissions} />}
         {activeNav === 'org'         && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} permissions={permissions} />}
-        {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(roleId)   => openWizard({ parentRoleId: roleId })} onEditRole={(roleId) => openWizard({ roleId })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} permissions={permissions} />}
+        {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} permissions={permissions} />}
         {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} permissions={permissions} />}
         {activeNav === 'assignments' && <RoleAssignmentsView permissions={permissions} />}
         {activeNav === 'replications' && <ReplicationsView />}

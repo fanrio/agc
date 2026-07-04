@@ -14,7 +14,8 @@
     "@sap/cds": "^9.9.1",
     "@sap/hana-client": "^2.28.21",
     "cors": "^2.8.6",
-    "hdb": "^2.27.1"
+    "hdb": "^2.27.1",
+    "puppeteer-core": "^25.3.0"
   },
   "devDependencies": {
     "@cap-js/cds-test": "^1.0.1",
