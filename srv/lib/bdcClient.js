@@ -1,11 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-function isMockUrl(url) {
-  if (!url) return true;
-  const lower = url.toLowerCase();
-  return lower.includes('mock') || lower.includes('localhost') || lower.includes('example.com') || lower.includes('127.0.0.1');
-}
+const { isMockUrl } = require('./urlUtils');
 
 class BdcClient {
   /**
@@ -108,13 +101,6 @@ class BdcClient {
 
       const assetsList = rawAssets.map(a => a.id || a.name || a);
       
-      // Save payload
-      try {
-        const filePath = path.join(__dirname, '..', 'last_fetched_assets.json');
-        fs.writeFileSync(filePath, JSON.stringify(rawData || assetsList, null, 2), 'utf-8');
-      } catch (err) {
-        console.error('Failed to save assets file:', err);
-      }
 
       return { rawData, assetsList };
     } catch (e) {
@@ -235,152 +221,144 @@ class BdcClient {
   /**
    * Helper to fetch relational values
    */
+  static _parseCols(idColumns, resolvedKeyCols) {
+    let cols = resolvedKeyCols || [];
+    if (!cols || cols.length === 0 || cols[0] === 'id') {
+      if (idColumns) {
+        try {
+          const parsed = JSON.parse(idColumns);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            cols = parsed;
+          } else if (parsed) {
+            cols = [parsed];
+          }
+        } catch {
+          cols = [idColumns];
+        }
+      }
+    }
+    return (Array.isArray(cols) && cols.length > 0 && cols[0]) ? cols : ['id'];
+  }
+
+  static async _fetchAssetRecords(url, accessToken, space, asset) {
+    const cleanSpace = space.trim();
+    const cleanAsset = asset.trim();
+    const assetEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/${cleanAsset}`;
+    
+    const assetRes = await fetch(assetEndpoint, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!assetRes.ok) {
+      throw new Error(`Asset ID relational request failed: ${assetRes.status} ${assetRes.statusText}`);
+    }
+
+    const assetResponseText = await assetRes.text();
+    const rawData = JSON.parse(assetResponseText);
+    const assetRows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
+    return { rawData, assetRecords: Array.isArray(assetRows) ? assetRows : [] };
+  }
+
+  static async _fetchAssetTextRecords(url, accessToken, space, assetText) {
+    if (!assetText || !assetText.trim()) return [];
+    const cleanSpace = space.trim();
+    const cleanAssetText = assetText.trim();
+    const assetTextEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAssetText}/${cleanAssetText}`;
+    
+    const textRes = await fetch(assetTextEndpoint, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+    if (textRes.ok) {
+      const textResponseText = await textRes.text();
+      const textRaw = JSON.parse(textResponseText);
+      const textRows = textRaw.value?.[0]?.value || textRaw.results || textRaw.value || textRaw || [];
+      return Array.isArray(textRows) ? textRows : [];
+    }
+    return [];
+  }
+
+  static _buildTranslationMap(assetTextRecords, cols, textColumn) {
+    const translationMap = new Map();
+    if (assetTextRecords.length > 0) {
+      for (const row of assetTextRecords) {
+        const key = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+        if (key) {
+          const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn || 'description';
+          const textVal = row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]) : '';
+          translationMap.set(key, textVal);
+        }
+      }
+    }
+    return translationMap;
+  }
+
+  static _mapRecord(row, cols, translationMap, textColumn, assetText, assetTextRecords) {
+    const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
+    const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
+    const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
+    
+    let idVal;
+    let textVal;
+
+    if (nodeIdCol) {
+      idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
+      const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
+      const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
+      
+      if (salesOrgVal) {
+        textVal = `${idVal} - ${salesOrgVal}`;
+      } else if (regionIdVal) {
+        textVal = `${idVal} - ${regionIdVal}`;
+      } else {
+        textVal = idVal;
+      }
+    } else {
+      idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
+      textVal = idVal;
+      if (assetText && assetText.trim() && assetTextRecords.length > 0) {
+        textVal = translationMap.get(idVal) || idVal;
+      } else {
+        const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn;
+        if (descCol && row[descCol] !== undefined && row[descCol] !== null) {
+          textVal = String(row[descCol]);
+        } else {
+          textVal = idVal;
+        }
+      }
+    }
+
+    const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
+    const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
+
+    const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
+    const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
+
+    const returnObj = {
+      id: idVal,
+      text: nodeIdCol ? textVal : (idVal === textVal ? idVal : `${idVal} - ${textVal}`)
+    };
+    if (nodeIdCol) {
+      returnObj.parent_ID = (parentIdVal !== null && parentIdVal !== 'null' && parentIdVal !== '') ? parentIdVal : null;
+    }
+    if (hierarchyVal !== undefined) {
+      returnObj.hierarchy = hierarchyVal;
+    }
+    return returnObj;
+  }
+
   static async fetchRelationalValues(options) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn } = options;
+    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText } = options;
     try {
       const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
-      
-      // Automatically retrieve key columns from metadata
-      let cols = [];
-      try {
-        cols = await this.fetchAssetKeyColumns(url, accessToken, space, asset);
-      } catch (err) {
-        console.error(`Failed to automatically resolve key columns for asset ${asset}:`, err.message);
-      }
-
-      if (!cols || cols.length === 0 || cols[0] === 'id') {
-        if (idColumns) {
-          try {
-            const parsed = JSON.parse(idColumns);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              cols = parsed;
-            } else if (parsed) {
-              cols = [parsed];
-            }
-          } catch {
-            cols = [idColumns];
-          }
-        }
-      }
-      if (!Array.isArray(cols) || cols.length === 0 || !cols[0]) {
-        cols = ['id'];
-      }
-
-      const cleanSpace = space.trim();
-      const cleanAsset = asset.trim();
-      const assetEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAsset}/${cleanAsset}`;
-      
-      const assetRes = await fetch(assetEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!assetRes.ok) {
-        throw new Error(`Asset ID relational request failed: ${assetRes.status} ${assetRes.statusText}`);
-      }
-
-      const assetResponseText = await assetRes.text();
-      const rawData = JSON.parse(assetResponseText);
-      const assetRows = rawData.value?.[0]?.value || rawData.results || rawData.value || rawData || [];
-      const assetRecords = Array.isArray(assetRows) ? assetRows : [];
-
-      // Fetch translations from Asset Text view if provided
-      let assetTextRecords = [];
-      if (assetText && assetText.trim()) {
-        const cleanAssetText = assetText.trim();
-        const assetTextEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${cleanSpace}/${cleanAssetText}/${cleanAssetText}`;
-        const textRes = await fetch(assetTextEndpoint, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json'
-          }
-        });
-        if (textRes.ok) {
-          const textResponseText = await textRes.text();
-          const textRaw = JSON.parse(textResponseText);
-          const textRows = textRaw.value?.[0]?.value || textRaw.results || textRaw.value || textRaw || [];
-          assetTextRecords = Array.isArray(textRows) ? textRows : [];
-        }
-      }
-
-      // Build translation map if Asset Text is provided
-      const translationMap = new Map();
-      if (assetTextRecords.length > 0) {
-        for (const row of assetTextRecords) {
-          const key = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
-          if (key) {
-            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn || 'description';
-            const textVal = row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]) : '';
-            translationMap.set(key, textVal);
-          }
-        }
-      }
-
-      const mapped = assetRecords.map(row => {
-        const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
-        const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
-        const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
-        
-        let idVal;
-        let textVal;
-
-        if (nodeIdCol) {
-          idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
-          const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
-          const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
-          
-          if (salesOrgVal) {
-            textVal = `${idVal} - ${salesOrgVal}`;
-          } else if (regionIdVal) {
-            textVal = `${idVal} - ${regionIdVal}`;
-          } else {
-            textVal = idVal;
-          }
-        } else {
-          idVal = cols.map(c => row[c] !== undefined && row[c] !== null ? String(row[c]) : '').filter(Boolean).join('-');
-          textVal = idVal;
-          if (assetText && assetText.trim() && assetTextRecords.length > 0) {
-            textVal = translationMap.get(idVal) || idVal;
-          } else {
-            const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description') || textColumn;
-            if (descCol && row[descCol] !== undefined && row[descCol] !== null) {
-              textVal = String(row[descCol]);
-            } else {
-              textVal = idVal;
-            }
-          }
-        }
-
-        const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
-        const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
-
-        const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
-        const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
-
-        const returnObj = {
-          id: idVal,
-          text: nodeIdCol ? textVal : (idVal === textVal ? idVal : `${idVal} - ${textVal}`)
-        };
-        if (nodeIdCol) {
-          returnObj.parent_ID = (parentIdVal !== null && parentIdVal !== 'null' && parentIdVal !== '') ? parentIdVal : null;
-        }
-        if (hierarchyVal !== undefined) {
-          returnObj.hierarchy = hierarchyVal;
-        }
-        return returnObj;
-      }).filter(item => item.id !== undefined && item.id !== null && item.id !== '');
-
-      // Save payload
-      try {
-        const filePath = path.join(__dirname, '..', 'last_fetched_relational_values.json');
-        fs.writeFileSync(filePath, JSON.stringify(rawData || mapped, null, 2), 'utf-8');
-      } catch (err) {
-        console.error('Failed to save relational values file:', err);
-      }
-
-      return { rawData, mapped };
+      const { rawData, assetRecords } = await this._fetchAssetRecords(url, accessToken, space, asset);
+      const assetTextRecords = await this._fetchAssetTextRecords(url, accessToken, space, assetText);
+      return { rawData, assetRecords, assetTextRecords };
     } catch (e) {
       if (isMockUrl(url)) {
         const mockRows = [
@@ -388,11 +366,7 @@ class BdcClient {
           { ID: 'C1002', NAME: 'Beta LLC', REGION: 'US_WEST' },
           { ID: 'C1003', NAME: 'Gamma Inc', REGION: 'EMEA_CENTRAL' }
         ];
-        const mapped = mockRows.map(r => ({
-          id: r.ID,
-          text: textColumn ? `${r.ID} - ${r[textColumn]}` : `${r.ID} - ${r.NAME}`
-        }));
-        return { rawData: mockRows, mapped };
+        return { rawData: mockRows, assetRecords: mockRows, assetTextRecords: [] };
       }
       throw e;
     }

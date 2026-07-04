@@ -17,7 +17,7 @@ const cds = require('@sap/cds');
 // Lib
 const HanaClient = require('./lib/hanaClient');
 const BdcClient  = require('./lib/bdcClient');
-const { syncDynamicRule } = require('./lib/dynamicSync');
+const { syncDynamicRule, ALLOWED_ENTITIES } = require('./lib/dynamicSync');
 const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
 
 // Services
@@ -78,7 +78,7 @@ module.exports = cds.service.impl(async function () {
   this.on('syncDynamicRule', async (req) => {
     const { ruleId } = req.data;
     try {
-      await syncDynamicRule(ruleId);
+      await syncDynamicRule(ruleId, cds);
       return { success: true, message: 'Reconciliation rule execution completed successfully' };
     } catch (err) {
       return { success: false, message: err.message || 'Rule sync execution failed' };
@@ -89,11 +89,10 @@ module.exports = cds.service.impl(async function () {
     try {
       const activeRules = await cds.db.run(
         SELECT.from(DynamicGenerationRules)
-          .where({ isActive: true })
-          .and("sourceEntity = 'fanrio.auth.Customers' or sourceEntity = 'Customers'")
+          .where({ isActive: true, sourceEntity: { in: ALLOWED_ENTITIES } })
       );
       for (const rule of activeRules) {
-        await syncDynamicRule(rule.ID);
+        await syncDynamicRule(rule.ID, cds);
       }
     } catch (err) {
       console.error('[AuthService] Failed to trigger dynamic rules synchronization:', err.message);
@@ -156,7 +155,7 @@ module.exports = cds.service.impl(async function () {
   this.on('fetchRawHanaViews',              makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
   this.on('runBdcTaskChain',                makeRunBdcTaskChainHandler(BdcClient));
   this.on('fetchBdcTaskChainLog',           makeFetchBdcTaskChainLogHandler(BdcClient));
-  this.on('searchLdapUsers',                makeSearchLdapUsersHandler());
+  this.on('searchLdapUsers',                makeSearchLdapUsersHandler(cds));
 
   // ---------------------------------------------------------------------------
   // Replication actions

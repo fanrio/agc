@@ -28,9 +28,13 @@
         "credentials": {
           "url": "sqlite.db"
         }
-      },
-      "auth": {
-        "kind": "mocked"
+      }
+    },
+    "[development]": {
+      "requires": {
+        "auth": {
+          "kind": "mocked"
+        }
       }
     },
     "features": {

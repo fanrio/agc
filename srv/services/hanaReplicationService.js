@@ -73,8 +73,9 @@ function buildHanaEntries(restrictions, roleName, userId) {
  * @param {string}   userId         - the assigned user ID
  * @param {string}   roleId         - the role ID
  * @param {boolean}  isDelete       - if true, removes rows rather than upserting
+ * @param {object}   [preloaded]    - optional pre-loaded { allRoles, allRestrictions, allInheritances } to avoid full-table scans
  */
-async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, userId, roleId, isDelete) {
+async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, userId, roleId, isDelete, preloaded) {
   const db = cds.db;
   const { Roles, Restrictions, RoleInheritance, BdcSettings } = entities;
 
@@ -84,9 +85,10 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
     const role = await db.run(SELECT.one.from(Roles).where({ ID: roleId }));
     if (!role) return;
 
-    const allRoles        = await db.run(SELECT.from(Roles));
-    const allRestrictions = await db.run(SELECT.from(Restrictions));
-    const allInheritances = await db.run(SELECT.from(RoleInheritance));
+    // A-12 fix: use pre-loaded data when provided to avoid 3× full-table scans per assignment
+    const allRoles        = preloaded?.allRoles        ?? await db.run(SELECT.from(Roles));
+    const allRestrictions = preloaded?.allRestrictions ?? await db.run(SELECT.from(Restrictions));
+    const allInheritances = preloaded?.allInheritances ?? await db.run(SELECT.from(RoleInheritance));
 
     let resolved = [];
     try {
@@ -113,7 +115,7 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
 
 /**
  * Re-syncs all assignments of a role (and all its derived descendants) to HANA.
- * Called when a role's restrictions change.
+ * Pre-fetches all necessary data once to avoid N×3 full-table scans (A-12 fix).
  *
  * @param {object} cds        - CAP cds instance
  * @param {object} HanaClient - injected HANA client
@@ -122,10 +124,16 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
  */
 async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
   const db = cds.db;
-  const { RoleInheritance, RoleAssignments } = entities;
+  const { Roles, Restrictions, RoleInheritance, RoleAssignments } = entities;
 
   try {
-    const allInheritances = await db.run(SELECT.from(RoleInheritance));
+    // A-12 fix: pre-fetch all needed tables once, then pass as preloaded to each child call
+    const [allRoles, allRestrictions, allInheritances] = await Promise.all([
+      db.run(SELECT.from(Roles)),
+      db.run(SELECT.from(Restrictions)),
+      db.run(SELECT.from(RoleInheritance))
+    ]);
+    const preloaded = { allRoles, allRestrictions, allInheritances };
 
     // Collect the role itself + all descendant roles (roles that inherit from this one)
     const roleIds = new Set([roleId]);
@@ -146,7 +154,7 @@ async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
 
     for (const assignment of assignments) {
       try {
-        await syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false);
+        await syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false, preloaded);
       } catch (e) {
         console.error(`[HanaReplication] Failed to re-sync assignment ${assignment.ID}:`, e.message);
       }

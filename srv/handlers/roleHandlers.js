@@ -191,6 +191,9 @@ function registerRoleHandlers(service, entities, deps) {
         const assignments = await cds.db.run(SELECT.from(RoleAssignments).where({ role_ID: { in: allRoleIds } }));
 
         // Delete assignments (triggers hooks for HANA sync + audit)
+        // NOTE: A loop is used here instead of a bulk DELETE.in to ensure that individual
+        // 'before DELETE' / 'after DELETE' hooks are fired for every single role assignment.
+        // This guarantees that we write audit logs and update SAP HANA flat tables for each deletion.
         for (const assignment of assignments) {
           await service.run(DELETE.from(RoleAssignments).where({ ID: assignment.ID }));
         }

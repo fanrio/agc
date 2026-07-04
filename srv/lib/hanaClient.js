@@ -1,4 +1,20 @@
+'use strict';
+
+/**
+ * HanaClient
+ *
+ * Low-level SAP HANA driver wrapper.
+ *
+ * FLAT_TABLE constant intentionally uses the corrected spelling "authorization_flat".
+ * NOTE: If you have existing HANA databases with the old misspelled table
+ * "authoriziation_flat" (double 'i'), run the following migration SQL once per schema:
+ *   RENAME TABLE "<schema>"."authoriziation_flat" TO "<schema>"."authorization_flat";
+ */
+
 let hanaDriver = require('@sap/hana-client');
+
+// Single source of truth for the flat table name (fixes audit finding F-23)
+const FLAT_TABLE = 'authorization_flat';
 
 class HanaClient {
   /**
@@ -10,11 +26,11 @@ class HanaClient {
 
   static getParams(setting) {
     return {
-      serverNode: `${setting.host}:${setting.port || 443}`,
-      uid: setting.username,
-      pwd: setting.password,
-      encrypt: 'true',
-      sslValidateCertificate: 'true',
+      serverNode:              `${setting.host}:${setting.port || 443}`,
+      uid:                     setting.username,
+      pwd:                     setting.password,
+      encrypt:                 'true',
+      sslValidateCertificate:  'true',
       sslHostNameInCertificate: setting.host
     };
   }
@@ -31,11 +47,13 @@ class HanaClient {
   }
 
   /**
-   * Helper to execute a single query with automatic connect/disconnect
+   * Helper to execute a single query with automatic connect/disconnect.
+   * Supports optional bound parameters to avoid SQL injection.
    */
   static async execute(setting, sql, params = []) {
-    const schemaName = this.validateUsername(setting.username);
-    const conn = hanaDriver.createConnection();
+    // Guard only — throws on invalid username before connecting (prevents SQL injection via username)
+    this.validateUsername(setting.username);
+    const conn       = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
@@ -58,11 +76,11 @@ class HanaClient {
   }
 
   /**
-   * Helper to test connection and ensure flat table exists
+   * Tests the HANA connection and ensures the authorization flat table exists.
    */
   static async testConnectionAndCreateTable(setting) {
     const schemaName = this.validateUsername(setting.username);
-    const conn = hanaDriver.createConnection();
+    const conn       = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve) => {
@@ -72,7 +90,7 @@ class HanaClient {
           return;
         }
 
-        const createSql = `CREATE TABLE "${schemaName}"."authoriziation_flat" (
+        const createSql = `CREATE TABLE "${schemaName}"."${FLAT_TABLE}" (
            "ID" VARCHAR(100) PRIMARY KEY,
            "USER" VARCHAR(150),
            "ROLE" VARCHAR(150),
@@ -88,13 +106,13 @@ class HanaClient {
               execErr.message.toLowerCase().includes('already exists') ||
               execErr.message.toLowerCase().includes('duplicate table name');
             if (!isAlreadyExists) {
-              console.error("Failed to create table:", execErr);
+              console.error('[HanaClient] Failed to create flat table:', execErr.message);
             }
           }
           conn.disconnect(() => {
             resolve({
               success: true,
-              message: `Successfully connected to SAP Hana database. Table "${schemaName}"."authoriziation_flat" is verified/created.`
+              message: `Successfully connected to SAP Hana database. Table "${schemaName}"."${FLAT_TABLE}" is verified/created.`
             });
           });
         });
@@ -103,11 +121,16 @@ class HanaClient {
   }
 
   /**
-   * Performs flat table synchronization for a role assignment with transaction safety
+   * Performs flat table synchronization for a role assignment with transaction safety.
+   *
+   * @param {object}   setting       - BdcSettings record (host, port, username, password, systemName)
+   * @param {string}   assignmentId  - RoleAssignment ID used as row ID prefix
+   * @param {boolean}  isDelete      - when true, removes rows without inserting new ones
+   * @param {object[]} restrictions  - flat table row objects { userId, roleName, field, operator, low, high }
    */
   static async syncAssignment(setting, assignmentId, isDelete, restrictions) {
     const schemaName = this.validateUsername(setting.username);
-    const conn = hanaDriver.createConnection();
+    const conn       = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
@@ -131,7 +154,7 @@ class HanaClient {
             });
           };
 
-          const deleteSql = `DELETE FROM "${schemaName}"."authoriziation_flat" WHERE "ID" LIKE ?`;
+          const deleteSql = `DELETE FROM "${schemaName}"."${FLAT_TABLE}" WHERE "ID" LIKE ?`;
 
           conn.prepare(deleteSql, (prepErr, stmt) => {
             if (prepErr) {
@@ -151,7 +174,7 @@ class HanaClient {
                   conn.disconnect(() => resolve());
                 });
               } else {
-                const insertSql = `INSERT INTO "${schemaName}"."authoriziation_flat" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
+                const insertSql = `INSERT INTO "${schemaName}"."${FLAT_TABLE}" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
                 conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
                   if (insertPrepErr) {
@@ -159,7 +182,7 @@ class HanaClient {
                   }
 
                   let insertCount = 0;
-                  let failed = false;
+                  let failed      = false;
 
                   const checkAndResolve = () => {
                     if (failed) return;

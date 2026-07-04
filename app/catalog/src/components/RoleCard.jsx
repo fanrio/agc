@@ -6,7 +6,7 @@ import {
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
-import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction } from '../utils/helpers';
+import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
 
 export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact, permissions }) {
   if (depth > 10) {
@@ -104,45 +104,21 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   const canAssignRoles = permissions?.canAssignRoles;
 
   const isOrgRole = !!role.orgNode_ID;
-  const isDerived = role.roleType === 'DERIVED';
+  const isDerived = role.type === 'DERIVED';
 
   // Wizard derive scopes checks
   const canDeriveFromRole = (role) => {
     if (!canManageDerivedRoles) return false;
-    const scope = permissions?.derivedRolesScope;
-    if (!scope) return false;
-    if (scope === '*') return true;
-    try {
-      const scopeList = JSON.parse(scope);
-      if (Array.isArray(scopeList)) {
-        return scopeList.some(s => s.roleId === role.ID || s.roleId === role.name);
-      }
-    } catch (e) {
-      const terms = scope.split(',').map(s => s.trim().toLowerCase());
-      return terms.includes(role.name.toLowerCase()) || terms.includes(role.ID.toLowerCase());
-    }
-    return false;
+    return isRoleInScope(role.ID, role.name, permissions?.managedDerivedRolesScope);
   };
 
   const canManageThisDerivedRole = (role) => {
     if (!canManageDerivedRoles) return false;
-    if (role.roleType !== 'DERIVED') return false;
-    const scope = permissions?.derivedRolesScope;
-    if (!scope) return false;
-    if (scope === '*') return true;
+    if (role.type !== 'DERIVED') return false;
     
     const parentRole = role.parentRoles?.[0]?.parent;
     if (!parentRole) return false;
-    try {
-      const scopeList = JSON.parse(scope);
-      if (Array.isArray(scopeList)) {
-        return scopeList.some(s => s.roleId === parentRole.ID || s.roleId === parentRole.name);
-      }
-    } catch (e) {
-      const terms = scope.split(',').map(s => s.trim().toLowerCase());
-      return terms.includes(parentRole.name.toLowerCase()) || terms.includes(parentRole.ID.toLowerCase());
-    }
-    return false;
+    return isRoleInScope(parentRole.ID, parentRole.name, permissions?.managedDerivedRolesScope);
   };
 
   const disableEdit = isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles);

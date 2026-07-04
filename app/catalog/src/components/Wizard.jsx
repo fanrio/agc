@@ -14,9 +14,9 @@ const STEPS = [
   { id: 'review',       label: 'Review & Deploy' },
 ];
 
-import { ENV_LABEL, ENV_COLOR, isCriticalRestriction } from '../utils/helpers';
+import { ENV_LABEL, ENV_COLOR, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
 
-export default function Wizard({ context = {}, onDone, permissions }) {
+export default function Wizard({ context = {}, onDone, permissions, allowFreeNavigation = false }) {
   const [step, setStep]                   = useState(0);
   const [roleType, setRoleType]           = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
   const [selectedOrgNodeId, setOrgNode]   = useState(context.orgNodeId || '');
@@ -62,9 +62,7 @@ export default function Wizard({ context = {}, onDone, permissions }) {
   const canNavigateTo = (targetStep) => {
     if (targetStep <= step) return true;
     if (isEditMode) return true;
-    const isTest = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') || 
-                   (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test');
-    if (isTest) return true;
+    if (allowFreeNavigation) return true;
     if (step === 0 && roleType === 'ORG_BASED' && !selectedOrgNodeId) return false;
     return targetStep <= maxStepReached;
   };
@@ -77,38 +75,29 @@ export default function Wizard({ context = {}, onDone, permissions }) {
       return true;
     }
 
-    try {
-      const scopeList = JSON.parse(scope);
-      if (Array.isArray(scopeList)) {
-        if (selectedParentIds && selectedParentIds.length > 0) {
+    if (context.roleId && isRoleInScope(context.roleId, roleName, scope)) {
+      return true;
+    }
+
+    if (selectedParentIds && selectedParentIds.length > 0) {
+      // Use stricter check (every) if it's a JSON array
+      try {
+        const parsed = JSON.parse(scope);
+        if (Array.isArray(parsed)) {
           return selectedParentIds.every(parentId => {
             const parentRole = allRoles.find(r => r.ID === parentId);
-            return scopeList.some(s => s.roleId === parentId || (parentRole && s.roleId === parentRole.name));
+            return isRoleInScope(parentId, parentRole?.name, scope);
           });
         }
-        return true;
-      }
-    } catch (e) {
-      // Fallback to comma-separated list
-      const terms = scope.split(',').map(s => s.trim().toLowerCase());
-      if (context.roleId) {
-        if (terms.includes(roleName.toLowerCase()) || terms.includes(context.roleId.toLowerCase())) {
-          return true;
-        }
-      }
-      if (selectedParentIds && selectedParentIds.length > 0) {
-        for (const parentId of selectedParentIds) {
-          const parent = allRoles.find(r => r.ID === parentId);
-          if (parent) {
-            if (terms.includes(parent.name.toLowerCase()) || terms.includes(parent.ID.toLowerCase())) {
-              return true;
-            }
-          }
-        }
-        return false;
-      }
+      } catch (e) {}
+
+      // Fallback to lax check (some) for comma-separated list
+      return selectedParentIds.some(parentId => {
+        const parentRole = allRoles.find(r => r.ID === parentId);
+        return isRoleInScope(parentId, parentRole?.name, scope);
+      });
     }
-    return false;
+    return true;
   };
 
   const handleCloseSnackbar = (event, reason) => {

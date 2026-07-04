@@ -29,7 +29,8 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
       sourceResponsibleField: 'responsibleUser',
       generationMode: 'USER_CONSOLIDATED_ROLE',
       targetRestrictionField: 'CustomerNumber',
-      filterType: 'MULTI_VALUE'
+      filterType: 'MULTI_VALUE',
+      sourceFilterCondition: '{"field":"status","value":"ACTIVE"}'
     });
     
     assert.ok(res.data.ID, 'Rule ID should be generated');
@@ -37,7 +38,19 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
   });
 
   await t.test('2. Add Customer and verify dynamic role generation', async () => {
-    // Insert customer record - this should trigger the automated dynamicSync
+    // 1. Insert an INACTIVE customer - should be filtered out by the sourceFilterCondition
+    await POST('/odata/v4/auth/Customers', {
+      ID: 'C1002',
+      name: 'Inactive Customer 2',
+      responsibleUser: 'bob@company.com',
+      status: 'INACTIVE'
+    });
+
+    // Verify Bob does NOT get a dynamic role
+    const bobRole = await db.run(SELECT.one.from('fanrio.auth.Roles').where({ name: 'ROLE_DYN_CUST_RESP_BOB_COMPANY_COM' }));
+    assert.strictEqual(bobRole, undefined, 'Bob should not get a dynamic role because C1002 is INACTIVE');
+
+    // 2. Insert active customer record - this should trigger the automated dynamicSync
     await POST('/odata/v4/auth/Customers', {
       ID: customerId,
       name: 'Test Customer 1',
@@ -107,11 +120,12 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     assert.strictEqual(map, undefined, 'Ledger mapping should be deleted');
   });
 
-  // Redeploy database to restore seed data for the developer workspace
-  const { execSync } = require('child_process');
-  try {
-    execSync('npx cds deploy', { stdio: 'ignore' });
-  } catch (e) {
-    console.error('Failed to redeploy database after tests:', e.message);
-  }
+  // Restore clean state after all tests — mirrors the cleanup in step 1
+  // F-22 fix: removed execSync('npx cds deploy') which was slow, fragile, and ran outside the test lifecycle
+  await db.run(cds.ql.DELETE.from('fanrio.auth.GeneratedResourceMap'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.DynamicGenerationRules'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.Customers'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.RoleAssignments'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.Restrictions'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.Roles').where("name like 'ROLE_DYN_%'"));
 });

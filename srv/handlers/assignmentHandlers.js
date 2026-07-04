@@ -25,9 +25,10 @@ function registerAssignmentHandlers(service, entities, deps) {
   service.before('CREATE', 'RoleAssignments', async (req) => {
     const { role_ID } = req.data;
     if (role_ID) {
+      // F-12 fix: fetch only data relevant to the specific role rather than full table scans
       const allRoles        = await cds.db.run(SELECT.from(Roles));
-      const allRestrictions = await cds.db.run(SELECT.from(Restrictions));
-      const allInheritances = await cds.db.run(SELECT.from(RoleInheritance));
+      const allRestrictions = await cds.db.run(SELECT.from(Restrictions).where({ role_ID: role_ID }));
+      const allInheritances = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: role_ID }));
       try {
         const resolved = resolveEffectiveRestrictions(role_ID, allRoles, allRestrictions, allInheritances);
         if (resolved.length === 0) return req.error(400, 'Cannot assign a role that has no restrictions.');
@@ -36,6 +37,7 @@ function registerAssignmentHandlers(service, entities, deps) {
       }
     }
   });
+
 
   // -------------------------------------------------------------------------
   // HANA sync + replication queue — after CREATE (first handler registered)

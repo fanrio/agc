@@ -3,7 +3,7 @@ import { Box, Typography, Button, TextField, Alert, Snackbar, Dialog, DialogTitl
 import { Shield, Plus } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
-import { isCriticalRestriction } from '../utils/helpers';
+import { isCriticalRestriction, isRoleInScope } from '../utils/helpers';
 
 // Helper recursively collecting all restrictions for a role
 function getEffectiveRestrictionsFlat(role, allRoles) {
@@ -57,39 +57,17 @@ function canManageThisDerivedRole(role, permissions, allRoles) {
     return true;
   }
 
-  try {
-    const scopeList = JSON.parse(scope);
-    if (Array.isArray(scopeList)) {
-      const matches = (id, name) => scopeList.some(s => s.roleId === id || (name && s.roleId === name));
-      if (matches(role.ID, role.name)) return true;
-      if (role.parentRoles && role.parentRoles.length > 0) {
-        for (const pr of role.parentRoles) {
-          const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-          if (parentId) {
-            const parent = allRoles.find(r => r.ID === parentId);
-            if (parent && matches(parent.ID, parent.name)) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    }
-  } catch (e) {
-    const terms = scope.split(',').map(s => s.trim().toLowerCase());
-    if (terms.includes(role.name.toLowerCase()) || terms.includes(role.ID.toLowerCase())) {
-      return true;
-    }
-    if (role.parentRoles && role.parentRoles.length > 0) {
-      for (const pr of role.parentRoles) {
-        const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-        if (parentId) {
-          const parent = allRoles.find(r => r.ID === parentId);
-          if (parent) {
-            if (terms.includes(parent.name.toLowerCase()) || terms.includes(parent.ID.toLowerCase())) {
-              return true;
-            }
-          }
+  // Check if role itself is in scope
+  if (isRoleInScope(role.ID, role.name, scope)) return true;
+
+  // Check if any parent role is in scope
+  if (role.parentRoles && role.parentRoles.length > 0) {
+    for (const pr of role.parentRoles) {
+      const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
+      if (parentId) {
+        const parent = allRoles.find(r => r.ID === parentId);
+        if (parent && isRoleInScope(parent.ID, parent.name, scope)) {
+          return true;
         }
       }
     }
@@ -97,28 +75,10 @@ function canManageThisDerivedRole(role, permissions, allRoles) {
   return false;
 }
 
-function canDeriveFromRole(parentRole, permissions) {
-  if (!permissions) return false;
-  if (!permissions.canManageDerivedRoles) return false;
-  const scope = permissions.managedDerivedRolesScope;
-  if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
-    return true;
-  }
 
-  try {
-    const scopeList = JSON.parse(scope);
-    if (Array.isArray(scopeList)) {
-      return scopeList.some(s => s.roleId === parentRole.ID || s.roleId === parentRole.name);
-    }
-  } catch (e) {
-    const terms = scope.split(',').map(s => s.trim().toLowerCase());
-    return terms.includes(parentRole.name.toLowerCase()) || terms.includes(parentRole.ID.toLowerCase());
-  }
-  return false;
-}
 
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter, permissions }) {
-  const [roles, setRoles]     = useState([]);
+  const [roles, setRoles] = useState([]);
   const [orgNodes, setOrgNodes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -153,7 +113,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
       ]);
       setRoles(rolesData);
       setOrgNodes(nodesData);
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
     setLoading(false);
   }
 
@@ -202,8 +162,8 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     const q = searchQuery.toLowerCase().trim();
     const nameMatch = role.name.toLowerCase().includes(q);
     const descMatch = role.description && role.description.toLowerCase().includes(q);
-    const restMatch = role.ownRestrictions && role.ownRestrictions.some(r => 
-      r.field.toLowerCase().includes(q) || 
+    const restMatch = role.ownRestrictions && role.ownRestrictions.some(r =>
+      r.field.toLowerCase().includes(q) ||
       r.value.toLowerCase().includes(q)
     );
     return nameMatch || descMatch || restMatch;
@@ -224,9 +184,9 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             <Chip
               label={
                 healthFilter === 'unrestricted' ? 'Unrestricted Roles' :
-                healthFilter === 'no-users' ? 'Roles with No Users' :
-                healthFilter === 'no-approver' ? 'Roles with No Approver' : 
-                healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'
+                  healthFilter === 'no-users' ? 'Roles with No Users' :
+                    healthFilter === 'no-approver' ? 'Roles with No Approver' :
+                      healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'
               }
               onDelete={() => {
                 setHealthFilter(null);
@@ -257,10 +217,10 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
               Detailed
             </ToggleButton>
           </ToggleButtonGroup>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={onCreateRole} 
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={onCreateRole}
             disabled={permissions && !permissions.canManageSingleRoles && !permissions.canManageOrgRoles}
             startIcon={<Plus size={15} />}
           >

@@ -8,7 +8,9 @@ const mockHana = {
     prepare: (sql, cb) => cb(null, {
       exec: (params, cb) => cb(null)
     }),
-    exec: (sql, cb) => {
+    exec: (sql, paramsOrCb, maybeCb) => {
+      // Support both exec(sql, cb) and exec(sql, params, cb)
+      const cb = typeof paramsOrCb === 'function' ? paramsOrCb : maybeCb;
       if (sql.includes('VIEWS')) {
         cb(null, [
           { SCHEMA_NAME: 'MOCK_SCHEMA', VIEW_NAME: 'MOCK_VIEW_1' },
@@ -764,11 +766,6 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // Trigger replication (it should pick up the Open replication, transition it to Running, and spawn task chain)
     const trigRes = await POST('/odata/v4/auth/triggerReplication', {});
-    if (trigRes.status !== 200 || !trigRes.data.success) {
-      console.log("=== DEBUG triggerReplication FAIL ===");
-      console.log("status:", trigRes.status);
-      console.log("data:", JSON.stringify(trigRes.data, null, 2));
-    }
     assert.strictEqual(trigRes.status, 200);
     assert.strictEqual(trigRes.data.success, true);
 

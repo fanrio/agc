@@ -97,7 +97,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
   // --- Step 0 ---
   it('handles Step 0 selections correctly (Role Type, Org Node, Parent Roles, Env)', async () => {
-    render(<Wizard onDone={() => {}} />);
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
 
     // Wait for reference data to load
     await waitFor(() => {
@@ -141,7 +141,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
   // --- Step 1 ---
   it('handles Step 1 restrictions adding of different types', async () => {
-    render(<Wizard onDone={() => {}} />);
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
 
     // Fill in required name first to proceed
     await waitFor(() => {
@@ -216,7 +216,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
   // --- Step 2 ---
   it('handles Step 2 LDAP approver searches, selection, and deletion', async () => {
-    render(<Wizard onDone={() => {}} />);
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
 
     // Proceed to Approvers step
     fireEvent.click(screen.getByText('Approvers'));
@@ -267,7 +267,7 @@ describe('Wizard Component - Expanded Tests', () => {
     api.simulateAccess.mockResolvedValue([
       { rowIndex: 0, passed: true, reason: 'All restrictions satisfied' }
     ]);
-    render(<Wizard onDone={() => {}} />);
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
 
     // Fill in role name
     await waitFor(() => {
@@ -292,7 +292,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
   // --- Manual Critical Preservation & Save popup ---
   it('preserves manual critical status and triggers impact popup correctly', async () => {
-    render(<Wizard context={{ roleId: 'role-1' }} onDone={() => {}} />);
+    render(<Wizard context={{ roleId: 'role-1' }} onDone={() => {}} allowFreeNavigation={true} />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('Original Description')).toBeInTheDocument();

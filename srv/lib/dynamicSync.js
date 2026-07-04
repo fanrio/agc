@@ -1,5 +1,3 @@
-const cds = require('@sap/cds');
-
 function safeJsonParse(val, fallback = []) {
   if (!val) return fallback;
   try {
@@ -10,10 +8,13 @@ function safeJsonParse(val, fallback = []) {
   }
 }
 
+// Whitelist of entities permitted for dynamic sync
+const ALLOWED_ENTITIES = ['fanrio.auth.Customers', 'Customers'];
+
 /**
  * Synchronizes assignments and dynamic roles for a specific rule.
  */
-async function syncDynamicRule(ruleId) {
+async function syncDynamicRule(ruleId, cds) {
   const db = cds.db;
   const { DynamicGenerationRules, GeneratedResourceMap, Roles, Restrictions, RoleAssignments, AuditLogs } = db.entities('fanrio.auth');
 
@@ -21,8 +22,6 @@ async function syncDynamicRule(ruleId) {
   const rule = await db.run(SELECT.one.from(DynamicGenerationRules).where({ ID: ruleId, isActive: true }));
   if (!rule) throw new Error(`Active Dynamic Rule ${ruleId} not found`);
 
-  // Whitelist check
-  const ALLOWED_ENTITIES = ['fanrio.auth.Customers', 'Customers'];
   if (!ALLOWED_ENTITIES.includes(rule.sourceEntity)) {
     throw new Error(`Dynamic sync is not permitted for entity: ${rule.sourceEntity}`);
   }
@@ -30,7 +29,17 @@ async function syncDynamicRule(ruleId) {
   // 2. Fetch master data records based on configured sourceEntity and sourceFilterCondition
   let query = SELECT.from(rule.sourceEntity);
   if (rule.sourceFilterCondition) {
-    query.where(rule.sourceFilterCondition);
+    // A-03 fix: parse structured JSON filter to avoid CQL injection.
+    // sourceFilterCondition must be stored as { "field": "...", "operator": "=", "value": "..." }
+    try {
+      const filter = JSON.parse(rule.sourceFilterCondition);
+      if (filter && filter.field && filter.value !== undefined) {
+        query.where({ [filter.field]: filter.value });
+      }
+    } catch (e) {
+      // If not valid JSON, skip the filter to prevent injection — log for operator visibility
+      console.warn(`[DynamicSync] sourceFilterCondition for rule ${ruleId} is not valid JSON and was ignored:`, rule.sourceFilterCondition);
+    }
   }
   const masterRecords = await db.run(query);
 
@@ -270,5 +279,6 @@ async function _removeGeneratedAccess(db, rule, mapping, AuditLogs) {
 }
 
 module.exports = {
-  syncDynamicRule
+  syncDynamicRule,
+  ALLOWED_ENTITIES
 };

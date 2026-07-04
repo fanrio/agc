@@ -86,7 +86,11 @@ export default function AuditLogsView() {
             }
           }
           match.details = JSON.stringify(merged);
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[AuditLogsView] Failed to merge duplicate log details:', e.message);
+          // Fall back: keep the log unmerged
+          consolidated.push({ ...log });
+        }
       } else {
         consolidated.push({ ...log });
       }

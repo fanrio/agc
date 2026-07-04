@@ -48,3 +48,29 @@ export function isCriticalRestriction(r, orgNodes = []) {
   }
   return false;
 }
+
+/**
+ * Helper to check if a specific role ID/name is within the permitted scope.
+ * Handles both JSON arrays and comma-separated string fallbacks.
+ * @param {string} roleId
+ * @param {string} roleName
+ * @param {string} scope
+ * @returns {boolean}
+ */
+export function isRoleInScope(roleId, roleName, scope) {
+  if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
+    return true;
+  }
+  
+  try {
+    const scopeList = JSON.parse(scope);
+    if (Array.isArray(scopeList)) {
+      return scopeList.some(s => s.roleId === roleId || (roleName && s.roleId === roleName));
+    }
+  } catch (e) {
+    const terms = scope.split(',').map(s => s.trim().toLowerCase());
+    return terms.includes((roleId || '').toLowerCase()) || terms.includes((roleName || '').toLowerCase());
+  }
+  return false;
+}
+
