@@ -8,7 +8,26 @@ class BdcClient {
     if (isMockUrl(tokenUrl)) {
       return 'mock-access-token-12345';
     }
-    const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    // Method 1: Try standard Authorization: Basic header (most common)
+    try {
+      const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const tokenRes = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'grant_type=client_credentials'
+      });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        if (tokenData.access_token) return tokenData.access_token;
+      }
+    } catch (e) {
+      console.warn('OAuth Basic Auth token request failed, trying body parameters...', e.message);
+    }
+
+    // Method 2: Try sending credentials solely in POST body parameters (alternate RFC standard)
     const bodyParams = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: clientId,
@@ -17,7 +36,6 @@ class BdcClient {
     const tokenRes = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: bodyParams.toString()
