@@ -144,4 +144,6 @@ service AuthorizationService @(path: '/odata/v4/auth') {
     success : Boolean;
     message : String;
   };
+
+  function getCurrentUserPermissions()                                         returns AppAuthorizations;
 }

@@ -122,11 +122,19 @@ entity AuditLogs : cuid, managed {
 entity AppAuthorizations : cuid, managed {
   userId               : String(100) not null;
   userName             : String(200);
+  email                : String(255);
+  isSuperAdmin         : Boolean @default: false;
+  canManageAppUsers    : Boolean @default: false;
   canManageOrgRoles    : Boolean @default: false;
   canManageSingleRoles : Boolean @default: false;
   canManageDerivedRoles: Boolean @default: false;
-  managedDerivedRolesScope: String(1000) @default: 'ALL';
+  managedDerivedRolesScope: LargeString @default: 'ALL';
   canAssignRoles       : Boolean @default: false;
+  canViewAuditLogs     : Boolean @default: false;
+  canManageSettings    : Boolean @default: false;
+  allowedEnvironments  : String(50) @default: 'ALL';
+  lastLogin            : DateTime;
+  isActive             : Boolean @default: true;
 }
 
 entity Environments {
