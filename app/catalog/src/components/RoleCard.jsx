@@ -163,7 +163,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
 
   return (
     <Box sx={{ pl: depth * 4, mb: 2 }}>
-      <Card variant="outlined" sx={{ borderRadius: 3, borderLeft: 5, borderLeftColor: isCritical ? 'error.main' : 'primary.main', boxShadow: '0 4px 12px 0 rgba(0,0,0,0.03)', overflow: 'visible' }}>
+      <Card variant="outlined" sx={{ borderRadius: 3, borderLeft: '5px solid', borderLeftColor: isCritical ? 'error.main' : 'primary.main', boxShadow: '0 4px 12px 0 rgba(0,0,0,0.03)', overflow: 'visible' }}>
         <Box sx={{ p: 2.5 }}>
           <Grid container spacing={2} alignItems="center">
             {/* Collapse/Expand toggle */}
