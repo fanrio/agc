@@ -183,7 +183,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             <Grid item xs={12} sm={4}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
-                <Chip size="small" label={role.roleType} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
+                <Chip size="small" label={role.type} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
                 {role.isCriticalManual && <Chip size="small" label="Critical (Manual)" color="error" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{role.description || 'No description provided.'}</Typography>
@@ -200,7 +200,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                     <strong>Org Unit:</strong> {orgNodeName}
                   </Typography>
                 )}
-                {role.roleType === 'DERIVED' && role.parentRoles?.[0]?.parent && (
+                {role.type === 'DERIVED' && role.parentRoles?.[0]?.parent && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <strong>Derived from:</strong> {role.parentRoles[0].parent.name}
                   </Typography>
