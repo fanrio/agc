@@ -55,6 +55,32 @@ export default function Wizard({ context = {}, onDone, allowFreeNavigation = fal
   const [isCriticalManuallySet, setIsCriticalManuallySet] = useState(!!context.roleId);
   const [maxStepReached, setMaxStepReached] = useState(context.roleId ? 3 : 0);
 
+  const parseEnvironments = (val) => {
+    if (!val || val === 'ALL' || val === '*') return 'ALL';
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return val.split(',').map(s => s.trim().toUpperCase());
+    }
+    return [];
+  };
+
+  const parsedAllowedEnvs = permissions?.isSuperAdmin ? 'ALL' : parseEnvironments(permissions?.allowedEnvironments);
+  const filteredEnvironments = environments.filter(env => {
+    if (parsedAllowedEnvs === 'ALL') return true;
+    return parsedAllowedEnvs.includes(env.ID);
+  });
+
+  useEffect(() => {
+    if (!isEditMode && filteredEnvironments.length > 0) {
+      const isCurrentAllowed = filteredEnvironments.some(e => e.ID === environmentId);
+      if (!isCurrentAllowed) {
+        setEnvironmentId(filteredEnvironments[0].ID);
+      }
+    }
+  }, [filteredEnvironments, environmentId, isEditMode]);
+
   useEffect(() => {
     if (step > maxStepReached) {
       setMaxStepReached(step);
@@ -707,7 +733,7 @@ export default function Wizard({ context = {}, onDone, allowFreeNavigation = fal
                   value={environmentId}
                   onChange={e => setEnvironmentId(e.target.value)}
                 >
-                  {environments.map(env => (
+                  {filteredEnvironments.map(env => (
                     <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
                   ))}
                 </Select>
