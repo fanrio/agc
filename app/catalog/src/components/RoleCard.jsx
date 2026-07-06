@@ -84,7 +84,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
 
   // Check if role is critical
   const directCritical = Array.isArray(role.ownRestrictions) && role.ownRestrictions.some(r => isCriticalRestriction(r, orgNodes));
-  const isCritical = role.isCriticalManual || directCritical;
+  const isCritical = role.critical || directCritical;
 
   const executeDelete = async () => {
     try {
@@ -184,7 +184,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
                 <Chip size="small" label={role.type} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
-                {role.isCriticalManual && <Chip size="small" label="Critical (Manual)" color="error" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />}
+                {role.critical && <Chip size="small" label="Critical (Manual)" color="error" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{role.description || 'No description provided.'}</Typography>
             </Grid>
