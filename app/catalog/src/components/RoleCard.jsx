@@ -105,7 +105,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   const canManageDerivedRoles = permissions?.canManageDerivedRoles;
   const canAssignRoles = permissions?.canAssignRoles;
 
-  const isOrgRole = !!role.orgNode_ID;
+  const isOrgRole = role.type === 'ORG_BASED';
   const isDerived = role.type === 'DERIVED';
 
   // Wizard derive scopes checks
