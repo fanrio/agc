@@ -130,6 +130,7 @@ entity AppAuthorizations : cuid, managed {
   canManageDerivedRoles: Boolean @default: false;
   managedDerivedRolesScope: LargeString @default: 'ALL';
   canAssignRoles       : Boolean @default: false;
+  canManageReplications: Boolean @default: false;
   canViewAuditLogs     : Boolean @default: false;
   canManageSettings    : Boolean @default: false;
   allowedEnvironments  : String(50) @default: 'ALL';

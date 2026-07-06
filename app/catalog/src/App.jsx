@@ -51,6 +51,7 @@ function AppContent({ simulatedUser, setSimulatedUser }) {
   // Filter NAV items based on permissions
   const filteredNav = NAV.filter(item => {
     if (permissions?.isSuperAdmin) return true;
+    if (item.id === 'replications') return !!permissions?.canManageReplications;
     if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
     if (item.id === 'admin') return !!permissions?.canManageSettings || !!permissions?.canManageAppUsers;
     return true;

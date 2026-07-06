@@ -94,6 +94,7 @@ module.exports = cds.service.impl(async function () {
           canManageDerivedRoles: true,
           managedDerivedRolesScope: 'ALL',
           canAssignRoles: true,
+          canManageReplications: true,
           canViewAuditLogs: true,
           canManageSettings: true,
           allowedEnvironments: 'ALL',
@@ -122,6 +123,12 @@ module.exports = cds.service.impl(async function () {
   this.before(['CREATE', 'UPDATE', 'DELETE'], ['BdcSettings', 'RestrictionFields', 'Streams'], async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageSettings', req);
+  });
+
+  // Replications CRUD protection
+  this.before(['CREATE', 'UPDATE', 'DELETE'], 'Replications', async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(perms, 'canManageReplications', req);
   });
 
   // Roles CRUD protection
@@ -259,10 +266,14 @@ module.exports = cds.service.impl(async function () {
     'fetchBdcRelationalValues', 'fetchBdcAssetColumns', 'fetchRawBdcSpaces',
     'fetchRawBdcAssets', 'fetchRawBdcRelationalValues', 'fetchRawBdcAssetColumns',
     'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
-    'fetchRawHanaViews', 'triggerReplication', 'checkReplicationStatuses'
+    'fetchRawHanaViews'
   ], async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageSettings', req);
+  });
+  this.before(['triggerReplication', 'checkReplicationStatuses'], async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(perms, 'canManageReplications', req);
   });
   this.before('searchLdapUsers', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);

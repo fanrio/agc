@@ -115,4 +115,49 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     // Clean up
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: testUser }));
   });
+
+  await t.test('Replications authorization enforcement', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations } = db.entities;
+
+    const replUser = 'repl-user';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: replUser }));
+
+    // User without canManageReplications
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: replUser,
+      userName: 'Repl User without permission',
+      canManageReplications: false,
+      isActive: true
+    }));
+
+    await t2.test('Block triggerReplication for user without permission', async () => {
+      try {
+        await POST('/odata/v4/auth/triggerReplication', {}, {
+          headers: { 'x-simulated-user': replUser }
+        });
+        assert.fail('Expected triggerReplication to fail with 403');
+      } catch (err) {
+        assert.strictEqual(err.status || err.response?.status, 403);
+      }
+    });
+
+    // Grant canManageReplications
+    await db.run(UPDATE(AppAuthorizations).set({ canManageReplications: true }).where({ userId: replUser }));
+
+    await t2.test('Allow triggerReplication for user with permission', async () => {
+      // Clear pending replications to avoid connecting to unconfigured BDC settings
+      await db.run(cds.ql.DELETE('fanrio.auth.Replications'));
+
+      const res = await POST('/odata/v4/auth/triggerReplication', {}, {
+        headers: { 'x-simulated-user': replUser }
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.data.success, true);
+    });
+
+    // Clean up
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: replUser }));
+  });
 });

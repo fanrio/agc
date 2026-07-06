@@ -69,6 +69,7 @@ export default function AppAuthorizationsView() {
     canManageDerivedRoles: true,
     managedDerivedRolesScope: 'ALL',
     canAssignRoles: true,
+    canManageReplications: false,
     canViewAuditLogs: true,
     canManageSettings: false,
     allowedEnvironments: ['D', 'Q', 'P'],
@@ -278,6 +279,7 @@ export default function AppAuthorizationsView() {
         canManageDerivedRoles: newPermissions.canManageDerivedRoles,
         managedDerivedRolesScope: newPermissions.managedDerivedRolesScope || 'ALL',
         canAssignRoles: newPermissions.canAssignRoles,
+        canManageReplications: newPermissions.canManageReplications,
         canViewAuditLogs: newPermissions.canViewAuditLogs,
         canManageSettings: newPermissions.canManageSettings,
         allowedEnvironments: serializeEnvironments(newPermissions.allowedEnvironments),
@@ -294,6 +296,7 @@ export default function AppAuthorizationsView() {
         canManageDerivedRoles: true,
         managedDerivedRolesScope: 'ALL',
         canAssignRoles: true,
+        canManageReplications: false,
         canViewAuditLogs: true,
         canManageSettings: false,
         allowedEnvironments: ['D', 'Q', 'P'],
@@ -377,7 +380,7 @@ export default function AppAuthorizationsView() {
           </Box>
         ) : (
           <TableContainer>
-            <Table size="small">
+             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell style={{ fontWeight: 600 }}>User ID</TableCell>
@@ -389,6 +392,7 @@ export default function AppAuthorizationsView() {
                   <TableCell style={{ fontWeight: 600 }} align="center">Manage Single Roles</TableCell>
                   <TableCell style={{ fontWeight: 600 }} align="center">Manage Derived Roles</TableCell>
                   <TableCell style={{ fontWeight: 600 }} align="center">Assign Roles</TableCell>
+                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Replications</TableCell>
                   <TableCell style={{ fontWeight: 600 }} align="center">Manage Settings</TableCell>
                   <TableCell style={{ fontWeight: 600 }} align="center">View Audit Logs</TableCell>
                   <TableCell style={{ fontWeight: 600 }} align="center">Environments</TableCell>
@@ -398,7 +402,7 @@ export default function AppAuthorizationsView() {
               <TableBody>
                 {authorizations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                    <TableCell colSpan={14} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                       No administrator authorization definitions set.
                     </TableCell>
                   </TableRow>
@@ -465,6 +469,14 @@ export default function AppAuthorizationsView() {
                           checked={auth.canAssignRoles}
                           onChange={(e) => handleTogglePermission(auth.ID, 'canAssignRoles', e.target.checked)}
                           sx={{ '&.Mui-checked': { color: '#10b981' } }}
+                          disabled={auth.isSuperAdmin}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Checkbox 
+                          checked={auth.canManageReplications}
+                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageReplications', e.target.checked)}
+                          sx={{ '&.Mui-checked': { color: '#0ea5e9' } }}
                           disabled={auth.isSuperAdmin}
                         />
                       </TableCell>
@@ -676,6 +688,18 @@ export default function AppAuthorizationsView() {
                   />
                   <Box component="label" htmlFor="perm-assign" sx={{ cursor: 'pointer' }}>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>Assign Roles</Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <Checkbox 
+                    checked={newPermissions.canManageReplications}
+                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageReplications: e.target.checked }))}
+                    id="perm-replications"
+                  />
+                  <Box component="label" htmlFor="perm-replications" sx={{ cursor: 'pointer' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Replications</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Trigger and monitor Datasphere replication runs</Typography>
                   </Box>
                 </Box>
 
