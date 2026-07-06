@@ -1,9 +1,19 @@
 const BASE = '/odata/v4/auth';
 
+let activeSimulatedUser = 'jdoe';
+
+export function setSimulatedUser(userId) {
+  activeSimulatedUser = userId;
+}
+
 async function request(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (activeSimulatedUser) {
+    headers['x-simulated-user'] = activeSimulatedUser;
+  }
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -14,6 +24,8 @@ async function request(method, path, body) {
   const data = await res.json();
   return data.value !== undefined ? data.value : data;
 }
+
+export const getCurrentUserPermissions = () => request('GET', '/getCurrentUserPermissions()');
 
 // Org Nodes
 export const getOrgNodes       = ()             => request('GET',    '/OrgNodes?$expand=attributes,type,children($expand=attributes,type,children($expand=attributes,type,children($expand=attributes,type)))');

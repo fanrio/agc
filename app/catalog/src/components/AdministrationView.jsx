@@ -8,13 +8,45 @@ import BdcApiTesterView from './BdcApiTesterView';
 import AppAuthorizationsView from './AppAuthorizationsView';
 import DynamicRulesView from './DynamicRulesView';
 import MasterDataEditorView from './MasterDataEditorView';
+import { usePermissions } from '../context/PermissionsContext';
 
 export default function AdministrationView() {
-  const [activeTab, setActiveTab] = useState(0); // 0 = fields, 1 = streams, 2 = bdc, 3 = tester, 4 = authorizations, 5 = dynamic rules, 6 = master data
+  const { permissions } = usePermissions();
+  const [activeTab, setActiveTab] = useState(0);
+
+  const TABS = [];
+  if (permissions?.isSuperAdmin || permissions?.canManageSettings) {
+    TABS.push({ id: 0, label: 'Restriction Fields', icon: <Settings size={16} />, component: <RestrictionFieldsView /> });
+    TABS.push({ id: 1, label: 'Operational Streams', icon: <Network size={16} />, component: <StreamsView /> });
+    TABS.push({ id: 2, label: 'BDC Connections', icon: <Cloud size={16} />, component: <BdcSettingsView /> });
+    TABS.push({ id: 3, label: 'BDC API Tester', icon: <Terminal size={16} />, component: <BdcApiTesterView /> });
+  }
+  if (permissions?.isSuperAdmin || permissions?.canManageAppUsers) {
+    TABS.push({ id: 4, label: 'App Authorizations', icon: <ShieldAlert size={16} />, component: <AppAuthorizationsView /> });
+  }
+  if (permissions?.isSuperAdmin || permissions?.canManageSettings) {
+    TABS.push({ id: 5, label: 'Dynamic Rules', icon: <GitFork size={16} />, component: <DynamicRulesView /> });
+    TABS.push({ id: 6, label: 'Master Data Editor', icon: <Database size={16} />, component: <MasterDataEditorView /> });
+  }
+
+  const visibleTabIndices = TABS.map(t => t.id);
+  const selectedTabIndex = visibleTabIndices.includes(activeTab) ? activeTab : (visibleTabIndices[0] !== undefined ? visibleTabIndices[0] : 0);
 
   const handleChange = (event, newValue) => {
     setActiveTab(newValue);
   };
+
+  if (TABS.length === 0) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 2 }}>
+        <Typography variant="h6" color="error.main" sx={{ fontWeight: 700, mb: 1 }}>Access Denied</Typography>
+        <Typography variant="body2" color="text.secondary">You do not have administration privileges in this application.</Typography>
+      </Box>
+    );
+  }
+
+  // Find currently active tab definition
+  const currentTab = TABS.find(t => t.id === selectedTabIndex) || TABS[0];
 
   return (
     <Box>
@@ -25,61 +57,30 @@ export default function AdministrationView() {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={handleChange} textColor="primary" indicatorColor="primary" variant="scrollable" scrollButtons="auto">
-          <Tab 
-            icon={<Settings size={16} />} 
-            iconPosition="start" 
-            label="Restriction Fields" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<Network size={16} />} 
-            iconPosition="start" 
-            label="Operational Streams" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<Cloud size={16} />} 
-            iconPosition="start" 
-            label="BDC Connections" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<Terminal size={16} />} 
-            iconPosition="start" 
-            label="BDC API Tester" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<ShieldAlert size={16} />} 
-            iconPosition="start" 
-            label="App Authorizations" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<GitFork size={16} />} 
-            iconPosition="start" 
-            label="Dynamic Rules" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab 
-            icon={<Database size={16} />} 
-            iconPosition="start" 
-            label="Master Data Editor" 
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
+        <Tabs 
+          value={selectedTabIndex} 
+          onChange={handleChange} 
+          textColor="primary" 
+          indicatorColor="primary" 
+          variant="scrollable" 
+          scrollButtons="auto"
+        >
+          {TABS.map(tab => (
+            <Tab 
+              key={tab.id}
+              value={tab.id}
+              icon={tab.icon} 
+              iconPosition="start" 
+              label={tab.label} 
+              sx={{ fontWeight: 600, minHeight: 48 }}
+            />
+          ))}
         </Tabs>
       </Box>
 
       {/* Content panel */}
       <Box>
-        {activeTab === 0 && <RestrictionFieldsView />}
-        {activeTab === 1 && <StreamsView />}
-        {activeTab === 2 && <BdcSettingsView />}
-        {activeTab === 3 && <BdcApiTesterView />}
-        {activeTab === 4 && <AppAuthorizationsView />}
-        {activeTab === 5 && <DynamicRulesView />}
-        {activeTab === 6 && <MasterDataEditorView />}
+        {currentTab.component}
       </Box>
     </Box>
   );

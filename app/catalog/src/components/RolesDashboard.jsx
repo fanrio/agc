@@ -4,6 +4,7 @@ import { Shield, Plus } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
 import { isCriticalRestriction, isRoleInScope } from '../utils/helpers';
+import { usePermissions } from '../context/PermissionsContext';
 
 // Helper recursively collecting all restrictions for a role
 function getEffectiveRestrictionsFlat(role, allRoles) {
@@ -77,7 +78,8 @@ function canManageThisDerivedRole(role, permissions, allRoles) {
 
 
 
-export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter, permissions }) {
+export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }) {
+  const { permissions } = usePermissions();
   const [roles, setRoles] = useState([]);
   const [orgNodes, setOrgNodes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,8 +140,25 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     setAssigningLoading(false);
   }
 
+  const parseEnvironments = (val) => {
+    if (!val || val === 'ALL' || val === '*') return 'ALL';
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return val.split(',').map(s => s.trim().toUpperCase());
+    }
+    return [];
+  };
+
+  const parsedAllowedEnvs = permissions?.isSuperAdmin ? 'ALL' : parseEnvironments(permissions?.allowedEnvironments);
+  const visibleRoles = roles.filter(role => {
+    if (permissions?.isSuperAdmin || parsedAllowedEnvs === 'ALL') return true;
+    return parsedAllowedEnvs.includes(role.environment_ID);
+  });
+
   // Apply health filters
-  const healthFilteredRoles = roles.filter(role => {
+  const healthFilteredRoles = visibleRoles.filter(role => {
     if (!healthFilter) return true;
     if (healthFilter === 'unrestricted') {
       return !role.ownRestrictions || role.ownRestrictions.length === 0;
@@ -170,7 +189,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   });
 
   const isFilterActive = Boolean(searchQuery.trim() || healthFilter);
-  const rootRoles = roles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
+  const rootRoles = visibleRoles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
 
   return (
     <Box sx={{ animation: 'fadeIn 0.3s' }}>

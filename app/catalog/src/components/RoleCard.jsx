@@ -7,8 +7,10 @@ import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
+import { usePermissions } from '../context/PermissionsContext';
 
-export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact, permissions }) {
+export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact }) {
+  const { permissions } = usePermissions();
   if (depth > 10) {
     return (
       <Box sx={{ pl: depth * 2, mb: 1 }}>
@@ -108,23 +110,30 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
 
   // Wizard derive scopes checks
   const canDeriveFromRole = (role) => {
+    if (permissions?.isSuperAdmin) return true;
     if (!canManageDerivedRoles) return false;
     return isRoleInScope(role.ID, role.name, permissions?.managedDerivedRolesScope);
   };
 
   const canManageThisDerivedRole = (role) => {
+    if (permissions?.isSuperAdmin) return true;
     if (!canManageDerivedRoles) return false;
     if (role.type !== 'DERIVED') return false;
     
-    const parentRole = role.parentRoles?.[0]?.parent;
-    if (!parentRole) return false;
-    return isRoleInScope(parentRole.ID, parentRole.name, permissions?.managedDerivedRolesScope);
+    if (!role.parentRoles || role.parentRoles.length === 0) return false;
+    return role.parentRoles.every(pr => {
+      const parentId = pr.parent_ID || pr.parent?.ID;
+      if (!parentId) return false;
+      const parent = allRoles.find(r => r.ID === parentId);
+      if (!parent) return false;
+      return isRoleInScope(parent.ID, parent.name, permissions?.managedDerivedRolesScope);
+    });
   };
 
-  const disableEdit = isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles);
-  const disableDelete = isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles);
-  const disableDerive = !canDeriveFromRole(role);
-  const disableAssign = !canAssignRoles;
+  const disableEdit = permissions?.isSuperAdmin ? false : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles));
+  const disableDelete = permissions?.isSuperAdmin ? false : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles));
+  const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role);
+  const disableAssign = permissions?.isSuperAdmin ? false : !canAssignRoles;
 
   if (isCompact) {
     return (

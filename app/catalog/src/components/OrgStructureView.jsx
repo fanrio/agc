@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
 import { Globe, Building2, MapPin, Factory, Briefcase, Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight } from 'lucide-react';
 import * as api from '../api';
+import { usePermissions } from '../context/PermissionsContext';
 
 const TYPE_ICONS = {
   Global:     Globe,
@@ -62,7 +63,8 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
 }
 
 // ─── Org Node Row ─────────────────────────────────────────────────────────────
-function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onRefresh, onError, permissions }) {
+function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onRefresh, onError }) {
+  const { permissions } = usePermissions();
   const [expanded, setExpanded]       = useState(depth < 2);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddAttr, setShowAddAttr]  = useState(false);
@@ -222,7 +224,7 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
                   key={a.ID}
                   label={`${a.field}: ${a.value}`}
                   size="small"
-                  onDelete={permissions && !permissions.canManageOrgRoles ? undefined : () => handleDeleteAttr(a.ID)}
+                  onDelete={permissions?.isSuperAdmin ? () => handleDeleteAttr(a.ID) : (permissions && !permissions.canManageOrgRoles ? undefined : () => handleDeleteAttr(a.ID))}
                   color="primary"
                   variant="outlined"
                   sx={{ height: 20, fontSize: 9 }}
@@ -238,16 +240,18 @@ function OrgNodeRow({ node, depth = 0, allNodes, nodeTypes = [], onGenerate, onR
               variant="text" 
               color="primary" 
               onClick={() => onGenerate(node.ID)} 
-              disabled={permissions && !permissions.canManageOrgRoles}
+              disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles)}
               startIcon={<Zap size={12} />}
             >
               Role
             </Button>
-            <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Attribute"><Plus size={13} /></IconButton>
-            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); }} disabled={permissions && !permissions.canManageOrgRoles} title="Rename"><Edit3 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={permissions && !permissions.canManageOrgRoles} title="Add Child Node"><Building2 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || (permissions && !permissions.canManageOrgRoles)}><MoveRight size={13} /></IconButton>
-            <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || (permissions && !permissions.canManageOrgRoles)} title={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
+            <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles)} title="Add Attribute"><Plus size={13} /></IconButton>
+            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); }} disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles)} title="Rename"><Edit3 size={13} /></IconButton>
+            <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles)} title="Add Child Node"><Building2 size={13} /></IconButton>
+            <IconButton size="small" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles))}>
+              <MoveRight size={13} />
+            </IconButton>
+            <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles))} title={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
           </Box>
         </Box>
 
@@ -345,7 +349,8 @@ function buildTree(flatNodes) {
 }
 
 // ─── Main Org View ────────────────────────────────────────────────────────────
-export default function OrgStructureView({ onGenerateRole, permissions }) {
+export default function OrgStructureView({ onGenerateRole }) {
+  const { permissions } = usePermissions();
   const [allNodes, setAllNodes]   = useState([]);
   const [roots, setRoots]         = useState([]);
   const [nodeTypes, setNodeTypes] = useState([]);
@@ -408,7 +413,7 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
             variant="outlined" 
             color="primary" 
             onClick={handleGenerateAll} 
-            disabled={loading || (permissions && !permissions.canManageOrgRoles)} 
+            disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles))} 
             startIcon={<Zap size={15} />}
           >
             Generate All Roles
@@ -417,7 +422,7 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
             variant="contained" 
             color="primary" 
             onClick={() => { setShowAdd(s => !s); setSnackbar({ open: false, message: '', severity: 'error' }); }} 
-            disabled={permissions && !permissions.canManageOrgRoles}
+            disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles)}
             startIcon={<Plus size={15} />}
           >
             Add Node
@@ -482,7 +487,6 @@ export default function OrgStructureView({ onGenerateRole, permissions }) {
                 onGenerate={onGenerateRole}
                 onRefresh={load}
                 onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-                permissions={permissions}
               />
             ))}
           </Box>

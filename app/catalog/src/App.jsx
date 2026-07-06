@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, FormControl, Select, MenuItem } from '@mui/material';
+import { useState } from 'react';
+import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress } from '@mui/material';
 import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw } from 'lucide-react';
-import * as api from './api';
 import HomeView from './components/HomeView';
 import OrgStructureView from './components/OrgStructureView';
 import RolesDashboard from './components/RolesDashboard';
@@ -10,6 +9,7 @@ import RoleAssignmentsView from './components/RoleAssignmentsView';
 import AdministrationView from './components/AdministrationView';
 import AuditLogsView from './components/AuditLogsView';
 import ReplicationsView from './components/ReplicationsView';
+import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
 
 const DRAWER_WIDTH = 240;
 
@@ -23,62 +23,12 @@ const NAV = [
   { id: 'admin',       label: 'Administration',      icon: Settings },
 ];
 
-export default function App() {
+function AppContent({ simulatedUser, setSimulatedUser }) {
   const [activeNav, setActiveNav]         = useState('home');
   const [wizardContext, setWizardContext] = useState(null); // { parentRoleId?, orgNodeId? }
   const [rolesFilter, setRolesFilter]     = useState(null);
   
-  // Simulated Logged-In User access authorizations
-  const [simulatedUser, setSimulatedUser] = useState('jdoe');
-  const [permissions, setPermissions] = useState({
-    canManageOrgRoles: true,
-    canManageSingleRoles: true,
-    canManageDerivedRoles: true,
-    managedDerivedRolesScope: 'ALL',
-    canAssignRoles: true
-  });
-
-  const loadPermissions = async () => {
-    try {
-      const authList = await api.getAppAuthorizations();
-      if (!authList || authList.length === 0) {
-        // Open Demo Mode: everyone has all access
-        setPermissions({
-          canManageOrgRoles: true,
-          canManageSingleRoles: true,
-          canManageDerivedRoles: true,
-          managedDerivedRolesScope: 'ALL',
-          canAssignRoles: true
-        });
-      } else {
-        const userAuth = authList.find(a => a.userId.toLowerCase() === simulatedUser.toLowerCase());
-        if (userAuth) {
-          setPermissions({
-            canManageOrgRoles: userAuth.canManageOrgRoles,
-            canManageSingleRoles: userAuth.canManageSingleRoles,
-            canManageDerivedRoles: userAuth.canManageDerivedRoles,
-            managedDerivedRolesScope: userAuth.managedDerivedRolesScope || 'ALL',
-            canAssignRoles: userAuth.canAssignRoles
-          });
-        } else {
-          // Not found -> no admin permissions
-          setPermissions({
-            canManageOrgRoles: false,
-            canManageSingleRoles: false,
-            canManageDerivedRoles: false,
-            managedDerivedRolesScope: '',
-            canAssignRoles: false
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load application authorizations:', e);
-    }
-  };
-
-  useEffect(() => {
-    loadPermissions();
-  }, [simulatedUser, activeNav]);
+  const { permissions, loading } = usePermissions();
 
   function navigateToRoles(filter = null) {
     setRolesFilter(filter);
@@ -89,6 +39,22 @@ export default function App() {
     setWizardContext(ctx);
     setActiveNav('wizard');
   }
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', bgcolor: 'background.default' }}>
+        <CircularProgress size={40} />
+      </Box>
+    );
+  }
+
+  // Filter NAV items based on permissions
+  const filteredNav = NAV.filter(item => {
+    if (permissions?.isSuperAdmin) return true;
+    if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
+    if (item.id === 'admin') return !!permissions?.canManageSettings || !!permissions?.canManageAppUsers;
+    return true;
+  });
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -105,7 +71,10 @@ export default function App() {
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <Select
                 value={simulatedUser}
-                onChange={(e) => setSimulatedUser(e.target.value)}
+                onChange={(e) => {
+                  setSimulatedUser(e.target.value);
+                  setActiveNav('home'); // Go to home when user switches to refresh state
+                }}
                 sx={{ 
                   height: 32, 
                   fontSize: '0.8125rem',
@@ -144,7 +113,7 @@ export default function App() {
             Navigation
           </Typography>
           <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, p: 0 }}>
-            {NAV.map(item => {
+            {filteredNav.map(item => {
               const isActive = activeNav === item.id;
               return (
                 <ListItem key={item.id} disablePadding>
@@ -179,15 +148,25 @@ export default function App() {
 
       {/* Main Content */}
       <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
-        {activeNav === 'home'        && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} permissions={permissions} />}
-        {activeNav === 'org'         && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} permissions={permissions} />}
-        {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} permissions={permissions} />}
-        {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} permissions={permissions} />}
-        {activeNav === 'assignments' && <RoleAssignmentsView permissions={permissions} />}
+        {activeNav === 'home'        && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
+        {activeNav === 'org'         && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
+        {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
+        {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
+        {activeNav === 'assignments' && <RoleAssignmentsView />}
         {activeNav === 'replications' && <ReplicationsView />}
         {activeNav === 'audit'       && <AuditLogsView />}
         {activeNav === 'admin'       && <AdministrationView />}
       </Box>
     </Box>
+  );
+}
+
+export default function App() {
+  const [simulatedUser, setSimulatedUser] = useState('jdoe');
+
+  return (
+    <PermissionsProvider userId={simulatedUser}>
+      <AppContent simulatedUser={simulatedUser} setSimulatedUser={setSimulatedUser} />
+    </PermissionsProvider>
   );
 }

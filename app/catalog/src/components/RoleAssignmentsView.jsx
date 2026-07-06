@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Plus, Trash2, X, Check, Shield, Users } from 'lucide-react';
 import * as api from '../api';
+import { usePermissions } from '../context/PermissionsContext';
 
 // Helper to recursively check if a role or any of its parents has restrictions
 function hasAnyRestrictions(role, allRoles) {
@@ -20,7 +21,8 @@ function hasAnyRestrictions(role, allRoles) {
   return false;
 }
 
-export default function RoleAssignmentsView({ permissions }) {
+export default function RoleAssignmentsView() {
+  const { permissions } = usePermissions();
   const [assignments, setAssignments] = useState([]);
   
   // Confirm Dialog State
@@ -111,7 +113,7 @@ export default function RoleAssignmentsView({ permissions }) {
         <Button 
           variant="contained" 
           onClick={() => { setShowAdd(s => !s); setSnackbar(prev => ({ ...prev, open: false })); }} 
-          disabled={permissions && !permissions.canAssignRoles}
+          disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles)}
           startIcon={<Plus size={15} />}
         >
           Assign Role
@@ -216,7 +218,7 @@ export default function RoleAssignmentsView({ permissions }) {
                       <IconButton 
                         color="error" 
                         onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
-                        disabled={loading || (permissions && !permissions.canAssignRoles)} 
+                        disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles))} 
                         size="small"
                       >
                         <Trash2 size={15} />

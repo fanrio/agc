@@ -15,8 +15,10 @@ const STEPS = [
 ];
 
 import { ENV_LABEL, ENV_COLOR, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
+import { usePermissions } from '../context/PermissionsContext';
 
-export default function Wizard({ context = {}, onDone, permissions, allowFreeNavigation = false }) {
+export default function Wizard({ context = {}, onDone, allowFreeNavigation = false }) {
+  const { permissions } = usePermissions();
   const [step, setStep]                   = useState(0);
   const [roleType, setRoleType]           = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
   const [selectedOrgNodeId, setOrgNode]   = useState(context.orgNodeId || '');
@@ -68,6 +70,7 @@ export default function Wizard({ context = {}, onDone, permissions, allowFreeNav
   };
 
   const canManageThisDerivedWizard = () => {
+    if (permissions?.isSuperAdmin) return true;
     if (!permissions) return false;
     if (!permissions.canManageDerivedRoles) return false;
     const scope = permissions.managedDerivedRolesScope;
@@ -470,6 +473,7 @@ export default function Wizard({ context = {}, onDone, permissions, allowFreeNav
   const isDerived = selectedParentIds.length > 0;
   const selectableRestrictionFields = (() => {
     if (!isDerived) return restrictionFields;
+    if (permissions?.isSuperAdmin) return restrictionFields;
     if (!permissions || !permissions.canManageDerivedRoles) return [];
 
     // Calculate all fields used by parent role or its ancestors
@@ -584,8 +588,8 @@ export default function Wizard({ context = {}, onDone, permissions, allowFreeNav
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Role Origin</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
               {[
-                { type: 'ORG_BASED', icon: Zap, label: 'Org-Based Role', desc: 'Auto-generated from an Org Structure node', color: '#1d4ed8', disabled: permissions && !permissions.canManageOrgRoles },
-                { type: 'SINGLE',    icon: Shield, label: 'Single Role', desc: 'A custom role containing specific restrictions', color: '#7c3aed', disabled: permissions && !permissions.canManageSingleRoles },
+                { type: 'ORG_BASED', icon: Zap, label: 'Org-Based Role', desc: 'Auto-generated from an Org Structure node', color: '#1d4ed8', disabled: permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles) },
+                { type: 'SINGLE',    icon: Shield, label: 'Single Role', desc: 'A custom role containing specific restrictions', color: '#7c3aed', disabled: permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageSingleRoles) },
               ].map(opt => {
                 const isSelected = roleType === opt.type;
                 const isDisabled = opt.disabled || isEditMode;
@@ -950,10 +954,10 @@ export default function Wizard({ context = {}, onDone, permissions, allowFreeNav
               variant="contained"
               color="primary"
               onClick={handleSaveClick}
-              disabled={loading || !roleName || (permissions && (
+              disabled={loading || !roleName || (permissions?.isSuperAdmin ? false : (permissions && (
                 roleType === 'ORG_BASED' ? !permissions.canManageOrgRoles :
                 (selectedParentIds.length > 0) ? !canManageThisDerivedWizard() : !permissions.canManageSingleRoles
-              ))}
+              )))}
               sx={{ alignSelf: 'flex-end', px: 4, py: 1.25 }}
             >
               {loading ? 'Saving…' : (isEditMode ? 'Save Changes' : 'Deploy Role')}
