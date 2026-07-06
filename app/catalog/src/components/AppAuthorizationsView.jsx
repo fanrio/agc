@@ -86,7 +86,7 @@ export default function AppAuthorizationsView() {
         api.getRoles(),
         api.getRestrictionFields()
       ]);
-      setAuthorizations(authData || []);
+      setAuthorizations((authData || []).filter(Boolean));
       setAllRoles(rolesData || []);
       setRestrictionFields(fieldsData || []);
     } catch (err) {
@@ -285,7 +285,11 @@ export default function AppAuthorizationsView() {
         allowedEnvironments: serializeEnvironments(newPermissions.allowedEnvironments),
         isActive: newPermissions.isActive
       });
-      setAuthorizations(prev => [...prev, newAuth]);
+      if (newAuth) {
+        setAuthorizations(prev => [...prev, newAuth].filter(Boolean));
+      } else {
+        await loadData();
+      }
       setOpenAdd(false);
       setSelectedLdapUser(null);
       setNewPermissions({
@@ -407,9 +411,11 @@ export default function AppAuthorizationsView() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  authorizations.map(auth => (
-                    <TableRow key={auth.ID} hover>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{auth.userId}</TableCell>
+                  authorizations.map(auth => {
+                    if (!auth) return null;
+                    return (
+                      <TableRow key={auth.ID} hover>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{auth.userId}</TableCell>
                       <TableCell sx={{ fontWeight: 500 }}>{auth.userName}</TableCell>
                       <TableCell align="center">
                         <Checkbox 
@@ -527,7 +533,8 @@ export default function AppAuthorizationsView() {
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                  ))
+                  );
+                })
                 )}
               </TableBody>
             </Table>
