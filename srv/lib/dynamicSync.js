@@ -1,3 +1,6 @@
+const HanaClient = require('./hanaClient');
+const { syncAssignmentToHana } = require('../services/hanaReplicationService');
+
 function safeJsonParse(val, fallback = []) {
   if (!val) return fallback;
   try {
@@ -60,9 +63,9 @@ async function syncDynamicRule(ruleId, cds) {
   // 5. Process user updates & creations
   for (const [userId, keys] of Object.entries(userRecordMapping)) {
     if (rule.generationMode === 'USER_CONSOLIDATED_ROLE') {
-      await _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings, AuditLogs);
+      await _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings, AuditLogs, cds);
     } else if (rule.generationMode === 'TEMPLATE_ASSIGNMENT') {
-      await _syncTemplateAssignment(db, rule, userId, keys, activeMappings, AuditLogs);
+      await _syncTemplateAssignment(db, rule, userId, keys, activeMappings, AuditLogs, cds);
     }
   }
 
@@ -76,15 +79,15 @@ async function syncDynamicRule(ruleId, cds) {
   }
   
   for (const obsolete of obsoleteMappings) {
-    await _removeGeneratedAccess(db, rule, obsolete, AuditLogs);
+    await _removeGeneratedAccess(db, rule, obsolete, AuditLogs, cds);
   }
 }
 
 /**
  * Handles Consolidated Dynamic Role mode
  */
-async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings, AuditLogs) {
-  const { Roles, Restrictions, RoleAssignments, GeneratedResourceMap } = db.entities('fanrio.auth');
+async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings, AuditLogs, cds) {
+  const { Roles, Restrictions, RoleAssignments, GeneratedResourceMap, RoleInheritance, BdcSettings } = db.entities('fanrio.auth');
   
   // Format role name (safe alphanumeric string)
   const roleName = `ROLE_DYN_${rule.code}_${userId.replace(/[@.]/g, '_').toUpperCase()}`;
@@ -127,6 +130,17 @@ async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings,
       userName: userId, // Default display name
     }));
   }
+
+  // Always sync consolidated assignment to HANA since restrictions are replaced on every reconciliation
+  await syncAssignmentToHana(
+    cds,
+    HanaClient,
+    { Roles, Restrictions, RoleInheritance, BdcSettings },
+    assignmentId,
+    userId,
+    roleId,
+    false
+  );
 
   // Update GeneratedResourceMap ledger and audit log creations in bulk
   const newMaps = [];
@@ -173,8 +187,8 @@ async function _syncConsolidatedUserRole(db, rule, userId, keys, activeMappings,
 /**
  * Handles Template Assignment mode
  */
-async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, AuditLogs) {
-  const { RoleAssignments, GeneratedResourceMap } = db.entities('fanrio.auth');
+async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, AuditLogs, cds) {
+  const { Roles, Restrictions, RoleAssignments, GeneratedResourceMap, RoleInheritance, BdcSettings } = db.entities('fanrio.auth');
   
   if (!rule.templateRole_ID) {
     throw new Error(`Template role not configured for rule ${rule.code}`);
@@ -191,6 +205,17 @@ async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, A
       userId: userId,
       userName: userId,
     }));
+
+    // Sync template role assignment to HANA
+    await syncAssignmentToHana(
+      cds,
+      HanaClient,
+      { Roles, Restrictions, RoleInheritance, BdcSettings },
+      assignmentId,
+      userId,
+      rule.templateRole_ID,
+      false
+    );
   }
 
   // Update GeneratedResourceMap ledger and audit log creations in bulk
@@ -235,8 +260,8 @@ async function _syncTemplateAssignment(db, rule, userId, keys, activeMappings, A
 /**
  * Removes dynamic roles, restrictions, and mapping registers when user loses scope
  */
-async function _removeGeneratedAccess(db, rule, mapping, AuditLogs) {
-  const { Roles, Restrictions, RoleAssignments, GeneratedResourceMap } = db.entities('fanrio.auth');
+async function _removeGeneratedAccess(db, rule, mapping, AuditLogs, cds) {
+  const { Roles, Restrictions, RoleAssignments, GeneratedResourceMap, RoleInheritance, BdcSettings } = db.entities('fanrio.auth');
 
   // Delete the GeneratedResourceMap entry
   await db.run(DELETE.from(GeneratedResourceMap).where({ ID: mapping.ID }));
@@ -262,6 +287,19 @@ async function _removeGeneratedAccess(db, rule, mapping, AuditLogs) {
       generatedAssignment_ID: mapping.generatedAssignment_ID
     }));
     if (!otherMapForAssignment) {
+      const assignment = await db.run(SELECT.one.from(RoleAssignments).where({ ID: mapping.generatedAssignment_ID }));
+      if (assignment) {
+        // Sync delete to HANA
+        await syncAssignmentToHana(
+          cds,
+          HanaClient,
+          { Roles, Restrictions, RoleInheritance, BdcSettings },
+          mapping.generatedAssignment_ID,
+          mapping.userId,
+          assignment.role_ID,
+          true
+        );
+      }
       await db.run(DELETE.from(RoleAssignments).where({ ID: mapping.generatedAssignment_ID }));
     }
   }
