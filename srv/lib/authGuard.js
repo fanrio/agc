@@ -1,4 +1,4 @@
-'use strict';
+const cds = require('@sap/cds');
 
 /**
  * authGuard.js - Backend authorization helper
@@ -7,11 +7,17 @@
 function getUserId(req) {
   // Use simulated user header if present, fallback to actual CAP user id or 'anonymous'
   const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
-  if (simUser) return simUser;
+  if (simUser) {
+    req.user = new cds.User({ id: simUser });
+    return simUser;
+  }
   const isTest = process.env.NODE_ENV === 'test' || 
                  process.execArgv.includes('--test') || 
                  (process.argv[1] && process.argv[1].includes('test'));
-  if (isTest) return 'admin';
+  if (isTest) {
+    req.user = new cds.User({ id: 'admin' });
+    return 'admin';
+  }
   return req.user?.id || 'anonymous';
 }
 

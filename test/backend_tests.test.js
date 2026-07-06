@@ -741,6 +741,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
   await t.test('triggerReplication and checkReplicationStatuses triggers', async () => {
     // Deactivate all existing connections to avoid OData connection collision
     await cds.db.run(UPDATE('fanrio.auth.BdcSettings').set({ isActive: false }));
+    await cds.db.run(cds.ql.DELETE.from('fanrio.auth.Replications'));
 
     // Create an active BDC OData setting for environment 'D' with all required parameters
     const setting = await POST('/odata/v4/auth/BdcSettings', {
