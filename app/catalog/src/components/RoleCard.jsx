@@ -272,7 +272,6 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                       <Box sx={{ mt: 1 }}>
                         <RestrictionDisplay restriction={eff} />
                       </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, fontSize: '0.65rem' }}>Inherited from: <strong>{eff.inheritedFromRoleName}</strong></Typography>
                     </Box>
                   </Grid>
                 ))}
