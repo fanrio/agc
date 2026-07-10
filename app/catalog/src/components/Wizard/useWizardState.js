@@ -52,10 +52,27 @@ export function useWizardState({ context = {}, permissions }) {
     return [];
   };
 
+  const parseAllowedStreams = (val) => {
+    if (!val || val === 'ALL' || val === '*') return 'ALL';
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return val.split(',').map(s => s.trim());
+    }
+    return [];
+  };
+
   const parsedAllowedEnvs = permissions?.isSuperAdmin ? 'ALL' : parseEnvironments(permissions?.allowedEnvironments);
   const filteredEnvironments = environments.filter(env => {
     if (parsedAllowedEnvs === 'ALL') return true;
     return parsedAllowedEnvs.includes(env.ID);
+  });
+
+  const parsedAllowedStreams = permissions?.isSuperAdmin ? 'ALL' : parseAllowedStreams(permissions?.allowedStreams);
+  const filteredStreams = streams.filter(s => {
+    if (parsedAllowedStreams === 'ALL') return true;
+    return parsedAllowedStreams.includes(s.ID);
   });
 
   useEffect(() => {
@@ -66,6 +83,15 @@ export function useWizardState({ context = {}, permissions }) {
       }
     }
   }, [filteredEnvironments, environmentId, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode && filteredStreams.length > 0) {
+      const isCurrentAllowed = filteredStreams.some(s => s.ID === streamId);
+      if (!isCurrentAllowed) {
+        setStreamId(filteredStreams[0].ID);
+      }
+    }
+  }, [filteredStreams, streamId, isEditMode]);
 
   useEffect(() => {
     if (step > maxStepReached) {
@@ -543,7 +569,7 @@ export function useWizardState({ context = {}, permissions }) {
     environmentId, setEnvironmentId,
     environments,
     streamId, setStreamId,
-    streams,
+    streams: filteredStreams,
     assignUserId, setAssignUserId,
     assignUserName, setAssignUserName,
     showImpactDialog, setShowImpactDialog,
