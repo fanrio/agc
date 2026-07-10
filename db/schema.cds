@@ -145,6 +145,7 @@ entity AppAuthorizations : cuid, managed {
   canViewAuditLogs     : Boolean @default: false;
   canManageSettings    : Boolean @default: false;
   allowedEnvironments  : String(50) @default: 'ALL';
+  allowedStreams        : String(1000) @default: 'ALL';  // JSON array of stream IDs or 'ALL'
   lastLogin            : DateTime;
   isActive             : Boolean @default: true;
 }

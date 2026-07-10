@@ -1,36 +1,38 @@
 import { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Card, 
-  CardContent, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Button, 
-  Checkbox, 
-  IconButton, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Button,
+  Checkbox,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
   DialogContentText,
-  DialogActions, 
-  TextField, 
-  Autocomplete, 
+  DialogActions,
+  TextField,
+  Autocomplete,
   CircularProgress,
   Alert,
   Snackbar,
   Select,
   MenuItem,
   OutlinedInput,
-  Chip
+  Chip,
+  Divider
 } from '@mui/material';
-import { Plus, Trash2, Shield, Users, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Shield, Settings, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 
+// ─── Environment helpers ──────────────────────────────────────────────────────
 const parseEnvironments = (val) => {
   if (!val || val === 'ALL' || val === '*') return ['D', 'Q', 'P'];
   try {
@@ -48,20 +50,53 @@ const serializeEnvironments = (arr) => {
   return JSON.stringify(arr);
 };
 
+// ─── Stream helpers ───────────────────────────────────────────────────────────
+const parseStreams = (val) => {
+  if (!val || val === 'ALL' || val === '*') return null; // null = ALL
+  try {
+    const parsed = JSON.parse(val);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (e) {
+    return val.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return null;
+};
+
+const serializeStreams = (ids, allStreams) => {
+  if (!ids || ids.length === allStreams.length) return 'ALL';
+  return JSON.stringify(ids);
+};
+
+// ─── Section heading ──────────────────────────────────────────────────────────
+function SectionHeading({ icon: Icon, title, subtitle, color = '#0F172A' }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(15,23,42,0.02)' }}>
+      <Box sx={{ width: 32, height: 32, borderRadius: 1.5, bgcolor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={16} color="#fff" />
+      </Box>
+      <Box>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>{title}</Typography>
+        <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+      </Box>
+    </Box>
+  );
+}
+
 export default function AppAuthorizationsView() {
   const [authorizations, setAuthorizations] = useState([]);
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
-  const [allRoles, setAllRoles] = useState([]);
+  const [streams, setStreams]               = useState([]);
+  const [allRoles, setAllRoles]             = useState([]);
   const [restrictionFields, setRestrictionFields] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [ldapOptions, setLdapOptions] = useState([]);
-  const [ldapLoading, setLdapLoading] = useState(false);
-  const [ldapInput, setLdapInput] = useState('');
-  
-  // Dialog state
-  const [openAdd, setOpenAdd] = useState(false);
+  const [loading, setLoading]               = useState(true);
+  const [ldapOptions, setLdapOptions]       = useState([]);
+  const [ldapLoading, setLdapLoading]       = useState(false);
+  const [ldapInput, setLdapInput]           = useState('');
+  const [openAdd, setOpenAdd]               = useState(false);
   const [selectedLdapUser, setSelectedLdapUser] = useState(null);
-  const [newPermissions, setNewPermissions] = useState({
+  const [confirmDialog, setConfirmDialog]   = useState({ open: false, title: '', message: '', onConfirm: null });
+  const [snackbar, setSnackbar]             = useState({ open: false, message: '', severity: 'success' });
+
+  const defaultPermissions = {
     isSuperAdmin: false,
     canManageAppUsers: false,
     canManageOrgRoles: true,
@@ -73,56 +108,52 @@ export default function AppAuthorizationsView() {
     canViewAuditLogs: true,
     canManageSettings: false,
     allowedEnvironments: ['D', 'Q', 'P'],
+    allowedStreams: null, // null = ALL
     isActive: true
-  });
-  
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  };
+  const [newPermissions, setNewPermissions] = useState(defaultPermissions);
 
+  // ─── Data loading ───────────────────────────────────────────────────────────
   const loadData = async () => {
     setLoading(true);
     try {
-      const [authData, rolesData, fieldsData] = await Promise.all([
+      const [authData, rolesData, fieldsData, streamsData] = await Promise.all([
         api.getAppAuthorizations(),
         api.getRoles(),
-        api.getRestrictionFields()
+        api.getRestrictionFields(),
+        api.getStreamsFlat()
       ]);
       setAuthorizations((authData || []).filter(Boolean));
       setAllRoles(rolesData || []);
       setRestrictionFields(fieldsData || []);
+      setStreams((streamsData || []).filter(s => !s.parent)); // root streams only for selection
     } catch (err) {
-      setSnackbar({ open: true, message: err.message || 'Failed to load authorizations', severity: 'error' });
+      setSnackbar({ open: true, message: err.message || 'Failed to load data', severity: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
-  // Debounced LDAP search
+  // LDAP debounced search
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
+    const t = setTimeout(() => {
       if (!ldapInput.trim()) return;
       setLdapLoading(true);
       api.searchLdapUsers(ldapInput)
-        .then(res => {
-          setLdapOptions(res || []);
-          setLdapLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLdapLoading(false);
-        });
+        .then(res => { setLdapOptions(res || []); setLdapLoading(false); })
+        .catch(() => setLdapLoading(false));
     }, 250);
-    return () => clearTimeout(delayDebounce);
+    return () => clearTimeout(t);
   }, [ldapInput]);
 
+  // ─── Update handlers ────────────────────────────────────────────────────────
   const handleTogglePermission = async (id, field, value) => {
     try {
       await api.updateAppAuthorization(id, { [field]: value });
       setAuthorizations(prev => prev.map(item => item.ID === id ? { ...item, [field]: value } : item));
-      setSnackbar({ open: true, message: 'Authorization updated successfully', severity: 'success' });
+      setSnackbar({ open: true, message: 'Permission updated', severity: 'success' });
     } catch (err) {
       setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
     }
@@ -133,7 +164,18 @@ export default function AppAuthorizationsView() {
     try {
       await api.updateAppAuthorization(id, { allowedEnvironments: serialized });
       setAuthorizations(prev => prev.map(item => item.ID === id ? { ...item, allowedEnvironments: serialized } : item));
-      setSnackbar({ open: true, message: 'Environments scope updated successfully', severity: 'success' });
+      setSnackbar({ open: true, message: 'Environments updated', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
+    }
+  };
+
+  const handleUpdateStreams = async (id, streamIds) => {
+    const serialized = serializeStreams(streamIds, streams);
+    try {
+      await api.updateAppAuthorization(id, { allowedStreams: serialized });
+      setAuthorizations(prev => prev.map(item => item.ID === id ? { ...item, allowedStreams: serialized } : item));
+      setSnackbar({ open: true, message: 'Stream scope updated', severity: 'success' });
     } catch (err) {
       setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
     }
@@ -148,6 +190,71 @@ export default function AppAuthorizationsView() {
     }
   };
 
+  // ─── Add / Delete ───────────────────────────────────────────────────────────
+  const handleAddAuthorization = async () => {
+    if (!selectedLdapUser) {
+      setSnackbar({ open: true, message: 'Please select a user from LDAP', severity: 'error' });
+      return;
+    }
+    const exists = authorizations.some(a => a.userId.toLowerCase() === selectedLdapUser.username.toLowerCase());
+    if (exists) {
+      setSnackbar({ open: true, message: `User "${selectedLdapUser.displayName}" is already configured`, severity: 'error' });
+      return;
+    }
+    try {
+      const streamVal = newPermissions.allowedStreams === null
+        ? 'ALL'
+        : serializeStreams(newPermissions.allowedStreams, streams);
+      const newAuth = await api.createAppAuthorization({
+        userId:                   selectedLdapUser.username,
+        userName:                 selectedLdapUser.displayName,
+        isSuperAdmin:             newPermissions.isSuperAdmin,
+        canManageAppUsers:        newPermissions.canManageAppUsers,
+        canManageOrgRoles:        newPermissions.canManageOrgRoles,
+        canManageSingleRoles:     newPermissions.canManageSingleRoles,
+        canManageDerivedRoles:    newPermissions.canManageDerivedRoles,
+        managedDerivedRolesScope: newPermissions.managedDerivedRolesScope || 'ALL',
+        canAssignRoles:           newPermissions.canAssignRoles,
+        canManageReplications:    newPermissions.canManageReplications,
+        canViewAuditLogs:         newPermissions.canViewAuditLogs,
+        canManageSettings:        newPermissions.canManageSettings,
+        allowedEnvironments:      serializeEnvironments(newPermissions.allowedEnvironments),
+        allowedStreams:            streamVal,
+        isActive:                 newPermissions.isActive
+      });
+      if (newAuth) {
+        setAuthorizations(prev => [...prev, newAuth].filter(Boolean));
+      } else {
+        await loadData();
+      }
+      setOpenAdd(false);
+      setSelectedLdapUser(null);
+      setNewPermissions(defaultPermissions);
+      setSnackbar({ open: true, message: 'User authorization added', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'Failed to add authorization', severity: 'error' });
+    }
+  };
+
+  const handleDelete = (id, name) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Authorization',
+      message: `Remove application authorization for user "${name}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await api.deleteAppAuthorization(id);
+          setAuthorizations(prev => prev.filter(item => item.ID !== id));
+          setSnackbar({ open: true, message: 'Authorization removed', severity: 'success' });
+        } catch (err) {
+          setSnackbar({ open: true, message: err.message || 'Deletion failed', severity: 'error' });
+        }
+      }
+    });
+  };
+
+  // ─── Sub-components ─────────────────────────────────────────────────────────
   const getRoleRestrictionFields = (roleId) => {
     const roleObj = allRoles.find(r => r.ID === roleId);
     if (!roleObj) return [];
@@ -159,16 +266,11 @@ export default function AppAuthorizationsView() {
       const currId = queue.shift();
       const currRole = allRoles.find(r => r.ID === currId);
       if (currRole) {
-        if (currRole.ownRestrictions) {
-          currRole.ownRestrictions.forEach(r => fields.add(r.field));
-        }
+        if (currRole.ownRestrictions) currRole.ownRestrictions.forEach(r => fields.add(r.field));
         if (currRole.parentRoles) {
           currRole.parentRoles.forEach(pr => {
             const pid = pr.parent?.ID || pr.parent_ID;
-            if (pid && !visited.has(pid)) {
-              visited.add(pid);
-              queue.push(pid);
-            }
+            if (pid && !visited.has(pid)) { visited.add(pid); queue.push(pid); }
           });
         }
       }
@@ -182,11 +284,11 @@ export default function AppAuthorizationsView() {
       const parsed = JSON.parse(scopeStr);
       if (Array.isArray(parsed)) return parsed;
     } catch (e) {
-      const rolesList = scopeStr.split(',').map(s => s.trim()).filter(Boolean);
-      return rolesList.map(roleNameOrId => {
-        const role = allRoles.find(r => r.name === roleNameOrId || r.ID === roleNameOrId);
-        return { roleId: role ? role.ID : roleNameOrId, fields: [] };
-      });
+      return scopeStr.split(',').map(s => s.trim()).filter(Boolean)
+        .map(nameOrId => {
+          const role = allRoles.find(r => r.name === nameOrId || r.ID === nameOrId);
+          return { roleId: role ? role.ID : nameOrId, fields: [] };
+        });
     }
     return [];
   };
@@ -195,40 +297,29 @@ export default function AppAuthorizationsView() {
     const scopeList = parseScope(scopeStr);
     const selectedRoleIds = scopeList.map(s => s.roleId);
     const availableRoles = allRoles.filter(r => !selectedRoleIds.includes(r.ID));
-
     const handleAddRole = (role) => {
       if (!role) return;
-      const updated = [...scopeList, { roleId: role.ID, fields: [] }];
-      onChange(JSON.stringify(updated));
+      onChange(JSON.stringify([...scopeList, { roleId: role.ID, fields: [] }]));
     };
-
     const handleRemoveRole = (roleId) => {
       const updated = scopeList.filter(s => s.roleId !== roleId);
       onChange(updated.length === 0 ? 'ALL' : JSON.stringify(updated));
     };
-
     const handleFieldChange = (roleId, fields) => {
-      const updated = scopeList.map(s => s.roleId === roleId ? { ...s, fields } : s);
-      onChange(JSON.stringify(updated));
+      onChange(JSON.stringify(scopeList.map(s => s.roleId === roleId ? { ...s, fields } : s)));
     };
-
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: 240, mt: 1 }}>
         <Autocomplete
-          size="small"
-          options={availableRoles}
-          getOptionLabel={(option) => option.name || option.ID || ''}
-          value={null}
+          size="small" options={availableRoles}
+          getOptionLabel={(o) => o.name || o.ID || ''} value={null}
           onChange={(e, val) => handleAddRole(val)}
-          renderInput={(params) => (
-            <TextField {...params} placeholder="Add Role..." variant="outlined" />
-          )}
+          renderInput={(params) => <TextField {...params} placeholder="Add Role..." variant="outlined" />}
         />
         {scopeList.map(item => {
           const roleObj = allRoles.find(r => r.ID === item.roleId);
           const roleName = roleObj ? roleObj.name : item.roleId;
           const allowedFields = getRoleRestrictionFields(item.roleId);
-
           return (
             <Card key={item.roleId} variant="outlined" sx={{ p: 1, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
@@ -238,15 +329,11 @@ export default function AppAuthorizationsView() {
                 </IconButton>
               </Box>
               <Autocomplete
-                multiple
-                size="small"
-                options={allowedFields}
-                getOptionLabel={(option) => option.name || ''}
+                multiple size="small" options={allowedFields}
+                getOptionLabel={(o) => o.name || ''}
                 value={allowedFields.filter(f => item.fields.includes(f.name))}
                 onChange={(e, val) => handleFieldChange(item.roleId, val.map(f => f.name))}
-                renderInput={(params) => (
-                  <TextField {...params} placeholder="Select fields..." variant="outlined" />
-                )}
+                renderInput={(params) => <TextField {...params} placeholder="Select fields..." variant="outlined" />}
                 sx={{ mt: 0.5 }}
               />
             </Card>
@@ -256,344 +343,262 @@ export default function AppAuthorizationsView() {
     );
   };
 
-  const handleAddAuthorization = async () => {
-    if (!selectedLdapUser) {
-      setSnackbar({ open: true, message: 'Please select a user from LDAP', severity: 'error' });
-      return;
+  // Stream chip/selector for a single row
+  const StreamCell = ({ auth }) => {
+    const streamIds = parseStreams(auth.allowedStreams);
+    if (auth.isSuperAdmin || streamIds === null) {
+      return <Chip label="All Streams" size="small" color="primary" variant="outlined" />;
     }
-
-    const exists = authorizations.some(a => a.userId.toLowerCase() === selectedLdapUser.username.toLowerCase());
-    if (exists) {
-      setSnackbar({ open: true, message: `User "${selectedLdapUser.displayName}" is already configured`, severity: 'error' });
-      return;
-    }
-
-    try {
-      const newAuth = await api.createAppAuthorization({
-        userId: selectedLdapUser.username,
-        userName: selectedLdapUser.displayName,
-        isSuperAdmin: newPermissions.isSuperAdmin,
-        canManageAppUsers: newPermissions.canManageAppUsers,
-        canManageOrgRoles: newPermissions.canManageOrgRoles,
-        canManageSingleRoles: newPermissions.canManageSingleRoles,
-        canManageDerivedRoles: newPermissions.canManageDerivedRoles,
-        managedDerivedRolesScope: newPermissions.managedDerivedRolesScope || 'ALL',
-        canAssignRoles: newPermissions.canAssignRoles,
-        canManageReplications: newPermissions.canManageReplications,
-        canViewAuditLogs: newPermissions.canViewAuditLogs,
-        canManageSettings: newPermissions.canManageSettings,
-        allowedEnvironments: serializeEnvironments(newPermissions.allowedEnvironments),
-        isActive: newPermissions.isActive
-      });
-      if (newAuth) {
-        setAuthorizations(prev => [...prev, newAuth].filter(Boolean));
-      } else {
-        await loadData();
-      }
-      setOpenAdd(false);
-      setSelectedLdapUser(null);
-      setNewPermissions({
-        isSuperAdmin: false,
-        canManageAppUsers: false,
-        canManageOrgRoles: true,
-        canManageSingleRoles: true,
-        canManageDerivedRoles: true,
-        managedDerivedRolesScope: 'ALL',
-        canAssignRoles: true,
-        canManageReplications: false,
-        canViewAuditLogs: true,
-        canManageSettings: false,
-        allowedEnvironments: ['D', 'Q', 'P'],
-        isActive: true
-      });
-      setSnackbar({ open: true, message: 'User authorization added successfully', severity: 'success' });
-    } catch (err) {
-      setSnackbar({ open: true, message: err.message || 'Failed to add authorization', severity: 'error' });
-    }
-  };
-
-  const handleDelete = (id, name) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Remove Authorizations',
-      message: `Remove application authorizations for user "${name}"?`,
-      onConfirm: async () => {
-        setConfirmDialog(prev => ({ ...prev, open: false }));
-        try {
-          await api.deleteAppAuthorization(id);
-          setAuthorizations(prev => prev.filter(item => item.ID !== id));
-          setSnackbar({ open: true, message: 'Authorization removed successfully', severity: 'success' });
-        } catch (err) {
-          setSnackbar({ open: true, message: err.message || 'Deletion failed', severity: 'error' });
-        }
-      }
+    const selectedStreamNames = streamIds.map(id => {
+      const s = streams.find(st => st.ID === id);
+      return s ? s.name : id;
     });
+    return (
+      <Autocomplete
+        multiple
+        size="small"
+        options={streams}
+        getOptionLabel={(o) => o.name || o.ID}
+        value={streams.filter(s => streamIds.includes(s.ID))}
+        onChange={(e, val) => handleUpdateStreams(auth.ID, val.map(s => s.ID))}
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => {
+            const { key, ...tagProps } = getTagProps({ index });
+            return <Chip key={key} label={option.name} size="small" {...tagProps} />;
+          })
+        }
+        renderInput={(params) => (
+          <TextField {...params} variant="outlined" size="small" placeholder={selectedStreamNames.length === 0 ? 'No streams' : ''} sx={{ minWidth: 160 }} />
+        )}
+        sx={{ minWidth: 160 }}
+      />
+    );
   };
+
+  // ─── Table cell helpers ─────────────────────────────────────────────────────
+  const BoolCell = ({ auth, field, color }) => (
+    <TableCell align="center">
+      <Checkbox
+        size="small"
+        checked={!!auth[field]}
+        onChange={(e) => handleTogglePermission(auth.ID, field, e.target.checked)}
+        disabled={field !== 'isActive' && field !== 'isSuperAdmin' && !!auth.isSuperAdmin}
+        sx={color ? { '&.Mui-checked': { color } } : undefined}
+      />
+    </TableCell>
+  );
+
+  const IdentityCell = ({ auth }) => (
+    <>
+      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{auth.userId}</TableCell>
+      <TableCell sx={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{auth.userName}</TableCell>
+    </>
+  );
+
+  const emptyRow = (cols) => (
+    <TableRow>
+      <TableCell colSpan={cols} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+        No user authorizations defined.
+      </TableCell>
+    </TableRow>
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
+      <Snackbar open={snackbar.open} autoHideDuration={4000}
         onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert>
       </Snackbar>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Page header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
             Application Access Control
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage roles/features permission levels for administrators within the Auth Wizard itself.
+            Manage permission levels for administrators within the Auth Wizard.
           </Typography>
         </Box>
-        <Button 
-          variant="contained" 
-          startIcon={<Plus size={16} />}
-          onClick={() => setOpenAdd(true)}
-        >
-          Add User Authorization
+        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setOpenAdd(true)}>
+          Add User
         </Button>
       </Box>
 
+      {/* Open Demo Mode banner */}
       {authorizations.length === 0 && !loading && (
         <Card sx={{ bgcolor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <AlertTriangle size={24} color="#f59e0b" />
             <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f59e0b' }}>
-                Open Demo Mode Active
-              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f59e0b' }}>Open Demo Mode Active</Typography>
               <Typography variant="caption" color="text.secondary">
-                No user authorizations are explicitly defined yet. All logged-in simulation users have full administrator access. Add a user below to enable strict role-based access control.
+                No authorizations defined. All simulated users have full access. Add a user to enable strict access control.
               </Typography>
             </Box>
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress size={30} />
-          </Box>
-        ) : (
-          <TableContainer>
-             <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell style={{ fontWeight: 600 }}>User ID</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>User Name</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Active</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Super Admin</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Users</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Org Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Single Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Derived Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Assign Roles</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Replications</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Manage Settings</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">View Audit Logs</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="center">Environments</TableCell>
-                  <TableCell style={{ fontWeight: 600 }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {authorizations.length === 0 ? (
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={30} /></Box>
+      ) : (
+        <>
+          {/* ── Area 1: Manage Application ─────────────────────────────────── */}
+          <Card>
+            <SectionHeading icon={Settings} title="Manage Application"
+              subtitle="System configuration, settings, and monitoring access" />
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={14} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                      No administrator authorization definitions set.
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Active</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Super Admin</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Users</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Settings</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">View Audit Logs</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Replications</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
                   </TableRow>
-                ) : (
-                  authorizations.map(auth => {
-                    if (!auth) return null;
-                    return (
+                </TableHead>
+                <TableBody>
+                  {authorizations.length === 0
+                    ? emptyRow(9)
+                    : authorizations.map(auth => !auth ? null : (
                       <TableRow key={auth.ID} hover>
-                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{auth.userId}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{auth.userName}</TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.isActive}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'isActive', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#ef4444' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.isSuperAdmin}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'isSuperAdmin', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#f43f5e' } }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageAppUsers}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageAppUsers', e.target.checked)}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageOrgRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageOrgRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#3b82f6' } }}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageSingleRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageSingleRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#a78bfa' } }}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                          <Checkbox 
-                            checked={auth.canManageDerivedRoles}
-                            onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
-                            sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
-                            disabled={auth.isSuperAdmin}
-                          />
-                          {!auth.isSuperAdmin && auth.canManageDerivedRoles && (
-                            <ScopeSelector
-                              scopeStr={auth.managedDerivedRolesScope}
-                              onChange={(val) => handleUpdateScope(auth.ID, val)}
-                            />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canAssignRoles}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canAssignRoles', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#10b981' } }}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageReplications}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageReplications', e.target.checked)}
-                          sx={{ '&.Mui-checked': { color: '#0ea5e9' } }}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canManageSettings}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canManageSettings', e.target.checked)}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Checkbox 
-                          checked={auth.canViewAuditLogs}
-                          onChange={(e) => handleTogglePermission(auth.ID, 'canViewAuditLogs', e.target.checked)}
-                          disabled={auth.isSuperAdmin}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        {auth.isSuperAdmin ? (
-                          <Chip label="ALL" size="small" color="primary" variant="outlined" />
-                        ) : (
-                          <Select
-                            multiple
-                            value={parseEnvironments(auth.allowedEnvironments)}
-                            onChange={(e) => handleUpdateEnvironments(auth.ID, e.target.value)}
-                            input={<OutlinedInput size="small" style={{ width: 80, fontSize: '0.75rem' }} />}
-                            renderValue={(selected) => (
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.2 }}>
-                                {selected.map((value) => (
-                                  <Typography key={value} style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{value}</Typography>
-                                ))}
-                              </Box>
-                            )}
-                          >
-                            <MenuItem value="D">D (Dev)</MenuItem>
-                            <MenuItem value="Q">Q (QA)</MenuItem>
-                            <MenuItem value="P">P (Prod)</MenuItem>
-                          </Select>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton 
-                          color="error"
-                          onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}
-                          size="small"
-                        >
-                          <Trash2 size={15} />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Card>
+                        <IdentityCell auth={auth} />
+                        <BoolCell auth={auth} field="isActive" color="#ef4444" />
+                        <BoolCell auth={auth} field="isSuperAdmin" color="#f43f5e" />
+                        <BoolCell auth={auth} field="canManageAppUsers" />
+                        <BoolCell auth={auth} field="canManageSettings" />
+                        <BoolCell auth={auth} field="canViewAuditLogs" />
+                        <BoolCell auth={auth} field="canManageReplications" color="#0ea5e9" />
+                        <TableCell align="right">
+                          <IconButton color="error" size="small"
+                            onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}>
+                            <Trash2 size={15} />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
 
-      {/* Add User Dialog */}
-      <Dialog 
-        open={openAdd} 
-        onClose={() => setOpenAdd(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            bgcolor: 'background.paper',
-            backgroundImage: 'none',
-            border: '1px solid',
-            borderColor: 'divider',
-          }
-        }}
-      >
+          {/* ── Area 2: Manage Roles ───────────────────────────────────────── */}
+          <Card>
+            <SectionHeading icon={Shield} title="Manage Roles"
+              subtitle="Role creation, assignment, and stream-based scoping" color="#2563eb" />
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Org Roles</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Single Roles</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Derived Roles</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Assign Roles</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Environments</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Streams</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {authorizations.length === 0
+                    ? emptyRow(8)
+                    : authorizations.map(auth => !auth ? null : (
+                      <TableRow key={auth.ID} hover>
+                        <IdentityCell auth={auth} />
+                        <BoolCell auth={auth} field="canManageOrgRoles" color="#3b82f6" />
+                        <BoolCell auth={auth} field="canManageSingleRoles" color="#a78bfa" />
+                        {/* Derived roles + scope selector */}
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                            <Checkbox
+                              size="small"
+                              checked={!!auth.canManageDerivedRoles}
+                              onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
+                              disabled={!!auth.isSuperAdmin}
+                              sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
+                            />
+                            {!auth.isSuperAdmin && auth.canManageDerivedRoles && (
+                              <ScopeSelector
+                                scopeStr={auth.managedDerivedRolesScope}
+                                onChange={(val) => handleUpdateScope(auth.ID, val)}
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <BoolCell auth={auth} field="canAssignRoles" color="#10b981" />
+                        {/* Environments */}
+                        <TableCell align="center">
+                          {auth.isSuperAdmin ? (
+                            <Chip label="ALL" size="small" color="primary" variant="outlined" />
+                          ) : (
+                            <Select
+                              multiple
+                              value={parseEnvironments(auth.allowedEnvironments)}
+                              onChange={(e) => handleUpdateEnvironments(auth.ID, e.target.value)}
+                              input={<OutlinedInput size="small" style={{ width: 84, fontSize: '0.75rem' }} />}
+                              renderValue={(selected) => (
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.2 }}>
+                                  {selected.map(v => (
+                                    <Typography key={v} style={{ fontSize: '0.75rem', fontWeight: 700 }}>{v}</Typography>
+                                  ))}
+                                </Box>
+                              )}
+                            >
+                              <MenuItem value="D">D (Dev)</MenuItem>
+                              <MenuItem value="Q">Q (QA)</MenuItem>
+                              <MenuItem value="P">P (Prod)</MenuItem>
+                            </Select>
+                          )}
+                        </TableCell>
+                        {/* Streams */}
+                        <TableCell align="center">
+                          <StreamCell auth={auth} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        </>
+      )}
+
+      {/* ── Add User Dialog ─────────────────────────────────────────────────── */}
+      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="xs" fullWidth
+        PaperProps={{ sx: { bgcolor: 'background.paper', backgroundImage: 'none', border: '1px solid', borderColor: 'divider' } }}>
         <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 2 }}>
           Add User Authorization
         </DialogTitle>
-        <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* User search */}
           <Autocomplete
             value={selectedLdapUser}
-            onChange={(event, newValue) => {
-              setSelectedLdapUser(newValue);
-            }}
+            onChange={(e, v) => setSelectedLdapUser(v)}
             inputValue={ldapInput}
-            onInputChange={(event, newInputValue) => {
-              setLdapInput(newInputValue);
-            }}
+            onInputChange={(e, v) => setLdapInput(v)}
             options={ldapOptions}
             loading={ldapLoading}
-            getOptionLabel={(option) => `${option.displayName} (${option.username})`}
+            getOptionLabel={(o) => `${o.displayName} (${o.username})`}
             renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Search User (LDAP)"
-                size="small"
-                placeholder="Type username or name..."
+              <TextField {...params} label="Search User (LDAP)" size="small" placeholder="Type username or name..."
                 InputProps={{
                   ...(params.InputProps || {}),
-                  endAdornment: (
-                    <>
-                      {ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps?.endAdornment}
-                    </>
-                  ),
+                  endAdornment: <>{ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps?.endAdornment}</>
                 }}
               />
             )}
             renderOption={(props, option) => {
-              const { key, ...optionProps } = props;
+              const { key, ...rest } = props;
               return (
-                <li key={key || option.username} {...optionProps}>
+                <li key={key || option.username} {...rest}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName} ({option.username})</Typography>
                     <Typography variant="caption" color="text.secondary">{option.department}</Typography>
@@ -604,158 +609,145 @@ export default function AppAuthorizationsView() {
             fullWidth
           />
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>Permissions</Typography>
-            
+          {/* Account */}
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>Account</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Checkbox 
-                checked={newPermissions.isActive}
-                onChange={(e) => setNewPermissions(prev => ({ ...prev, isActive: e.target.checked }))}
-                id="perm-active"
-              />
+              <Checkbox id="perm-active" checked={newPermissions.isActive}
+                onChange={(e) => setNewPermissions(p => ({ ...p, isActive: e.target.checked }))} />
               <Box component="label" htmlFor="perm-active" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Active User Account</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>Active</Typography>
+              </Box>
+              <Checkbox id="perm-super" checked={newPermissions.isSuperAdmin}
+                onChange={(e) => setNewPermissions(p => ({ ...p, isSuperAdmin: e.target.checked }))} />
+              <Box component="label" htmlFor="perm-super" sx={{ cursor: 'pointer' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>Super Admin</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Bypasses all checks</Typography>
               </Box>
             </Box>
+          </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-              <Checkbox 
-                checked={newPermissions.isSuperAdmin}
-                onChange={(e) => setNewPermissions(prev => ({ ...prev, isSuperAdmin: e.target.checked }))}
-                id="perm-superadmin"
-              />
-              <Box component="label" htmlFor="perm-superadmin" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Super Administrator</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Unrestricted master control bypass</Typography>
+          {!newPermissions.isSuperAdmin && (
+            <>
+              <Divider />
+              {/* Application permissions */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Settings size={14} />
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>Application Permissions</Typography>
+                </Box>
+                {[
+                  { id: 'perm-app-users', field: 'canManageAppUsers', label: 'Manage App Users', desc: 'Edit other users permissions' },
+                  { id: 'perm-settings', field: 'canManageSettings', label: 'Manage Settings', desc: 'BDC, Streams, Restriction Fields' },
+                  { id: 'perm-audit', field: 'canViewAuditLogs', label: 'View Audit Logs' },
+                  { id: 'perm-repl', field: 'canManageReplications', label: 'Manage Replications', desc: 'Trigger and monitor replication runs' },
+                ].map(({ id, field, label, desc }) => (
+                  <Box key={id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Checkbox id={id} size="small" checked={newPermissions[field]}
+                      onChange={(e) => setNewPermissions(p => ({ ...p, [field]: e.target.checked }))} />
+                    <Box component="label" htmlFor={id} sx={{ cursor: 'pointer' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{label}</Typography>
+                      {desc && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{desc}</Typography>}
+                    </Box>
+                  </Box>
+                ))}
               </Box>
-            </Box>
 
-            {!newPermissions.isSuperAdmin && (
-              <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canManageAppUsers}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageAppUsers: e.target.checked }))}
-                    id="perm-app-users"
-                  />
-                  <Box component="label" htmlFor="perm-app-users" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Application Users</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Edit permissions of other admin users</Typography>
+              <Divider />
+              {/* Role management permissions */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Shield size={14} />
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>Role Management Permissions</Typography>
+                </Box>
+                {[
+                  { id: 'perm-org', field: 'canManageOrgRoles', label: 'Org-Based Roles' },
+                  { id: 'perm-single', field: 'canManageSingleRoles', label: 'Single Roles' },
+                  { id: 'perm-assign', field: 'canAssignRoles', label: 'Assign Roles' },
+                ].map(({ id, field, label }) => (
+                  <Box key={id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Checkbox id={id} size="small" checked={newPermissions[field]}
+                      onChange={(e) => setNewPermissions(p => ({ ...p, [field]: e.target.checked }))} />
+                    <Box component="label" htmlFor={id} sx={{ cursor: 'pointer' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{label}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+
+                {/* Derived roles */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                  <Checkbox id="perm-derived" size="small" checked={newPermissions.canManageDerivedRoles}
+                    onChange={(e) => setNewPermissions(p => ({ ...p, canManageDerivedRoles: e.target.checked }))} />
+                  <Box component="label" htmlFor="perm-derived" sx={{ cursor: 'pointer' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Derived Roles</Typography>
                   </Box>
                 </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canManageOrgRoles}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageOrgRoles: e.target.checked }))}
-                    id="perm-org-roles"
-                  />
-                  <Box component="label" htmlFor="perm-org-roles" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Org-Based Roles</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canManageSingleRoles}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageSingleRoles: e.target.checked }))}
-                    id="perm-single-roles"
-                  />
-                  <Box component="label" htmlFor="perm-single-roles" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Single Roles</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Checkbox 
-                      checked={newPermissions.canManageDerivedRoles}
-                      onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageDerivedRoles: e.target.checked }))}
-                      id="perm-derived-roles"
+                {newPermissions.canManageDerivedRoles && (
+                  <Box sx={{ ml: 4, mt: 0.5 }}>
+                    <ScopeSelector
+                      scopeStr={newPermissions.managedDerivedRolesScope}
+                      onChange={(val) => setNewPermissions(p => ({ ...p, managedDerivedRolesScope: val }))}
                     />
-                    <Box component="label" htmlFor="perm-derived-roles" sx={{ cursor: 'pointer' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Derived Roles</Typography>
-                    </Box>
                   </Box>
-                  {newPermissions.canManageDerivedRoles && (
-                    <Box sx={{ ml: 4, mt: 0.5 }}>
-                      <ScopeSelector
-                        scopeStr={newPermissions.managedDerivedRolesScope}
-                        onChange={(val) => setNewPermissions(prev => ({ ...prev, managedDerivedRolesScope: val }))}
-                      />
-                    </Box>
-                  )}
-                </Box>
+                )}
 
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canAssignRoles}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canAssignRoles: e.target.checked }))}
-                    id="perm-assign"
-                  />
-                  <Box component="label" htmlFor="perm-assign" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Assign Roles</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canManageReplications}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageReplications: e.target.checked }))}
-                    id="perm-replications"
-                  />
-                  <Box component="label" htmlFor="perm-replications" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Replications</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Trigger and monitor Datasphere replication runs</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canManageSettings}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canManageSettings: e.target.checked }))}
-                    id="perm-settings"
-                  />
-                  <Box component="label" htmlFor="perm-settings" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Settings</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Configure BDC, Contexts, and Fields</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Checkbox 
-                    checked={newPermissions.canViewAuditLogs}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, canViewAuditLogs: e.target.checked }))}
-                    id="perm-audit"
-                  />
-                  <Box component="label" htmlFor="perm-audit" sx={{ cursor: 'pointer' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>View System Audit Logs</Typography>
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 2 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Allowed Environments</Typography>
+                {/* Environments */}
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Allowed Environments</Typography>
                   <Select
                     multiple
                     value={newPermissions.allowedEnvironments}
-                    onChange={(e) => setNewPermissions(prev => ({ ...prev, allowedEnvironments: e.target.value }))}
+                    onChange={(e) => setNewPermissions(p => ({ ...p, allowedEnvironments: e.target.value }))}
                     input={<OutlinedInput size="small" />}
                     renderValue={(selected) => (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((value) => (
-                          <Chip key={value} label={value} size="small" />
-                        ))}
+                        {selected.map(v => <Chip key={v} label={v} size="small" />)}
                       </Box>
                     )}
+                    fullWidth
                   >
                     <MenuItem value="D">D (Dev)</MenuItem>
                     <MenuItem value="Q">Q (QA)</MenuItem>
                     <MenuItem value="P">P (Prod)</MenuItem>
                   </Select>
                 </Box>
-              </>
-            )}
-          </Box>
+
+                {/* Streams */}
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Allowed Streams</Typography>
+                  {newPermissions.allowedStreams === null ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label="All Streams" size="small" color="primary" variant="outlined" />
+                      <Button size="small" variant="text" onClick={() => setNewPermissions(p => ({ ...p, allowedStreams: [] }))}>
+                        Restrict
+                      </Button>
+                    </Box>
+                  ) : (
+                    <Autocomplete
+                      multiple size="small"
+                      options={streams}
+                      getOptionLabel={(o) => o.name || o.ID}
+                      value={streams.filter(s => (newPermissions.allowedStreams || []).includes(s.ID))}
+                      onChange={(e, val) => setNewPermissions(p => ({ ...p, allowedStreams: val.map(s => s.ID) }))}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => {
+                          const { key, ...tagProps } = getTagProps({ index });
+                          return <Chip key={key} label={option.name} size="small" {...tagProps} />;
+                        })
+                      }
+                      renderInput={(params) => <TextField {...params} placeholder="Select streams..." variant="outlined" />}
+                    />
+                  )}
+                  {newPermissions.allowedStreams !== null && newPermissions.allowedStreams.length === 0 && (
+                    <Button size="small" variant="text" sx={{ mt: 0.5 }}
+                      onClick={() => setNewPermissions(p => ({ ...p, allowedStreams: null }))}>
+                      ← Grant all streams
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            </>
+          )}
         </DialogContent>
         <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
           <Button onClick={() => setOpenAdd(false)} color="inherit">Cancel</Button>
@@ -763,28 +755,15 @@ export default function AppAuthorizationsView() {
         </DialogActions>
       </Dialog>
 
-      {/* Confirm Dialog */}
-      <Dialog
-        open={confirmDialog.open}
-        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-description"
-      >
-        <DialogTitle id="confirm-dialog-title">
-          {confirmDialog.title}
-        </DialogTitle>
+      {/* ── Confirm Dialog ──────────────────────────────────────────────────── */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog(p => ({ ...p, open: false }))}>
+        <DialogTitle>{confirmDialog.title}</DialogTitle>
         <DialogContent>
-          <DialogContentText id="confirm-dialog-description">
-            {confirmDialog.message}
-          </DialogContentText>
+          <DialogContentText>{confirmDialog.message}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))} color="inherit">
-            Cancel
-          </Button>
-          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>
-            Confirm
-          </Button>
+          <Button onClick={() => setConfirmDialog(p => ({ ...p, open: false }))} color="inherit">Cancel</Button>
+          <Button onClick={confirmDialog.onConfirm} color="primary" variant="contained" autoFocus>Confirm</Button>
         </DialogActions>
       </Dialog>
     </Box>

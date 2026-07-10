@@ -27,6 +27,7 @@ export function PermissionsProvider({ userId, children }) {
         canViewAuditLogs: false,
         canManageSettings: false,
         allowedEnvironments: '[]',
+        allowedStreams: '[]',
         isActive: false
       });
     } catch (err) {
@@ -44,6 +45,7 @@ export function PermissionsProvider({ userId, children }) {
         canViewAuditLogs: false,
         canManageSettings: false,
         allowedEnvironments: '[]',
+        allowedStreams: '[]',
         isActive: false
       });
     } finally {

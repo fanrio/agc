@@ -46,6 +46,7 @@ async function getSessionPermissions(req, db, AppAuthorizations) {
       canViewAuditLogs: true,
       canManageSettings: true,
       allowedEnvironments: 'ALL',
+      allowedStreams: 'ALL',
       isActive: true
     };
   }
@@ -68,6 +69,7 @@ async function getSessionPermissions(req, db, AppAuthorizations) {
       canViewAuditLogs: false,
       canManageSettings: false,
       allowedEnvironments: '[]',
+      allowedStreams: '[]',
       isActive: false
     };
   }
@@ -103,9 +105,27 @@ function requireEnvironment(permissions, envId, req) {
   req.reject(403, `Access Denied: You are not authorized to manage resources in environment ${envId || 'unspecified'}.`);
 }
 
+function requireStream(permissions, streamId, req) {
+  if (permissions.isSuperAdmin) return; // SuperAdmin bypasses all checks
+  const allowed = permissions.allowedStreams || 'ALL';
+  if (allowed === 'ALL' || allowed === '*') return;
+
+  try {
+    const streams = JSON.parse(allowed);
+    if (Array.isArray(streams) && streams.includes(streamId)) return;
+  } catch (e) {
+    // Fallback: comma separated list
+    const streams = allowed.split(',').map(s => s.trim());
+    if (streams.includes(String(streamId).trim())) return;
+  }
+
+  req.reject(403, `Access Denied: You are not authorized to manage roles in stream ${streamId || 'unspecified'}.`);
+}
+
 module.exports = {
   getUserId,
   getSessionPermissions,
   requirePermission,
-  requireEnvironment
+  requireEnvironment,
+  requireStream
 };

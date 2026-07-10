@@ -66,7 +66,8 @@ module.exports = cds.service.impl(async function () {
     getUserId,
     getSessionPermissions,
     requirePermission,
-    requireEnvironment
+    requireEnvironment,
+    requireStream
   } = require('./lib/authGuard');
 
   // Action: getCurrentUserPermissions
@@ -101,6 +102,7 @@ module.exports = cds.service.impl(async function () {
           canViewAuditLogs: true,
           canManageSettings: true,
           allowedEnvironments: 'ALL',
+          allowedStreams: 'ALL',
           isActive: true
         }));
         console.log(`[auth] Successfully bootstrapped super admin user: ${superAdminId}`);
@@ -158,6 +160,16 @@ module.exports = cds.service.impl(async function () {
 
     if (envId) {
       requireEnvironment(perms, envId, req);
+    }
+
+    // Stream-based role management scoping
+    let streamId = req.data.stream_ID;
+    if (!streamId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
+      const existingForStream = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+      if (existingForStream) streamId = existingForStream.stream_ID;
+    }
+    if (streamId) {
+      requireStream(perms, streamId, req);
     }
 
     if (roleType === 'ORG_BASED') {
