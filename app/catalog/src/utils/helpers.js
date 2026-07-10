@@ -74,3 +74,47 @@ export function isRoleInScope(roleId, roleName, scope) {
   return false;
 }
 
+export function filterRolesByPermissions(roles, permissions) {
+  if (!roles) return [];
+  if (!permissions) return roles;
+  if (permissions.isSuperAdmin) return roles;
+
+  // Filter by allowedEnvironments
+  const parseEnvs = (val) => {
+    if (!val || val === 'ALL' || val === '*') return 'ALL';
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return val.split(',').map(s => s.trim().toUpperCase());
+    }
+    return [];
+  };
+  const allowedEnvs = parseEnvs(permissions.allowedEnvironments);
+
+  // Filter by allowedStreams
+  const parseStreams = (val) => {
+    if (!val || val === 'ALL' || val === '*') return 'ALL';
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      return val.split(',').map(s => s.trim());
+    }
+    return [];
+  };
+  const allowedStreams = parseStreams(permissions.allowedStreams);
+
+  return roles.filter(role => {
+    if (allowedEnvs !== 'ALL') {
+      const roleEnv = (role.environment_ID || '').toUpperCase();
+      if (!allowedEnvs.includes(roleEnv)) return false;
+    }
+    if (allowedStreams !== 'ALL') {
+      const roleStream = role.stream_ID;
+      if (!allowedStreams.includes(roleStream)) return false;
+    }
+    return true;
+  });
+}
+

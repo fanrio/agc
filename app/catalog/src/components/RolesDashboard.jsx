@@ -3,7 +3,7 @@ import { Box, Typography, Button, TextField, Alert, Snackbar, Dialog, DialogTitl
 import { Shield, Plus } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
-import { isCriticalRestriction, isRoleInScope } from '../utils/helpers';
+import { isCriticalRestriction, isRoleInScope, filterRolesByPermissions } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
 
 // Helper recursively collecting all restrictions for a role
@@ -113,7 +113,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         api.getRoles(),
         api.getAllOrgNodesFlat()
       ]);
-      setRoles(rolesData);
+      setRoles(filterRolesByPermissions(rolesData, permissions));
       setOrgNodes(nodesData);
     } catch (e) { console.error(e); }
     setLoading(false);

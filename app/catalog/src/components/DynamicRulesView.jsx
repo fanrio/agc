@@ -8,8 +8,11 @@ import {
 } from '@mui/material';
 import { Play, Edit, Trash2, Plus, RefreshCw } from 'lucide-react';
 import * as api from '../api';
+import { usePermissions } from '../context/PermissionsContext';
+import { filterRolesByPermissions } from '../utils/helpers';
 
 export default function DynamicRulesView() {
+  const { permissions } = usePermissions();
   const [rules, setRules] = useState([]);
   const [roles, setRoles] = useState([]);
   const [fields, setFields] = useState([]);
@@ -51,7 +54,7 @@ export default function DynamicRulesView() {
         api.getBdcSettings()
       ]);
       setRules(rData || []);
-      setRoles(rolesData || []);
+      setRoles(filterRolesByPermissions(rolesData || [], permissions));
       setFields(fieldsData || []);
       setConnections(connData || []);
     } catch (err) {

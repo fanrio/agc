@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Box, Card, Typography, Grid, CircularProgress, Button, List, ListItem, ListItemIcon, ListItemText, Alert, Chip } from '@mui/material';
 import { Shield, Users, Building2, Network, Settings, ChevronRight, Zap, Play, Cloud, Activity } from 'lucide-react';
 import * as api from '../api';
+import { usePermissions } from '../context/PermissionsContext';
+import { filterRolesByPermissions } from '../utils/helpers';
 
 export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }) {
+  const { permissions } = usePermissions();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -12,7 +15,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
     setLoading(true);
     setError('');
     try {
-      const [roles, nodes, assignments, streams, fields, bdcSettings] = await Promise.all([
+      const [rawRoles, nodes, assignments, streams, fields, bdcSettings] = await Promise.all([
         api.getRoles(),
         api.getAllOrgNodesFlat(),
         api.getAssignments(),
@@ -20,6 +23,8 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
         api.getRestrictionFields(),
         api.getBdcSettings()
       ]);
+
+      const roles = filterRolesByPermissions(rawRoles, permissions);
 
       // Calculate unique users
       const uniqueUsers = new Set(assignments.map(a => a.userId));

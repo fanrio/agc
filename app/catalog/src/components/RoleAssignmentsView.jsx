@@ -3,6 +3,7 @@ import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, 
 import { Plus, Trash2, X, Check, Shield, Users } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
+import { filterRolesByPermissions } from '../utils/helpers';
 
 // Helper to recursively check if a role or any of its parents has restrictions
 function hasAnyRestrictions(role, allRoles) {
@@ -48,8 +49,10 @@ export default function RoleAssignmentsView() {
         api.getAssignments(),
         api.getRoles()
       ]);
-      setAssignments(assignData);
-      setRoles(roleData);
+      const filteredRoles = filterRolesByPermissions(roleData, permissions);
+      const allowedRoleIds = new Set(filteredRoles.map(r => r.ID));
+      setAssignments(assignData.filter(a => allowedRoleIds.has(a.role_ID)));
+      setRoles(filteredRoles);
     } catch (e) {
       setError(`Failed to load data: ${e.message}`);
     }
