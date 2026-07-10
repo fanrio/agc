@@ -13,6 +13,13 @@
 
 const { isMockUrl } = require('../lib/urlUtils');
 
+const REPLICATION_STATUS = {
+  OPEN: 'Open',
+  RUNNING: 'Running',
+  SUCCESS: 'Success',
+  FAILED: 'Failed'
+};
+
 /**
  * Inserts a new 'Open' replication record for the given role, unless one already exists.
  *
@@ -27,14 +34,14 @@ async function queueReplication(cds, Replications, roleName, environmentId, user
   try {
     const envId = environmentId || 'D';
     const existing = await cds.db.run(
-      SELECT.one.from(Replications).where({ replicationRoles: roleName, environment_ID: envId, status: 'Open' })
+      SELECT.one.from(Replications).where({ replicationRoles: roleName, environment_ID: envId, status: REPLICATION_STATUS.OPEN })
     );
     if (existing) return; // already queued — avoid duplicates
 
     await cds.db.run(INSERT.into(Replications).entries({
       ID:               cds.utils.uuid(),
       replicationDate:  new Date().toISOString(),
-      status:           'Open',
+      status:           REPLICATION_STATUS.OPEN,
       replicationRoles: roleName,
       environment_ID:   envId,
       user:             user || 'system'
@@ -56,7 +63,7 @@ async function checkAndUpdateRunningReplications(cds, entities, BdcClient) {
   const db = cds.db;
   const { Replications, BdcSettings } = entities;
 
-  const runningReps = await db.run(SELECT.from(Replications).where({ status: 'Running' }));
+  const runningReps = await db.run(SELECT.from(Replications).where({ status: REPLICATION_STATUS.RUNNING }));
   if (runningReps.length === 0) {
     return { success: true, message: 'No running replications.' };
   }
@@ -114,10 +121,10 @@ async function checkAndUpdateRunningReplications(cds, entities, BdcClient) {
 
       const now = finishedAt || new Date().toISOString();
       if (status === 'COMPLETED') {
-        await db.run(UPDATE(Replications).set({ status: 'Success',  replicationDate: now, endTime: now }).where({ runId, status: 'Running' }));
+        await db.run(UPDATE(Replications).set({ status: REPLICATION_STATUS.SUCCESS,  replicationDate: now, endTime: now }).where({ runId, status: REPLICATION_STATUS.RUNNING }));
         results.push(`Run ${runId} completed successfully.`);
       } else if (status === 'FAILED' || status === 'ABORTED') {
-        await db.run(UPDATE(Replications).set({ status: 'Failed', replicationDate: now, endTime: now }).where({ runId, status: 'Running' }));
+        await db.run(UPDATE(Replications).set({ status: REPLICATION_STATUS.FAILED, replicationDate: now, endTime: now }).where({ runId, status: REPLICATION_STATUS.RUNNING }));
         results.push(`Run ${runId} failed or aborted.`);
       } else {
         results.push(`Run ${runId} is still running.`);
@@ -156,7 +163,7 @@ function makeTriggerReplicationHandler(cds, entities, BdcClient) {
     });
 
     // 2. Fetch all pending Open or Failed replications
-    const openReps = await db.run(SELECT.from(Replications).where({ status: { in: ['Open', 'Failed'] } }));
+    const openReps = await db.run(SELECT.from(Replications).where({ status: { in: [REPLICATION_STATUS.OPEN, REPLICATION_STATUS.FAILED] } }));
     if (openReps.length === 0) {
       return { success: true, message: 'No pending or failed changes to replicate.' };
     }
@@ -214,8 +221,8 @@ function makeTriggerReplicationHandler(cds, entities, BdcClient) {
 
         if (success) {
           await db.run(UPDATE(Replications)
-            .set({ status: 'Running', replicationDate: runStartTime, startTime: runStartTime, user: runUser, runId: String(finalLogId) })
-            .where({ environment_ID: envId, status: { in: ['Open', 'Failed'] } }));
+            .set({ status: REPLICATION_STATUS.RUNNING, replicationDate: runStartTime, startTime: runStartTime, user: runUser, runId: String(finalLogId) })
+            .where({ environment_ID: envId, status: { in: [REPLICATION_STATUS.OPEN, REPLICATION_STATUS.FAILED] } }));
           results.push(`Environment ${envId}: Started replication (Run ID: ${finalLogId}) via ${activeSetting.systemName}`);
         } else {
           errors.push(`Environment ${envId}: Replication failed to trigger.`);

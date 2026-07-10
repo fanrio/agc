@@ -718,7 +718,7 @@ export default function AppAuthorizationsView() {
                   />
                   <Box component="label" htmlFor="perm-settings" sx={{ cursor: 'pointer' }}>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>Manage Settings</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Configure BDC, Streams, and Fields</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Configure BDC, Contexts, and Fields</Typography>
                   </Box>
                 </Box>
 

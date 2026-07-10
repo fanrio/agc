@@ -17,7 +17,7 @@ export default function AdministrationView() {
   const TABS = [];
   if (permissions?.isSuperAdmin || permissions?.canManageSettings) {
     TABS.push({ id: 0, label: 'Restriction Fields', icon: <Settings size={16} />, component: <RestrictionFieldsView /> });
-    TABS.push({ id: 1, label: 'Operational Streams', icon: <Network size={16} />, component: <StreamsView /> });
+    TABS.push({ id: 1, label: 'Streams', icon: <Network size={16} />, component: <StreamsView /> });
     TABS.push({ id: 2, label: 'BDC Connections', icon: <Cloud size={16} />, component: <BdcSettingsView /> });
     TABS.push({ id: 3, label: 'BDC API Tester', icon: <Terminal size={16} />, component: <BdcApiTesterView /> });
   }
@@ -52,7 +52,7 @@ export default function AdministrationView() {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>System Administration</Typography>
-        <Typography variant="body2" color="text.secondary">Configure global parameters, restriction fields, operational streams, BDC gateways, and dynamic generation engines</Typography>
+        <Typography variant="body2" color="text.secondary">Configure global parameters, restriction fields, application contexts, BDC gateways, and dynamic generation engines</Typography>
       </Box>
 
       {/* Tabs */}

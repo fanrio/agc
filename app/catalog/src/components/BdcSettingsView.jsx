@@ -329,6 +329,14 @@ export default function BdcSettingsView() {
     }
   }
 
+  if (loading && settings.length === 0 && environments.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ animation: 'fadeIn 0.3s' }}>
       <Snackbar

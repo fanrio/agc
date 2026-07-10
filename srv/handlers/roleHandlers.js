@@ -26,6 +26,7 @@ function registerRoleHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   service.before('CREATE', 'Roles', (req) => {
     if (!req.data.ID) req.data.ID = cds.utils.uuid();
+    if (!req.data.stream_ID) req.data.stream_ID = 'app-global';
   });
 
   // -------------------------------------------------------------------------

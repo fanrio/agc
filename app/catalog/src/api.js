@@ -56,10 +56,12 @@ export const updateRestrictionField = (id, body) => request('PATCH',  `/Restrict
 export const deleteRestrictionField = (id)      => request('DELETE', `/RestrictionFields('${id}')`);
 
 // Streams
-export const getStreams            = ()          => request('GET',    '/Streams');
-export const createStream          = (body)      => request('POST',   '/Streams', body);
-export const updateStream          = (id, body)  => request('PATCH',  `/Streams('${id}')`, body);
-export const deleteStream          = (id)        => request('DELETE', `/Streams('${id}')`);
+export const getStreamsFlat             = ()          => request('GET',    '/Streams?$expand=attributes,type');
+export const createStreamNode           = (body)      => request('POST',   '/Streams', body);
+export const updateStreamNode           = (id, body)  => request('PATCH',  `/Streams('${id}')`, body);
+export const deleteStreamNode           = (id)        => request('DELETE', `/Streams('${id}')`);
+export const createStreamAttr           = (body)      => request('POST',   '/StreamAttributes', body);
+export const deleteStreamAttr           = (id)        => request('DELETE', `/StreamAttributes(${id})`);
 
 // Assignments
 export const getAssignments    = ()             => request('GET',    '/RoleAssignments?$expand=role');
@@ -76,6 +78,7 @@ export const fetchBdcSpaces     = (url, tokenUrl, clientId, clientSecret) => req
 export const fetchBdcAssets     = (url, tokenUrl, clientId, clientSecret, space) => request('POST', '/fetchBdcAssets', { url, tokenUrl, clientId, clientSecret, space });
 export const fetchBdcRelationalValues = (url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn) => request('POST', '/fetchBdcRelationalValues', { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn });
 export const fetchBdcAssetColumns = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchBdcAssetColumns', { url, tokenUrl, clientId, clientSecret, space, asset });
+export const fetchBdcAssetKeyColumns = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchBdcAssetKeyColumns', { url, tokenUrl, clientId, clientSecret, space, asset });
 
 // Actions
 export const generateOrgRole   = (orgNodeId)    => request('POST', '/generateOrgRole', { orgNodeId });
@@ -105,7 +108,7 @@ export const triggerReplication         = ()             => request('POST',   '/
 export const checkReplicationStatuses   = ()             => request('POST',   '/checkReplicationStatuses', {});
 
 // Dynamic Rules & Customers
-export const getDynamicRules = () => request('GET', '/DynamicGenerationRules?$expand=templateRole');
+export const getDynamicRules = () => request('GET', '/DynamicGenerationRules?$expand=templateRole,mappings,bdcConnection');
 export const createDynamicRule = (body) => request('POST', '/DynamicGenerationRules', body);
 export const updateDynamicRule = (id, body) => request('PATCH', `/DynamicGenerationRules('${id}')`, body);
 export const deleteDynamicRule = (id) => request('DELETE', `/DynamicGenerationRules('${id}')`);

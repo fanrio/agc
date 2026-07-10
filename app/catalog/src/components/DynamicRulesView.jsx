@@ -13,7 +13,13 @@ export default function DynamicRulesView() {
   const [rules, setRules] = useState([]);
   const [roles, setRoles] = useState([]);
   const [fields, setFields] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [assetColumns, setAssetColumns] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+  const [loadingColumns, setLoadingColumns] = useState(false);
   const [syncingRuleId, setSyncingRuleId] = useState(null);
   
   // Dialog state
@@ -23,15 +29,14 @@ export default function DynamicRulesView() {
     code: '',
     description: '',
     isActive: true,
-    sourceType: 'LOCAL_DB',
-    sourceEntity: 'fanrio.auth.Customers',
-    sourceKeyField: 'ID',
-    sourceResponsibleField: 'responsibleUser',
+    sourceType: 'ODATA_SERVICE',
+    sourceEntity: '',
+    sourceResponsibleField: '',
     sourceFilterCondition: '',
     generationMode: 'USER_CONSOLIDATED_ROLE',
     templateRole_ID: '',
-    targetRestrictionField: '',
-    filterType: 'MULTI_VALUE'
+    bdcConnection_ID: '',
+    mappings: []
   });
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -39,14 +44,16 @@ export default function DynamicRulesView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rData, rolesData, fieldsData] = await Promise.all([
+      const [rData, rolesData, fieldsData, connData] = await Promise.all([
         api.getDynamicRules(),
         api.getRoles(),
-        api.getRestrictionFields()
+        api.getRestrictionFields(),
+        api.getBdcSettings()
       ]);
       setRules(rData || []);
       setRoles(rolesData || []);
       setFields(fieldsData || []);
+      setConnections(connData || []);
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
@@ -57,26 +64,90 @@ export default function DynamicRulesView() {
     loadData();
   }, []);
 
+  // Fetch BDC Assets whenever connection selection changes in the form
+  useEffect(() => {
+    if (!form.bdcConnection_ID) {
+      setAssets([]);
+      return;
+    }
+    const conn = connections.find(c => c.ID === form.bdcConnection_ID);
+    if (conn) {
+      setLoadingAssets(true);
+      api.fetchBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space)
+        .then(assetsList => {
+          setAssets(assetsList || []);
+        })
+        .catch(err => {
+          console.error('Failed to load BDC Assets:', err);
+          setAssets([]);
+          setSnackbar({ open: true, message: `Failed to load BDC Assets: ${err.message}`, severity: 'error' });
+        })
+        .finally(() => {
+          setLoadingAssets(false);
+        });
+    }
+  }, [form.bdcConnection_ID, connections]);
+
+  // Fetch Key Columns & All Columns when the BDC Asset selection changes
+  const handleAssetChange = async (selectedAsset) => {
+    setForm(p => ({ ...p, sourceEntity: selectedAsset, sourceResponsibleField: '', mappings: [] }));
+    setAssetColumns([]);
+    if (!selectedAsset) return;
+
+    const conn = connections.find(c => c.ID === form.bdcConnection_ID);
+    if (!conn) return;
+
+    // 1. Fetch Key Columns
+    setLoadingKeys(true);
+    try {
+      const keys = await api.fetchBdcAssetKeyColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, selectedAsset);
+      if (keys && keys.length > 0) {
+        setForm(p => ({
+          ...p,
+          mappings: keys.map(k => ({ sourceKeyField: k, targetRestrictionField: '' }))
+        }));
+      } else {
+        setSnackbar({ open: true, message: 'No key columns found in metadata for selected asset.', severity: 'warning' });
+      }
+    } catch (err) {
+      console.error('Failed to fetch asset key columns:', err);
+      setSnackbar({ open: true, message: `Failed to fetch asset key columns: ${err.message}`, severity: 'error' });
+    }
+    setLoadingKeys(false);
+
+    // 2. Fetch All Columns for Responsible User selector
+    setLoadingColumns(true);
+    try {
+      const cols = await api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, selectedAsset);
+      setAssetColumns(cols || []);
+    } catch (err) {
+      console.error('Failed to fetch asset columns:', err);
+      setSnackbar({ open: true, message: `Failed to fetch asset columns: ${err.message}`, severity: 'error' });
+    }
+    setLoadingColumns(false);
+  };
+
   const handleOpenCreate = () => {
     setEditingRule(null);
     setForm({
       code: '',
       description: '',
       isActive: true,
-      sourceType: 'LOCAL_DB',
-      sourceEntity: 'fanrio.auth.Customers',
-      sourceKeyField: 'ID',
-      sourceResponsibleField: 'responsibleUser',
+      sourceType: 'ODATA_SERVICE',
+      sourceEntity: '',
+      sourceResponsibleField: '',
       sourceFilterCondition: '',
       generationMode: 'USER_CONSOLIDATED_ROLE',
       templateRole_ID: '',
-      targetRestrictionField: '',
-      filterType: 'MULTI_VALUE'
+      bdcConnection_ID: connections[0]?.ID || '',
+      mappings: []
     });
+    setAssetColumns([]);
     setOpen(true);
   };
 
-  const handleOpenEdit = (rule) => {
+  // On Edit, populate available columns if we have an active connection and asset selected
+  const handleOpenEdit = async (rule) => {
     setEditingRule(rule);
     setForm({
       code: rule.code,
@@ -84,24 +155,64 @@ export default function DynamicRulesView() {
       isActive: rule.isActive,
       sourceType: rule.sourceType,
       sourceEntity: rule.sourceEntity,
-      sourceKeyField: rule.sourceKeyField,
       sourceResponsibleField: rule.sourceResponsibleField,
       sourceFilterCondition: rule.sourceFilterCondition || '',
       generationMode: rule.generationMode,
       templateRole_ID: rule.templateRole_ID || '',
-      targetRestrictionField: rule.targetRestrictionField || '',
-      filterType: rule.filterType
+      bdcConnection_ID: rule.bdcConnection_ID || '',
+      mappings: (rule.mappings || []).map(m => ({
+        sourceKeyField: m.sourceKeyField,
+        targetRestrictionField: m.targetRestrictionField
+      }))
     });
+    setAssetColumns([]);
+
+    const conn = connections.find(c => c.ID === rule.bdcConnection_ID);
+    if (conn && rule.sourceEntity) {
+      setLoadingColumns(true);
+      try {
+        const cols = await api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, rule.sourceEntity);
+        setAssetColumns(cols || []);
+      } catch (err) {
+        console.error('Failed to fetch asset columns for editing rule:', err);
+      }
+      setLoadingColumns(false);
+    }
     setOpen(true);
   };
 
   const handleClose = () => setOpen(false);
+
+  const handleMappingChange = (index, value) => {
+    setForm(p => {
+      const newMappings = [...p.mappings];
+      newMappings[index] = { ...newMappings[index], targetRestrictionField: value };
+      return { ...p, mappings: newMappings };
+    });
+  };
 
   const handleSave = async () => {
     if (!form.code.trim()) {
       setSnackbar({ open: true, message: 'Rule Code is required', severity: 'error' });
       return;
     }
+    if (!form.bdcConnection_ID) {
+      setSnackbar({ open: true, message: 'BDC Connection is required', severity: 'error' });
+      return;
+    }
+    if (!form.sourceEntity) {
+      setSnackbar({ open: true, message: 'Source BDC Asset is required', severity: 'error' });
+      return;
+    }
+    if (!form.sourceResponsibleField) {
+      setSnackbar({ open: true, message: 'User (Responsible) Field is required', severity: 'error' });
+      return;
+    }
+    if (form.mappings.length === 0 || form.mappings.some(m => !m.sourceKeyField.trim() || !m.targetRestrictionField.trim())) {
+      setSnackbar({ open: true, message: 'All auto-generated field mappings must be fully configured', severity: 'error' });
+      return;
+    }
+
     try {
       if (editingRule) {
         await api.updateDynamicRule(editingRule.ID, form);
@@ -161,9 +272,10 @@ export default function DynamicRulesView() {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Rule Code</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Source Table</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>BDC Connection</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>BDC Asset</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>User Field</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Target Field</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Mappings Count</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Mode</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
@@ -172,15 +284,16 @@ export default function DynamicRulesView() {
             <TableBody>
               {rules.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ color: 'text.secondary', py: 4 }}>No dynamic rules configured.</TableCell>
+                  <TableCell colSpan={8} align="center" sx={{ color: 'text.secondary', py: 4 }}>No dynamic rules configured.</TableCell>
                 </TableRow>
               ) : (
                 rules.map((rule) => (
                   <TableRow key={rule.ID}>
                     <TableCell sx={{ fontWeight: 600 }}>{rule.code}</TableCell>
+                    <TableCell>{rule.bdcConnection?.systemName || 'Unknown'}</TableCell>
                     <TableCell>{rule.sourceEntity}</TableCell>
                     <TableCell>{rule.sourceResponsibleField}</TableCell>
-                    <TableCell>{rule.targetRestrictionField || 'N/A'}</TableCell>
+                    <TableCell>{(rule.mappings || []).length} field(s)</TableCell>
                     <TableCell>
                       <Typography variant="caption" sx={{ px: 1, py: 0.5, bgcolor: 'action.selected', borderRadius: 1, fontWeight: 600 }}>
                         {rule.generationMode === 'USER_CONSOLIDATED_ROLE' ? 'CONSOLIDATED' : 'TEMPLATE'}
@@ -239,54 +352,96 @@ export default function DynamicRulesView() {
             />
             
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Source Master Data Settings</Typography>
+            
             <FormControl size="small" fullWidth>
-              <InputLabel>Source Type</InputLabel>
+              <InputLabel>BDC Connection</InputLabel>
               <Select
-                value={form.sourceType}
-                label="Source Type"
-                onChange={(e) => setForm(p => ({ ...p, sourceType: e.target.value }))}
+                value={form.bdcConnection_ID}
+                label="BDC Connection"
+                onChange={(e) => setForm(p => ({ ...p, bdcConnection_ID: e.target.value }))}
               >
-                <MenuItem value="LOCAL_DB">Local Database Entity</MenuItem>
-                <MenuItem value="HANA_VIEW">SAP HANA View</MenuItem>
-                <MenuItem value="ODATA_SERVICE">External OData Service</MenuItem>
+                {connections.map(c => <MenuItem key={c.ID} value={c.ID}>{c.systemName} ({c.space})</MenuItem>)}
               </Select>
             </FormControl>
 
-            <TextField
-              label="Source Entity / Table Path"
-              size="small"
-              value={form.sourceEntity}
-              onChange={(e) => setForm(p => ({ ...p, sourceEntity: e.target.value }))}
-              fullWidth
-            />
+            <FormControl size="small" fullWidth disabled={loadingAssets || !form.bdcConnection_ID}>
+              <InputLabel id="bdc-asset-label">
+                {loadingAssets ? 'Loading Assets...' : 'BDC Asset'}
+              </InputLabel>
+              <Select
+                labelId="bdc-asset-label"
+                label="BDC Asset"
+                value={form.sourceEntity || ''}
+                onChange={(e) => handleAssetChange(e.target.value)}
+              >
+                {assets.map(asset => (
+                  <MenuItem key={asset} value={asset}>{asset}</MenuItem>
+                ))}
+                {assets.length === 0 && !loadingAssets && (
+                  <MenuItem value="" disabled>No assets available</MenuItem>
+                )}
+              </Select>
+            </FormControl>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Key Field Name"
-                size="small"
-                value={form.sourceKeyField}
-                onChange={(e) => setForm(p => ({ ...p, sourceKeyField: e.target.value }))}
-                fullWidth
-              />
-              <TextField
+            <FormControl size="small" fullWidth disabled={loadingColumns || !form.sourceEntity}>
+              <InputLabel id="bdc-responsible-label">
+                {loadingColumns ? 'Loading Columns...' : 'User (Responsible) Field'}
+              </InputLabel>
+              <Select
+                labelId="bdc-responsible-label"
                 label="User (Responsible) Field"
-                size="small"
-                value={form.sourceResponsibleField}
+                value={form.sourceResponsibleField || ''}
                 onChange={(e) => setForm(p => ({ ...p, sourceResponsibleField: e.target.value }))}
-                fullWidth
-              />
-            </Box>
+              >
+                {assetColumns.map(col => (
+                  <MenuItem key={col} value={col}>{col}</MenuItem>
+                ))}
+                {assetColumns.length === 0 && !loadingColumns && (
+                  <MenuItem value="" disabled>No columns available</MenuItem>
+                )}
+              </Select>
+            </FormControl>
 
             <TextField
               label="Source Filter Condition"
               size="small"
               value={form.sourceFilterCondition}
               onChange={(e) => setForm(p => ({ ...p, sourceFilterCondition: e.target.value }))}
-              placeholder="e.g. status = 'ACTIVE'"
+              placeholder='e.g. {"field": "status", "value": "ACTIVE"}'
               fullWidth
             />
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Generation Target Configuration</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
+              Composite Field Mappings
+              {loadingKeys && <CircularProgress size={12} sx={{ ml: 1 }} />}
+            </Typography>
+            {form.mappings.length === 0 && !loadingKeys && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                Select a BDC Asset to automatically populate its key columns.
+              </Typography>
+            )}
+            {form.mappings.map((mapping, idx) => (
+              <Box key={idx} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <TextField
+                  label="Source Column (Derived)"
+                  size="small"
+                  value={mapping.sourceKeyField}
+                  disabled
+                  fullWidth
+                />
+                <Autocomplete
+                  size="small"
+                  options={fields}
+                  getOptionLabel={(option) => option.name || ''}
+                  value={fields.find(f => f.name === mapping.targetRestrictionField) || null}
+                  onChange={(e, val) => handleMappingChange(idx, val ? val.name : '')}
+                  renderInput={(params) => <TextField {...params} label="Target Restriction Field" variant="outlined" />}
+                  fullWidth
+                />
+              </Box>
+            ))}
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Target Configuration</Typography>
             <FormControl size="small" fullWidth>
               <InputLabel>Generation Mode</InputLabel>
               <Select
@@ -299,7 +454,7 @@ export default function DynamicRulesView() {
               </Select>
             </FormControl>
 
-            {form.generationMode === 'TEMPLATE_ASSIGNMENT' ? (
+            {form.generationMode === 'TEMPLATE_ASSIGNMENT' && (
               <FormControl size="small" fullWidth>
                 <InputLabel>Template Role</InputLabel>
                 <Select
@@ -310,15 +465,6 @@ export default function DynamicRulesView() {
                   {roles.map(r => <MenuItem key={r.ID} value={r.ID}>{r.name}</MenuItem>)}
                 </Select>
               </FormControl>
-            ) : (
-              <Autocomplete
-                size="small"
-                options={fields}
-                getOptionLabel={(option) => option.name || ''}
-                value={fields.find(f => f.name === form.targetRestrictionField) || null}
-                onChange={(e, val) => setForm(p => ({ ...p, targetRestrictionField: val ? val.name : '' }))}
-                renderInput={(params) => <TextField {...params} label="Target Restriction Field" variant="outlined" />}
-              />
             )}
           </Box>
         </DialogContent>

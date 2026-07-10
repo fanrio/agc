@@ -17,7 +17,8 @@ const cds = require('@sap/cds');
 // Lib
 const HanaClient = require('./lib/hanaClient');
 const BdcClient  = require('./lib/bdcClient');
-const { syncDynamicRule, ALLOWED_ENTITIES } = require('./lib/dynamicSync');
+const { syncDynamicRule } = require('./services/dynamicSyncService');
+
 const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
 
 // Services
@@ -31,6 +32,7 @@ const {
   makeFetchBdcAssetsHandler,
   makeFetchBdcRelationalValuesHandler,
   makeFetchBdcAssetColumnsHandler,
+  makeFetchBdcAssetKeyColumnsHandler,
   makeFetchRawBdcSpacesHandler,
   makeFetchRawBdcAssetsHandler,
   makeFetchRawBdcRelationalValuesHandler,
@@ -46,6 +48,7 @@ const {
 const { registerRoleHandlers }        = require('./handlers/roleHandlers');
 const { registerAssignmentHandlers }  = require('./handlers/assignmentHandlers');
 const { registerRestrictionHandlers } = require('./handlers/restrictionHandlers');
+const { registerStreamHandlers } = require('./handlers/streamHandler');
 
 module.exports = cds.service.impl(async function () {
   const entities = this.entities;
@@ -120,7 +123,7 @@ module.exports = cds.service.impl(async function () {
   });
 
   // Settings CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], ['BdcSettings', 'RestrictionFields', 'Streams'], async (req) => {
+  this.before(['CREATE', 'UPDATE', 'DELETE'], ['BdcSettings', 'RestrictionFields'], async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageSettings', req);
   });
@@ -263,7 +266,7 @@ module.exports = cds.service.impl(async function () {
   });
   this.before([
     'testBdcConnection', 'fetchBdcSpaces', 'fetchBdcAssets',
-    'fetchBdcRelationalValues', 'fetchBdcAssetColumns', 'fetchRawBdcSpaces',
+    'fetchBdcRelationalValues', 'fetchBdcAssetColumns', 'fetchBdcAssetKeyColumns', 'fetchRawBdcSpaces',
     'fetchRawBdcAssets', 'fetchRawBdcRelationalValues', 'fetchRawBdcAssetColumns',
     'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
     'fetchRawHanaViews'
@@ -342,10 +345,12 @@ module.exports = cds.service.impl(async function () {
     try {
       const activeRules = await cds.db.run(
         SELECT.from(DynamicGenerationRules)
-          .where({ isActive: true, sourceEntity: { in: ALLOWED_ENTITIES } })
+          .where({ isActive: true })
       );
       for (const rule of activeRules) {
-        await syncDynamicRule(rule.ID, cds);
+        if (rule.sourceEntity === 'Customers' || rule.sourceEntity === 'fanrio.auth.Customers') {
+          await syncDynamicRule(rule.ID, cds);
+        }
       }
     } catch (err) {
       console.error('[AuthService] Failed to trigger dynamic rules synchronization:', err.message);
@@ -355,10 +360,21 @@ module.exports = cds.service.impl(async function () {
   // ---------------------------------------------------------------------------
   // UUID auto-generation (consolidated — same for all entities below)
   // ---------------------------------------------------------------------------
-  ['OrgNodes', 'BdcSettings', 'DynamicGenerationRules', 'GeneratedResourceMap'].forEach(entity => {
+  ['OrgNodes', 'BdcSettings', 'DynamicGenerationRules', 'DynamicRuleFieldMappings', 'GeneratedResourceMap'].forEach(entity => {
     this.before('CREATE', entity, (req) => {
       if (!req.data.ID) req.data.ID = cds.utils.uuid();
+      if (entity === 'BdcSettings') {
+        if (req.data.isActive === undefined || req.data.isActive === null) {
+          req.data.isActive = true;
+        }
+      }
     });
+  });
+
+  this.before('UPDATE', 'DynamicGenerationRules', async (req) => {
+    if (req.data.mappings) {
+      await cds.db.run(DELETE.from('fanrio.auth.DynamicRuleFieldMappings').where({ rule_ID: req.data.ID }));
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -376,6 +392,7 @@ module.exports = cds.service.impl(async function () {
   registerRoleHandlers(this, entities, handlerDeps);
   registerAssignmentHandlers(this, entities, handlerDeps);
   registerRestrictionHandlers(this, entities, handlerDeps);
+  registerStreamHandlers(this);
 
   // ---------------------------------------------------------------------------
   // Org Role Generation actions
@@ -400,6 +417,7 @@ module.exports = cds.service.impl(async function () {
   this.on('fetchBdcAssets',                 makeFetchBdcAssetsHandler(BdcClient));
   this.on('fetchBdcRelationalValues',       makeFetchBdcRelationalValuesHandler(BdcClient));
   this.on('fetchBdcAssetColumns',           makeFetchBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchBdcAssetKeyColumns',        makeFetchBdcAssetKeyColumnsHandler(BdcClient));
   this.on('fetchRawBdcSpaces',              makeFetchRawBdcSpacesHandler(BdcClient));
   this.on('fetchRawBdcAssets',              makeFetchRawBdcAssetsHandler(BdcClient));
   this.on('fetchRawBdcRelationalValues',    makeFetchRawBdcRelationalValuesHandler(BdcClient));

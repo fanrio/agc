@@ -77,20 +77,42 @@ export function filterSelectedNodes(selectedList, flatNodes) {
   return selectedList.filter(id => !isAncestorSelected(id, selectedList, flatNodes));
 }
 
-const FILTER_TYPES = ['SINGLE_VALUE', 'MULTI_VALUE', 'RANGE', 'HIERARCHY', 'PATTERN'];
+const FILTER_TYPES = ['ALL', 'N', 'NN', 'EQ', 'NE', 'GT', 'GE', 'LT', 'LE', 'CP', 'BT', 'MULTI_VALUE', 'HIERARCHY'];
 
 const TYPE_COLOR = {
-  SINGLE_VALUE: 'primary',
+  ALL:          'success',
+  N:            'secondary',
+  NN:           'secondary',
+  EQ:           'primary',
+  NE:           'error',
+  GT:           'warning',
+  GE:           'warning',
+  LT:           'warning',
+  LE:           'warning',
+  CP:           'info',
+  BT:           'info',
   MULTI_VALUE:  'secondary',
-  RANGE:        'warning',
   HIERARCHY:    'success',
+  SINGLE_VALUE: 'primary',
+  RANGE:        'warning',
   PATTERN:      'info',
 };
 const TYPE_LABEL = {
-  SINGLE_VALUE: 'Equals',
+  ALL:          'All (*)',
+  N:            'Is Null (N)',
+  NN:           'Not Null (NN)',
+  EQ:           'Equals (EQ)',
+  NE:           'Not Equals (NE)',
+  GT:           'Greater Than (GT)',
+  GE:           'Greater Equal (GE)',
+  LT:           'Less Than (LT)',
+  LE:           'Less Equal (LE)',
+  CP:           'Like (CP)',
+  BT:           'Between (BT)',
   MULTI_VALUE:  'In List',
-  RANGE:        'Range',
   HIERARCHY:    'Hierarchy',
+  SINGLE_VALUE: 'Equals',
+  RANGE:        'Range',
   PATTERN:      'Pattern',
 };
 
@@ -139,14 +161,17 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
 
   useEffect(() => {
     setSelectedHierarchyDirectory('');
-  }, [fieldConfig, filterType]);
+    if (['ALL', 'N', 'NN'].includes(filterType) && value !== '') {
+      onChange('');
+    }
+  }, [fieldConfig, filterType, value, onChange]);
 
   useEffect(() => {
     if (!fieldConfig || !fieldConfig.bdcConnection) {
       setBdcValues([]);
       return;
     }
-    if (filterType === 'PATTERN') {
+    if (['PATTERN', 'CP', 'RANGE', 'BT', 'ALL', 'N', 'NN'].includes(filterType)) {
       setBdcValues([]);
       return;
     }
@@ -189,7 +214,15 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
 
   const hasBdcOptions = bdcValues.length > 0;
 
-  if (filterType === 'PATTERN') {
+  if (['ALL', 'N', 'NN'].includes(filterType)) {
+    return (
+      <Typography variant="body2" color="text.secondary" sx={{ py: 1, fontStyle: 'italic' }}>
+        No value is required for this operator.
+      </Typography>
+    );
+  }
+
+  if (filterType === 'PATTERN' || filterType === 'CP') {
     return (
       <TextField
         size="small"
@@ -200,7 +233,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       />
     );
   }
-  if (filterType === 'SINGLE_VALUE') {
+  if (filterType === 'SINGLE_VALUE' || ['EQ', 'NE', 'GT', 'GE', 'LT', 'LE'].includes(filterType)) {
     if (loadingBdc) {
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
     }
@@ -319,7 +352,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     const tags = value ? JSON.parse(value) : [];
     return <TagInput values={tags} onChange={arr => onChange(JSON.stringify(arr))} />;
   }
-  if (filterType === 'RANGE') {
+  if (filterType === 'RANGE' || filterType === 'BT') {
     const range = value ? JSON.parse(value) : { from: '', to: '' };
     if (loadingBdc) {
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
@@ -420,15 +453,32 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       if (loadingBdc) {
         return <TextField size="small" fullWidth disabled value="Loading hierarchy from Datasphere..." />;
       }
-
-      const selectedIds = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
       const uniqueHierarchies = Array.from(new Set(bdcValues.map(v => v.hierarchy).filter(Boolean)));
       
       // Filter options based on selected directory (if withHierarchyDirectory is true)
       const isWithDirectory = !!fieldConfig.withHierarchyDirectory;
-      const filteredOptions = isWithDirectory && selectedHierarchyDirectory
-        ? bdcValues.filter(v => v.hierarchy === selectedHierarchyDirectory)
+
+      // Extract directory from value if present
+      let initialDir = '';
+      const rawSelected = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
+      if (isWithDirectory && rawSelected.length > 0) {
+        const firstWithSlash = rawSelected.find(x => typeof x === 'string' && x.includes('/'));
+        if (firstWithSlash) {
+          initialDir = firstWithSlash.split('/')[0];
+        }
+      }
+
+      // Initialize local state if not set
+      const activeDir = selectedHierarchyDirectory || initialDir;
+
+      const filteredOptions = isWithDirectory && activeDir
+        ? bdcValues.filter(v => v.hierarchy === activeDir)
         : bdcValues;
+
+      // Clean prefix for UI rendering
+      const selectedIds = isWithDirectory && activeDir
+        ? rawSelected.map(id => (typeof id === 'string' && id.includes('/')) ? id.split('/').slice(1).join('/') : id)
+        : rawSelected;
 
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
@@ -437,7 +487,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
               <InputLabel id="hierarchy-directory-label">Hierarchy Directory</InputLabel>
               <Select
                 labelId="hierarchy-directory-label"
-                value={selectedHierarchyDirectory}
+                value={selectedHierarchyDirectory || initialDir}
                 onChange={e => {
                   setSelectedHierarchyDirectory(e.target.value);
                   onChange(JSON.stringify([]));
@@ -461,7 +511,10 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
               onChange={e => {
                 const nextSelected = e.target.value;
                 const filtered = filterSelectedNodes(nextSelected, filteredOptions);
-                onChange(JSON.stringify(filtered));
+                const finalValues = isWithDirectory && activeDir
+                  ? filtered.map(id => `${activeDir}/${id}`)
+                  : filtered;
+                onChange(JSON.stringify(finalValues));
               }}
               input={<OutlinedInput label="Select Hierarchy Nodes" />}
               renderValue={(selected) => {
@@ -578,8 +631,8 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
   let display = restriction.value;
   if (restriction.filterType === 'MULTI_VALUE') {
     try { display = JSON.parse(restriction.value).join(', '); } catch {}
-  } else if (restriction.filterType === 'RANGE') {
-    try { const r = JSON.parse(restriction.value); display = `${r.from} – ${r.to}`; } catch {}
+  } else if (restriction.filterType === 'RANGE' || restriction.filterType === 'BT') {
+    try { const r = JSON.parse(restriction.value); display = `${r.from} and ${r.to}`; } catch {}
   } else if (restriction.filterType === 'HIERARCHY') {
     try {
       if (restriction.value.startsWith('[')) {
@@ -619,7 +672,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
 }
 
 export default function RestrictionBuilder({ restrictions, onChange, inheritedRestrictions = [], orgNodes = [], restrictionFields = [] }) {
-  const [draft, setDraft] = useState({ field: '', filterType: 'SINGLE_VALUE', value: '' });
+  const [draft, setDraft] = useState({ field: '', filterType: 'EQ', value: '' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
   const handleCloseSnackbar = (event, reason) => {
@@ -630,7 +683,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
   function addRestriction() {
     if (!draft.field.trim() || !draft.value) return;
 
-    if (draft.filterType === 'RANGE') {
+    if (draft.filterType === 'RANGE' || draft.filterType === 'BT') {
       try {
         const range = JSON.parse(draft.value);
         if (!range.from || !range.to) {
@@ -659,7 +712,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
     }
 
     onChange([...restrictions, { ...draft, ID: `temp-${Date.now()}` }]);
-    setDraft({ field: '', filterType: 'SINGLE_VALUE', value: '' });
+    setDraft({ field: '', filterType: 'EQ', value: '' });
   }
 
   function removeRestriction(id) {

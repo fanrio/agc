@@ -25,12 +25,13 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
       isActive: true,
       sourceType: 'LOCAL_DB',
       sourceEntity: 'fanrio.auth.Customers',
-      sourceKeyField: 'ID',
       sourceResponsibleField: 'responsibleUser',
       generationMode: 'USER_CONSOLIDATED_ROLE',
-      targetRestrictionField: 'CustomerNumber',
       filterType: 'MULTI_VALUE',
-      sourceFilterCondition: '{"field":"status","value":"ACTIVE"}'
+      sourceFilterCondition: '{"field":"status","value":"ACTIVE"}',
+      mappings: [
+        { sourceKeyField: 'ID', targetRestrictionField: 'CustomerNumber' }
+      ]
     });
     
     assert.ok(res.data.ID, 'Rule ID should be generated');
@@ -74,7 +75,7 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     assert.ok(assignment, 'Dynamic role assignment for Alice should exist');
 
     // Verify GeneratedResourceMap ledger entry exists
-    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: customerId }));
+    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: JSON.stringify({ ID: customerId }) }));
     assert.ok(map, 'Ledger mapping entry should be created');
     assert.strictEqual(map.userId, 'alice@company.com');
   });
@@ -103,7 +104,7 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     assert.ok(assignment, 'Dynamic assignment for Bob should exist');
 
     // Ledger mapping should point to Bob
-    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: customerId }));
+    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: JSON.stringify({ ID: customerId }) }));
     assert.ok(map, 'Ledger mapping should exist');
     assert.strictEqual(map.userId, 'bob@company.com');
   });
@@ -116,13 +117,13 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     const role = await db.run(SELECT.one.from('fanrio.auth.Roles').where({ name: 'ROLE_DYN_CUST_RESP_BOB_COMPANY_COM' }));
     assert.strictEqual(role, undefined, 'Bob dynamic role should be cleaned up');
 
-    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: customerId }));
+    const map = await db.run(SELECT.one.from('fanrio.auth.GeneratedResourceMap').where({ rule_ID: ruleId, masterRecordKey: JSON.stringify({ ID: customerId }) }));
     assert.strictEqual(map, undefined, 'Ledger mapping should be deleted');
   });
 
-  // Restore clean state after all tests — mirrors the cleanup in step 1
-  // F-22 fix: removed execSync('npx cds deploy') which was slow, fragile, and ran outside the test lifecycle
+  // Restore clean state after all tests
   await db.run(cds.ql.DELETE.from('fanrio.auth.GeneratedResourceMap'));
+  await db.run(cds.ql.DELETE.from('fanrio.auth.DynamicRuleFieldMappings'));
   await db.run(cds.ql.DELETE.from('fanrio.auth.DynamicGenerationRules'));
   await db.run(cds.ql.DELETE.from('fanrio.auth.Customers'));
   await db.run(cds.ql.DELETE.from('fanrio.auth.RoleAssignments'));

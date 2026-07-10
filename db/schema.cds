@@ -33,10 +33,20 @@ entity RestrictionFields : cuid {
   textColumn    : String(100);
 }
 
-entity Streams {
-  key ID       : String(2);
-  abbreviation : String(3) not null;
-  name         : String(150) not null;
+entity Streams : managed {
+  key ID      : String(36);
+  name        : String(10) not null;
+  description : String(200);
+  type        : Association to RestrictionFields;
+  parent      : Association to Streams;
+  children    : Composition of many Streams on children.parent = $self;
+  attributes  : Composition of many StreamAttributes on attributes.node = $self;
+}
+
+entity StreamAttributes : cuid {
+  node  : Association to Streams not null;
+  field : String(100) not null;
+  value : String(200) not null;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +61,7 @@ entity Roles : managed {
   critical        : Boolean @default : false;
   environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
+  stream          : Association to Streams not null @default : 'app-global';
   parentRoles     : Association to many RoleInheritance on parentRoles.role = $self;
   childRoles      : Association to many RoleInheritance on childRoles.parent = $self;
   ownRestrictions : Composition of many Restrictions on ownRestrictions.role = $self;
@@ -172,23 +183,30 @@ entity DynamicGenerationRules : managed {
   isActive                : Boolean @default : true;
 
   sourceType              : String(20) not null;                 // 'LOCAL_DB' | 'HANA_VIEW' | 'ODATA_SERVICE'
-  sourceEntity            : String(255) not null;                // e.g. 'fanrio.auth.Customers'
-  sourceKeyField          : String(100) not null;                // e.g. 'ID'
+  sourceEntity            : String(255) not null;                // e.g. 'CUSTOMERS_VW' (BDC Asset ID)
   sourceResponsibleField  : String(100) not null;                // e.g. 'responsibleUser'
   sourceFilterCondition   : String(500);
 
   generationMode          : String(30) not null;                 // 'USER_CONSOLIDATED_ROLE' | 'TEMPLATE_ASSIGNMENT'
   templateRole            : Association to Roles;
-  targetRestrictionField  : String(100);
+  bdcConnection           : Association to BdcSettings;
+  mappings                : Composition of many DynamicRuleFieldMappings on mappings.rule = $self;
   filterType              : String(20) @default : 'MULTI_VALUE';
+}
+
+entity DynamicRuleFieldMappings : cuid, managed {
+  rule                    : Association to DynamicGenerationRules;
+  sourceKeyField          : String(100) not null;                // e.g. 'ID'
+  targetRestrictionField  : String(100) not null;                // e.g. 'Customer'
 }
 
 entity GeneratedResourceMap : cuid, managed {
   rule                    : Association to DynamicGenerationRules not null;
-  masterRecordKey         : String(255) not null;                // e.g. 'C1001'
+  masterRecordKey         : String(255) not null;                // e.g. 'C1001' or JSON string for composite keys
   userId                  : String(200) not null;
   generatedRole           : Association to Roles;
   generatedRestriction    : Association to Restrictions;
   generatedAssignment     : Association to RoleAssignments;
 }
+
 

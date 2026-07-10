@@ -16,7 +16,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
         api.getRoles(),
         api.getAllOrgNodesFlat(),
         api.getAssignments(),
-        api.getStreams(),
+        api.getStreamsFlat(),
         api.getRestrictionFields(),
         api.getBdcSettings()
       ]);
@@ -489,7 +489,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Network size={16} color="#3b82f6" />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Active Streams</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Streams</Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
                   {stats?.streamCount || 0}

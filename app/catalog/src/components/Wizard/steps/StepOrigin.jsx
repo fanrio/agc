@@ -1,0 +1,221 @@
+import React from 'react';
+import { Box, Card, Typography, TextField, FormControl, InputLabel, Select, MenuItem, OutlinedInput, ListItemText, FormControlLabel, Checkbox } from '@mui/material';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import { Check, Shield, Zap } from 'lucide-react';
+
+export default function StepOrigin({
+  roleType, setRoleType,
+  selectedOrgNodeId, setOrgNode, orgNodes,
+  selectedParentIds, setSelectedParentIds, allRoles,
+  roleName, setRoleName, handleRoleNameBlur,
+  description, setDescription,
+  environmentId, setEnvironmentId, filteredEnvironments,
+  streamId, setStreamId, streams,
+  critical, setCritical, setIsCriticalManuallySet,
+  isEditMode, permissions, context = {}
+}) {
+  const canManageThisDerivedWizard = () => {
+    if (permissions?.isSuperAdmin) return true;
+    if (!permissions) return false;
+    if (!permissions.canManageDerivedRoles) return false;
+    const scope = permissions.managedDerivedRolesScope;
+    if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
+      return true;
+    }
+
+    if (context.roleId && isRoleInScope(context.roleId, roleName, scope)) {
+      return true;
+    }
+
+    if (selectedParentIds && selectedParentIds.length > 0) {
+      try {
+        const parsed = JSON.parse(scope);
+        if (Array.isArray(parsed)) {
+          return selectedParentIds.every(parentId => {
+            const parentRole = allRoles.find(r => r.ID === parentId);
+            return isRoleInScope(parentId, parentRole?.name, scope);
+          });
+        }
+      } catch (e) {}
+
+      return selectedParentIds.some(parentId => {
+        const parentRole = allRoles.find(r => r.ID === parentId);
+        return isRoleInScope(parentId, parentRole?.name, scope);
+      });
+    }
+    return true;
+  };
+
+  return (
+    <Card sx={{ p: 3 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Role Origin</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
+        {[
+          { type: 'ORG_BASED', icon: Zap, label: 'Org-Based Role', desc: 'Auto-generated from an Org Structure node', color: '#1d4ed8', disabled: permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageOrgRoles) },
+          { type: 'SINGLE',    icon: Shield, label: 'Single Role', desc: 'A custom role containing specific restrictions', color: '#7c3aed', disabled: permissions?.isSuperAdmin ? false : (permissions && !permissions.canManageSingleRoles) },
+        ].map(opt => {
+          const isSelected = roleType === opt.type;
+          const isDisabled = opt.disabled || isEditMode;
+          return (
+            <Box
+              key={opt.type}
+              onClick={() => !isDisabled && setRoleType(opt.type)}
+              sx={{
+                p: 2,
+                borderRadius: 1.5,
+                border: '1px solid',
+                borderColor: isSelected ? opt.color : 'divider',
+                bgcolor: isSelected ? 'action.hover' : 'transparent',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                opacity: isDisabled && !isSelected ? 0.5 : 1,
+                transition: 'all 0.2s',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5,
+                '&:hover': {
+                  borderColor: isDisabled ? 'none' : isSelected ? opt.color : 'action.active',
+                }
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <opt.icon size={18} color={opt.color} />
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>{opt.label}</Typography>
+                {isSelected && <Check size={14} color="#10b981" style={{ marginLeft: 'auto' }} />}
+              </Box>
+              <Typography variant="body2" color="text.secondary">{opt.desc}</Typography>
+            </Box>
+          );
+        })}
+      </Box>
+
+      {roleType === 'ORG_BASED' && (
+        <Box sx={{ mb: 3 }}>
+          <FormControl size="small" fullWidth sx={{ maxWidth: 400 }}>
+            <InputLabel id="origin-org-label">Select Org Node</InputLabel>
+            <Select
+              labelId="origin-org-label"
+              label="Select Org Node"
+              value={selectedOrgNodeId}
+              onChange={e => setOrgNode(e.target.value)}
+              disabled={isEditMode}
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {orgNodes.map(n => (
+                <MenuItem key={n.ID} value={n.ID}>{n.name} ({n.type?.name || ''})</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      )}
+
+      {roleType === 'SINGLE' && (
+        <Box sx={{ mb: 3 }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel id="parent-roles-select-label">Inherit from Roles (Multiple Select)</InputLabel>
+            <Select
+              labelId="parent-roles-select-label"
+              id="parent-roles-select"
+              multiple
+              value={selectedParentIds}
+              onChange={e => setSelectedParentIds(e.target.value)}
+              input={<OutlinedInput label="Inherit from Roles (Multiple Select)" />}
+              renderValue={selected => {
+                const names = selected.map(id => allRoles.find(r => r.ID === id)?.name).filter(Boolean);
+                return names.join(', ');
+              }}
+            >
+              {allRoles.filter(r => r.ID !== context.roleId).map(r => {
+                const isChecked = selectedParentIds.includes(r.ID);
+                const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
+
+                return (
+                  <MenuItem key={r.ID} value={r.ID}>
+                    <SelectionIcon
+                      fontSize="small"
+                      style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
+                    />
+                    <ListItemText primary={r.name} />
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+        </Box>
+      )}
+
+      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <TextField
+          label="Role Name"
+          size="small"
+          fullWidth
+          placeholder="e.g. ROLE_DE_FINANCE"
+          value={roleName}
+          onChange={e => setRoleName(e.target.value)}
+          onBlur={handleRoleNameBlur}
+          disabled={isEditMode}
+        />
+        <TextField
+          label="Description"
+          size="small"
+          fullWidth
+          placeholder="Optional description"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+        />
+        <FormControl size="small" fullWidth sx={{ mt: 1 }}>
+          <InputLabel id="role-env-label">Environment</InputLabel>
+          <Select
+            labelId="role-env-label"
+            label="Environment"
+            value={environmentId}
+            onChange={e => setEnvironmentId(e.target.value)}
+          >
+            {filteredEnvironments.length === 0 ? (
+              <MenuItem value={environmentId}>{environmentId}</MenuItem>
+            ) : (
+              filteredEnvironments.map(env => (
+                <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControl size="small" fullWidth sx={{ mt: 1 }} required>
+          <InputLabel id="role-stream-label">Stream</InputLabel>
+          <Select
+            labelId="role-stream-label"
+            label="Stream *"
+            value={streamId}
+            onChange={e => setStreamId(e.target.value)}
+          >
+            {streams.length === 0 ? (
+              <MenuItem value={streamId}>{streamId}</MenuItem>
+            ) : (
+              streams.map(ctx => (
+                <MenuItem key={ctx.ID} value={ctx.ID}>{ctx.name}</MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={critical}
+              onChange={e => {
+                setCritical(e.target.checked);
+                setIsCriticalManuallySet(true);
+              }}
+              color="error"
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>Critical Status</Typography>
+              <Typography variant="caption" color="text.secondary">Flag this role as high-risk/critical authorization</Typography>
+            </Box>
+          }
+        />
+      </Box>
+    </Card>
+  );
+}

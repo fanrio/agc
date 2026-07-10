@@ -121,6 +121,54 @@ class HanaClient {
   }
 
   /**
+   * Dynamically creates a custom flat authorization table in HANA.
+   */
+  static async createCustomFlatTable(setting, tableName) {
+    const schemaName = this.validateUsername(setting.username);
+    const conn       = hanaDriver.createConnection();
+    const connParams = this.getParams(setting);
+
+    return new Promise((resolve) => {
+      conn.connect(connParams, (err) => {
+        if (err) {
+          console.error(`[HanaClient] Connection failed for table creation ${tableName}:`, err.message);
+          resolve({ success: false, message: `Hana database connection failed: ${err.message}` });
+          return;
+        }
+
+        const createSql = `CREATE TABLE "${schemaName}"."${tableName}" (
+           "id" VARCHAR(100) PRIMARY KEY,
+           "identifier" VARCHAR(150),
+           "restricion" VARCHAR(250),
+           "criterion" VARCHAR(50),
+           "operartor" VARCHAR(2),
+           "first_value" VARCHAR(1333),
+           "second_value" VARCHAR(1333),
+           "original_role" VARCHAR(200),
+           "created_timestamp" TIMESTAMP,
+           "changed_timestamp" TIMESTAMP
+        )`;
+
+        conn.exec(createSql, (execErr) => {
+          if (execErr) {
+            const isAlreadyExists = execErr.code === 288 ||
+              execErr.message.toLowerCase().includes('already exists') ||
+              execErr.message.toLowerCase().includes('duplicate table name');
+            if (!isAlreadyExists) {
+              console.error(`[HanaClient] Failed to create custom table ${tableName}:`, execErr.message);
+            }
+          } else {
+            console.log(`[HanaClient] Successfully created custom flat table: "${schemaName}"."${tableName}"`);
+          }
+          conn.disconnect(() => {
+            resolve({ success: !execErr || execErr.code === 288 });
+          });
+        });
+      });
+    });
+  }
+
+  /**
    * Performs flat table synchronization for a role assignment with transaction safety.
    *
    * @param {object}   setting       - BdcSettings record (host, port, username, password, systemName)
@@ -132,6 +180,7 @@ class HanaClient {
     const schemaName = this.validateUsername(setting.username);
     const conn       = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
+    connParams.autoCommit = false; // Disable autocommit for transactional safety
 
     return new Promise((resolve, reject) => {
       conn.connect(connParams, (err) => {
@@ -139,85 +188,177 @@ class HanaClient {
           return reject(new Error(`Failed to connect to HANA database [${setting.systemName}] for sync: ${err.message}`));
         }
 
-        // Set auto-commit off to start transactional boundary
-        conn.setAutoCommit(false, (autoCommitErr) => {
-          if (autoCommitErr) {
-            conn.disconnect();
-            return reject(new Error(`Failed to disable auto-commit: ${autoCommitErr.message}`));
+        const rollbackAndReject = (errorMsg) => {
+          conn.rollback(() => {
+            conn.disconnect(() => {
+              reject(new Error(errorMsg));
+            });
+          });
+        };
+
+        const deleteSql = `DELETE FROM "${schemaName}"."${FLAT_TABLE}" WHERE "ID" LIKE ?`;
+
+        conn.prepare(deleteSql, (prepErr, stmt) => {
+          if (prepErr) {
+            return rollbackAndReject(`Failed to prepare delete query: ${prepErr.message}`);
           }
 
-          const rollbackAndReject = (errorMsg) => {
-            conn.rollback(() => {
-              conn.disconnect(() => {
-                reject(new Error(errorMsg));
-              });
-            });
-          };
-
-          const deleteSql = `DELETE FROM "${schemaName}"."${FLAT_TABLE}" WHERE "ID" LIKE ?`;
-
-          conn.prepare(deleteSql, (prepErr, stmt) => {
-            if (prepErr) {
-              return rollbackAndReject(`Failed to prepare delete query: ${prepErr.message}`);
+          stmt.exec([`${assignmentId}%`], (execErr) => {
+            if (execErr) {
+              return rollbackAndReject(`Failed to execute delete sync query: ${execErr.message}`);
             }
 
-            stmt.exec([`${assignmentId}%`], (execErr) => {
-              if (execErr) {
-                return rollbackAndReject(`Failed to execute delete sync query: ${execErr.message}`);
-              }
+            if (isDelete || restrictions.length === 0) {
+              conn.commit((commitErr) => {
+                if (commitErr) {
+                  return rollbackAndReject(`Failed to commit delete transaction: ${commitErr.message}`);
+                }
+                conn.disconnect(() => resolve());
+              });
+            } else {
+              const insertSql = `INSERT INTO "${schemaName}"."${FLAT_TABLE}" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
-              if (isDelete || restrictions.length === 0) {
-                conn.commit((commitErr) => {
-                  if (commitErr) {
-                    return rollbackAndReject(`Failed to commit delete transaction: ${commitErr.message}`);
-                  }
-                  conn.disconnect(() => resolve());
-                });
-              } else {
-                const insertSql = `INSERT INTO "${schemaName}"."${FLAT_TABLE}" ("ID", "USER", "ROLE", "FIELD", "OPERATOR", "LOW", "HIGH") VALUES (?, ?, ?, ?, ?, ?, ?)`;
+              conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
+                if (insertPrepErr) {
+                  return rollbackAndReject(`Failed to prepare insert query: ${insertPrepErr.message}`);
+                }
 
-                conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
-                  if (insertPrepErr) {
-                    return rollbackAndReject(`Failed to prepare insert query: ${insertPrepErr.message}`);
-                  }
+                let insertCount = 0;
+                let failed      = false;
 
-                  let insertCount = 0;
-                  let failed      = false;
-
-                  const checkAndResolve = () => {
-                    if (failed) return;
-                    if (insertCount === restrictions.length) {
-                      conn.commit((commitErr) => {
-                        if (commitErr) {
-                          return rollbackAndReject(`Failed to commit insert transaction: ${commitErr.message}`);
-                        }
-                        conn.disconnect(() => resolve());
-                      });
-                    }
-                  };
-
-                  restrictions.forEach((r, idx) => {
-                    const id = `${assignmentId}_${idx}`;
-                    insertStmt.exec([
-                      id,
-                      r.userId,
-                      r.roleName,
-                      r.field,
-                      r.operator,
-                      r.low,
-                      r.high || ''
-                    ], (insertExecErr) => {
-                      if (insertExecErr) {
-                        failed = true;
-                        return rollbackAndReject(`Failed to insert restriction row for ID ${id}: ${insertExecErr.message}`);
+                const checkAndResolve = () => {
+                  if (failed) return;
+                  if (insertCount === restrictions.length) {
+                    conn.commit((commitErr) => {
+                      if (commitErr) {
+                        return rollbackAndReject(`Failed to commit insert transaction: ${commitErr.message}`);
                       }
-                      insertCount++;
-                      checkAndResolve();
+                      conn.disconnect(() => resolve());
                     });
+                  }
+                };
+
+                restrictions.forEach((r, idx) => {
+                  const id = `${assignmentId}_${idx}`;
+                  insertStmt.exec([
+                    id,
+                    r.userId,
+                    r.roleName,
+                    r.field,
+                    r.operator,
+                    r.low,
+                    r.high || ''
+                  ], (insertExecErr) => {
+                    if (insertExecErr) {
+                      failed = true;
+                      return rollbackAndReject(`Failed to insert restriction row for ID ${id}: ${insertExecErr.message}`);
+                    }
+                    insertCount++;
+                    checkAndResolve();
                   });
                 });
-              }
+              });
+            }
+          });
+        });
+      });
+    });
+  }
+
+  /**
+   * Performs flat table synchronization for a role assignment in a custom application context flat table.
+   */
+  static async syncCustomAssignment(setting, tableName, assignmentId, isDelete, restrictions, originalRoleName) {
+    const schemaName = this.validateUsername(setting.username);
+    const conn       = hanaDriver.createConnection();
+    const connParams = this.getParams(setting);
+    connParams.autoCommit = false; // Disable autocommit for transactional safety
+
+    return new Promise((resolve, reject) => {
+      conn.connect(connParams, (err) => {
+        if (err) {
+          return reject(new Error(`Failed to connect to HANA database [${setting.systemName}] for custom sync: ${err.message}`));
+        }
+
+        const rollbackAndReject = (errorMsg) => {
+          conn.rollback(() => {
+            conn.disconnect(() => {
+              reject(new Error(errorMsg));
             });
+          });
+        };
+
+        const deleteSql = `DELETE FROM "${schemaName}"."${tableName}" WHERE "id" LIKE ?`;
+
+        conn.prepare(deleteSql, (prepErr, stmt) => {
+          if (prepErr) {
+            return rollbackAndReject(`Failed to prepare delete query on custom table ${tableName}: ${prepErr.message}`);
+          }
+
+          stmt.exec([`${assignmentId}%`], (execErr) => {
+            if (execErr) {
+              return rollbackAndReject(`Failed to execute delete query on custom table ${tableName}: ${execErr.message}`);
+            }
+
+            if (isDelete || restrictions.length === 0) {
+              conn.commit((commitErr) => {
+                if (commitErr) {
+                  return rollbackAndReject(`Failed to commit delete on custom table ${tableName}: ${commitErr.message}`);
+                }
+                conn.disconnect(() => resolve());
+              });
+            } else {
+              const insertSql = `INSERT INTO "${schemaName}"."${tableName}" (
+                "id", "identifier", "restricion", "criterion", "operartor", 
+                "first_value", "second_value", "original_role", "created_timestamp", "changed_timestamp"
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+              conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
+                if (insertPrepErr) {
+                  return rollbackAndReject(`Failed to prepare insert on custom table ${tableName}: ${insertPrepErr.message}`);
+                }
+
+                let insertCount = 0;
+                let failed      = false;
+
+                const checkAndResolve = () => {
+                  if (failed) return;
+                  if (insertCount === restrictions.length) {
+                    conn.commit((commitErr) => {
+                      if (commitErr) {
+                        return rollbackAndReject(`Failed to commit insert on custom table ${tableName}: ${commitErr.message}`);
+                      }
+                      conn.disconnect(() => resolve());
+                    });
+                  }
+                };
+
+                const now = new Date();
+
+                restrictions.forEach((r, idx) => {
+                  const id = `${assignmentId}_${idx}`;
+                  insertStmt.exec([
+                    id,
+                    r.userId,
+                    r.roleName,
+                    r.field,
+                    r.operator,
+                    r.low,
+                    r.high || '',
+                    originalRoleName,
+                    now,
+                    now
+                  ], (insertExecErr) => {
+                    if (insertExecErr) {
+                      failed = true;
+                      return rollbackAndReject(`Failed to insert row for ID ${id} in custom table ${tableName}: ${insertExecErr.message}`);
+                    }
+                    insertCount++;
+                    checkAndResolve();
+                  });
+                });
+              });
+            }
           });
         });
       });

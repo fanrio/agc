@@ -35,7 +35,8 @@ async function generateRoleForNode(cds, entities, node) {
       name:        roleName,
       type:        'ORG_BASED',
       description: `Auto-generated from Org Node: ${node.name}`,
-      orgNode_ID:  node.ID
+      orgNode_ID:  node.ID,
+      stream_ID: 'app-global'
     }));
   }
 
@@ -98,4 +99,5 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
   };
 }
 
-module.exports = { generateRoleForNode, makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler };
+module.exports = { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler };
+

@@ -15,6 +15,8 @@
  * @param {object} entities - { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs }
  * @param {{ cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions }} deps
  */
+const { fetchRoleAncestryChain } = require('../services/hanaReplicationService');
+
 function registerAssignmentHandlers(service, entities, deps) {
   const { cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions } = deps;
   const { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs } = entities;
@@ -25,11 +27,8 @@ function registerAssignmentHandlers(service, entities, deps) {
   service.before('CREATE', 'RoleAssignments', async (req) => {
     const { role_ID } = req.data;
     if (role_ID) {
-      // F-12 fix: fetch only data relevant to the specific role rather than full table scans
-      const allRoles        = await cds.db.run(SELECT.from(Roles));
-      const allRestrictions = await cds.db.run(SELECT.from(Restrictions).where({ role_ID: role_ID }));
-      const allInheritances = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: role_ID }));
       try {
+        const { allRoles, allRestrictions, allInheritances } = await fetchRoleAncestryChain(cds.db, role_ID, { Roles, Restrictions, RoleInheritance });
         const resolved = resolveEffectiveRestrictions(role_ID, allRoles, allRestrictions, allInheritances);
         if (resolved.length === 0) return req.error(400, 'Cannot assign a role that has no restrictions.');
       } catch (e) {
@@ -42,18 +41,22 @@ function registerAssignmentHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   // HANA sync + replication queue — after CREATE (first handler registered)
   // -------------------------------------------------------------------------
-  service.after('CREATE', 'RoleAssignments', async (assignment, req) => {
-    try {
-      await syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
-    } catch (e) {
-      console.error('[AssignmentHandlers] Failed to replicate assignment creation to HANA:', e.message);
-    }
-    try {
-      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
-      if (role) await queueReplication(role.name, role.environment_ID, req?.user?.id);
-    } catch (err) {
-      console.error('[AssignmentHandlers] Failed to queue replication for assignment creation:', err.message);
-    }
+  service.after('CREATE', 'RoleAssignments', (assignment, req) => {
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        await syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
+      } catch (e) {
+        console.error('[AssignmentHandlers] Failed to replicate assignment creation to HANA:', e.message);
+      }
+    });
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+        if (role) await queueReplication(role.name, role.environment_ID, req?.user?.id);
+      } catch (err) {
+        console.error('[AssignmentHandlers] Failed to queue replication for assignment creation:', err.message);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -160,7 +163,14 @@ function registerAssignmentHandlers(service, entities, deps) {
           details:    JSON.stringify(assignment)
         }));
       }
-      await syncAssignmentToHana(id, null, null, true);
+
+      cds.spawn({ user: req?.user }, async () => {
+        try {
+          await syncAssignmentToHana(id, null, null, true);
+        } catch (e) {
+          console.error('[AssignmentHandlers] Failed to replicate assignment deletion:', e.message);
+        }
+      });
     } catch (e) {
       console.error('[AssignmentHandlers] Failed to replicate assignment deletion:', e.message);
     }

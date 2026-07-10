@@ -1,10 +1,9 @@
-const cds = require('@sap/cds');
-
 /**
  * authGuard.js - Backend authorization helper
  */
 
 function getUserId(req) {
+  const cds = global.cds || require('@sap/cds');
   // Use simulated user header if present, fallback to actual CAP user id or 'anonymous'
   const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
   if (simUser) {
@@ -20,6 +19,7 @@ function getUserId(req) {
   }
   return req.user?.id || 'anonymous';
 }
+
 
 async function getSessionPermissions(req, db, AppAuthorizations) {
   const userId = getUserId(req);

@@ -1,16 +1,5 @@
-/**
- * safeJsonParse
- * Wrap JSON parsing to prevent runtime syntax crashes
- */
-function safeJsonParse(val, fallback = []) {
-  if (!val) return fallback;
-  try {
-    return JSON.parse(val);
-  } catch (e) {
-    console.error(`JSON Parse failed for value: ${val}`, e);
-    return fallback;
-  }
-}
+const { safeJsonParse } = require('./utils');
+
 
 /**
  * resolveEffectiveRestrictions
@@ -76,8 +65,66 @@ function evaluateRestriction(restriction, dataRow) {
 
   switch (restriction.filterType) {
     case 'SINGLE_VALUE':
+    case 'EQ':
       if (cellValue !== restriction.value) {
         return { passed: false, reason: `${restriction.field} must be '${restriction.value}', got '${cellValue}'` };
+      }
+      break;
+
+    case 'NE':
+      if (cellValue === restriction.value) {
+        return { passed: false, reason: `${restriction.field} must not be '${restriction.value}', got '${cellValue}'` };
+      }
+      break;
+
+    case 'GT': {
+      const numCell = parseFloat(cellValue);
+      const numLimit = parseFloat(restriction.value);
+      if (isNaN(numCell) || isNaN(numLimit) ? cellValue <= restriction.value : numCell <= numLimit) {
+        return { passed: false, reason: `${restriction.field} must be > ${restriction.value}, got '${cellValue}'` };
+      }
+      break;
+    }
+
+    case 'GE': {
+      const numCell = parseFloat(cellValue);
+      const numLimit = parseFloat(restriction.value);
+      if (isNaN(numCell) || isNaN(numLimit) ? cellValue < restriction.value : numCell < numLimit) {
+        return { passed: false, reason: `${restriction.field} must be >= ${restriction.value}, got '${cellValue}'` };
+      }
+      break;
+    }
+
+    case 'LT': {
+      const numCell = parseFloat(cellValue);
+      const numLimit = parseFloat(restriction.value);
+      if (isNaN(numCell) || isNaN(numLimit) ? cellValue >= restriction.value : numCell >= numLimit) {
+        return { passed: false, reason: `${restriction.field} must be < ${restriction.value}, got '${cellValue}'` };
+      }
+      break;
+    }
+
+    case 'LE': {
+      const numCell = parseFloat(cellValue);
+      const numLimit = parseFloat(restriction.value);
+      if (isNaN(numCell) || isNaN(numLimit) ? cellValue > restriction.value : numCell > numLimit) {
+        return { passed: false, reason: `${restriction.field} must be <= ${restriction.value}, got '${cellValue}'` };
+      }
+      break;
+    }
+
+    case 'ALL':
+      break;
+
+    case 'N':
+      if (rawValue !== null && rawValue !== undefined && String(rawValue).trim() !== '') {
+        return { passed: false, reason: `${restriction.field} must be null, got '${cellValue}'` };
+      }
+      break;
+
+    case 'NN':
+      if (rawValue === null || rawValue === undefined || String(rawValue).trim() === '') {
+        return { passed: false, reason: `${restriction.field} must not be null` };
       }
       break;
 
@@ -89,7 +136,8 @@ function evaluateRestriction(restriction, dataRow) {
       break;
     }
 
-    case 'RANGE': {
+    case 'RANGE':
+    case 'BT': {
       const parsed = safeJsonParse(restriction.value, null);
       if (!parsed || parsed.from === undefined || parsed.to === undefined) {
         return { passed: false, reason: `Invalid range specification in restriction` };
@@ -102,7 +150,8 @@ function evaluateRestriction(restriction, dataRow) {
       break;
     }
 
-    case 'PATTERN': {
+    case 'PATTERN':
+    case 'CP': {
       const pattern = restriction.value
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/%/g, '.*')

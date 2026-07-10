@@ -8,7 +8,8 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity OrgNodes               as projection on db.OrgNodes;
   entity OrgNodeAttributes      as projection on db.OrgNodeAttributes;
   entity RestrictionFields      as projection on db.RestrictionFields;
-  entity Streams                as projection on db.Streams;
+  entity Streams                  as projection on db.Streams;
+  entity StreamAttributes         as projection on db.StreamAttributes;
 
   // -------------------------------------------------------------------------
   // Roles
@@ -25,6 +26,7 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity Replications           as projection on db.Replications;
   entity Customers              as projection on db.Customers;
   entity DynamicGenerationRules as projection on db.DynamicGenerationRules;
+  entity DynamicRuleFieldMappings as projection on db.DynamicRuleFieldMappings;
   entity GeneratedResourceMap   as projection on db.GeneratedResourceMap;
   entity BdcSettings            as projection on db.BdcSettings;
 
@@ -109,6 +111,9 @@ service AuthorizationService @(path: '/odata/v4/auth') {
 
   action fetchBdcAssetColumns(url: String, tokenUrl: String, clientId: String, clientSecret: String,
                               space: String, asset: String)                     returns array of String;
+
+  action fetchBdcAssetKeyColumns(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+                                 space: String, asset: String)                  returns array of String;
 
   action fetchRawBdcSpaces(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns LargeString;
 

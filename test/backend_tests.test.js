@@ -792,10 +792,32 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     // Verify it transitioned to Success
     const repSuccessRes = await GET(`/odata/v4/auth/Replications(ID=${rep.data.ID})`);
     assert.strictEqual(repSuccessRes.data.status, 'Success');
-
     // Clean up
     await DELETE(`/odata/v4/auth/Replications(ID=${rep.data.ID})`);
     await DELETE(`/odata/v4/auth/BdcSettings(ID=${setting.data.ID})`);
+  });
+
+  test('HANA Flat Replication - Cartesian Product buildHanaEntries', () => {
+    const { buildHanaEntries } = require('../srv/services/hanaReplicationService');
+    
+    const restrictions = [
+      { field: 'Plant', filterType: 'MULTI_VALUE', value: '["10", "20"]' },
+      { field: 'Company Code', filterType: 'SINGLE_VALUE', value: 'CC01' }
+    ];
+    
+    const entries = buildHanaEntries(restrictions, 'ROLE_TEST', 'user1');
+    
+    assert.strictEqual(entries.length, 4);
+    
+    const role1Entries = entries.filter(e => e.roleName === 'ROLE_TEST_1');
+    assert.strictEqual(role1Entries.length, 2);
+    assert.ok(role1Entries.some(e => e.field === 'Plant' && e.low === '10'));
+    assert.ok(role1Entries.some(e => e.field === 'Company Code' && e.low === 'CC01'));
+    
+    const role2Entries = entries.filter(e => e.roleName === 'ROLE_TEST_2');
+    assert.strictEqual(role2Entries.length, 2);
+    assert.ok(role2Entries.some(e => e.field === 'Plant' && e.low === '20'));
+    assert.ok(role2Entries.some(e => e.field === 'Company Code' && e.low === 'CC01'));
   });
 
 });

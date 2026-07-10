@@ -27,6 +27,29 @@ vi.mock('../../api', () => ({
   fetchBdcRelationalValues: vi.fn(() => Promise.resolve([])),
 }));
 
+// Mock the PermissionsContext module
+vi.mock('../../context/PermissionsContext', () => ({
+  usePermissions: () => ({
+    permissions: {
+      isSuperAdmin: true,
+      canManageAppUsers: true,
+      canManageOrgRoles: true,
+      canManageSingleRoles: true,
+      canManageDerivedRoles: true,
+      managedDerivedRolesScope: '[]',
+      canAssignRoles: true,
+      canManageReplications: true,
+      canViewAuditLogs: true,
+      canManageSettings: true,
+      allowedEnvironments: '[]',
+      isActive: true
+    },
+    loading: false,
+    error: null,
+  })
+}));
+
+
 describe('Wizard Component - Expanded Tests', () => {
   const mockRoles = [
     {
