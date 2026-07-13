@@ -194,7 +194,7 @@ export function useWizardState({ context = {}, permissions }) {
         const role = all.find(r => r.ID === context.roleId);
         if (role) {
           try {
-            setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : 'SINGLE');
+            setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : (role.type === 'DRAGE' ? 'DRAGE' : 'SINGLE'));
             setRoleName(role.name || '');
             setDescription(role.description || '');
             setOrgNode(role.orgNode_ID || '');
@@ -394,7 +394,7 @@ export function useWizardState({ context = {}, permissions }) {
           critical,
           environment_ID: environmentId,
           stream_ID: streamId,
-          type: roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE')
+          type: roleType === 'DRAGE' ? 'DRAGE' : (roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE'))
         });
 
         const allRoles = await api.getRoles();

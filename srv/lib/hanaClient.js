@@ -89,15 +89,41 @@ class HanaClient {
           resolve({ success: false, message: `Hana database connection failed: ${err.message}` });
           return;
         }
+        conn.disconnect(() => {
+          resolve({
+            success: true,
+            message: `Successfully connected to SAP Hana database.`
+          });
+        });
+      });
+    });
+  }
 
-        const createSql = `CREATE TABLE "${schemaName}"."${FLAT_TABLE}" (
-           "ID" VARCHAR(100) PRIMARY KEY,
-           "USER" VARCHAR(150),
-           "ROLE" VARCHAR(150),
-           "FIELD" VARCHAR(50),
-           "OPERATOR" VARCHAR(2),
-           "LOW" VARCHAR(1333),
-           "HIGH" VARCHAR(1333)
+  /**
+   * Dynamically creates a custom hierarchy authorization table in HANA.
+   * Schema matches the SAP Datasphere Hierarchy with Directory DAC permissions entity.
+   */
+  static async createCustomHierTable(setting, tableName) {
+    const schemaName = this.validateUsername(setting.username);
+    const conn       = hanaDriver.createConnection();
+    const connParams = this.getParams(setting);
+
+    return new Promise((resolve) => {
+      conn.connect(connParams, (err) => {
+        if (err) {
+          console.error(`[HanaClient] Connection failed for hier table creation ${tableName}:`, err.message);
+          resolve({ success: false, message: `Hana database connection failed: ${err.message}` });
+          return;
+        }
+
+        const createSql = `CREATE TABLE "${schemaName}"."${tableName}" (
+           "PERMISSION_ID"         NVARCHAR(100) PRIMARY KEY,
+           "IDENTIFIER"            NVARCHAR(150),
+           "RESTRICTION"           NVARCHAR(200),
+           "TARGET_NODE_TYPE"      NVARCHAR(100),
+           "ROOT_NODE_TYPE"        NVARCHAR(100),
+           "ROOT_VALUES"           NVARCHAR(1333),
+           "HIERARCHY_IDENTIFIERS" NVARCHAR(200)
         )`;
 
         conn.exec(createSql, (execErr) => {
@@ -106,18 +132,40 @@ class HanaClient {
               execErr.message.toLowerCase().includes('already exists') ||
               execErr.message.toLowerCase().includes('duplicate table name');
             if (!isAlreadyExists) {
-              console.error('[HanaClient] Failed to create flat table:', execErr.message);
+              console.error(`[HanaClient] Failed to create custom hier table ${tableName}:`, execErr.message);
             }
+          } else {
+            console.log(`[HanaClient] Successfully created custom hier table: "${schemaName}"."${tableName}"`);
           }
           conn.disconnect(() => {
-            resolve({
-              success: true,
-              message: `Successfully connected to SAP Hana database. Table "${schemaName}"."${FLAT_TABLE}" is verified/created.`
-            });
+            resolve({ success: !execErr || execErr.code === 288 });
           });
         });
       });
     });
+  }
+
+  /**
+   * Dynamically drops a custom table in HANA.
+   */
+  static async dropCustomTable(setting, tableName) {
+    const schemaName = this.validateUsername(setting.username);
+    if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      throw new Error(`Invalid table name for drop: [${tableName}]`);
+    }
+    const sql = `DROP TABLE "${schemaName}"."${tableName}"`;
+    try {
+      await this.execute(setting, sql);
+      console.log(`[HanaClient] Successfully dropped custom table: "${schemaName}"."${tableName}"`);
+      return { success: true };
+    } catch (execErr) {
+      const isNotExists = execErr.message.toLowerCase().includes('invalid table name') ||
+                          execErr.message.toLowerCase().includes('does not exist');
+      if (!isNotExists) {
+        console.error(`[HanaClient] Failed to drop custom table ${tableName}:`, execErr.message);
+      }
+      return { success: isNotExists };
+    }
   }
 
   /**
@@ -357,6 +405,117 @@ class HanaClient {
                     checkAndResolve();
                   });
                 });
+              });
+            }
+          });
+        });
+      });
+    });
+  }
+
+  /**
+   * Synchronizes a role assignment to a stream-specific *_hier_authorizations table.
+   * Same schema as syncHierAssignment but targets the stream-namespaced table.
+   *
+   * @param {object}   setting       - BdcSettings record
+   * @param {string}   tableName     - stream-specific hier table, e.g. "finance_hier_authorizations"
+   * @param {string}   assignmentId  - RoleAssignment ID
+   * @param {boolean}  isDelete      - when true, removes rows
+   * @param {object[]} hierEntries   - hier row objects
+   */
+  static async syncCustomHierAssignment(setting, tableName, assignmentId, isDelete, hierEntries) {
+    const schemaName = this.validateUsername(setting.username);
+    const conn       = hanaDriver.createConnection();
+    const connParams = this.getParams(setting);
+    connParams.autoCommit = false;
+
+    return new Promise((resolve, reject) => {
+      conn.connect(connParams, (err) => {
+        if (err) {
+          return reject(new Error(`Failed to connect to HANA [${setting.systemName}] for custom hier sync: ${err.message}`));
+        }
+
+        const rollbackAndReject = (errorMsg) => {
+          conn.rollback(() => conn.disconnect(() => reject(new Error(errorMsg))));
+        };
+
+        const deleteSql = `DELETE FROM "${schemaName}"."${tableName}" WHERE "PERMISSION_ID" LIKE ?`;
+
+        conn.prepare(deleteSql, (prepErr, stmt) => {
+          if (prepErr) return rollbackAndReject(`Failed to prepare hier delete on ${tableName}: ${prepErr.message}`);
+
+          stmt.exec([`${assignmentId}%`], (execErr) => {
+            if (execErr) return rollbackAndReject(`Failed to execute hier delete on ${tableName}: ${execErr.message}`);
+
+            if (isDelete || hierEntries.length === 0) {
+              conn.commit((commitErr) => {
+                if (commitErr) return rollbackAndReject(`Failed to commit hier delete on ${tableName}: ${commitErr.message}`);
+                conn.disconnect(() => resolve());
+              });
+            } else {
+              const insertSql = `INSERT INTO "${schemaName}"."${tableName}" ` +
+                `("PERMISSION_ID", "IDENTIFIER", "RESTRICTION", "TARGET_NODE_TYPE", "ROOT_NODE_TYPE", "ROOT_VALUES", "HIERARCHY_IDENTIFIERS") ` +
+                `VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+              const executeInserts = (insertStmt) => {
+                let insertCount = 0;
+                let failed      = false;
+
+                const checkAndResolve = () => {
+                  if (failed) return;
+                  if (insertCount === hierEntries.length) {
+                    conn.commit((commitErr) => {
+                      if (commitErr) return rollbackAndReject(`Failed to commit hier insert on ${tableName}: ${commitErr.message}`);
+                      conn.disconnect(() => resolve());
+                    });
+                  }
+                };
+
+                hierEntries.forEach((r, idx) => {
+                  const id = `${assignmentId}_${idx}`;
+                  insertStmt.exec([
+                    id,
+                    r.identifier,
+                    r.restriction,
+                    r.targetNodeType || '',
+                    r.rootNodeType   || '',
+                    r.rootValues,
+                    r.hierIdentifier
+                  ], (insertExecErr) => {
+                    if (insertExecErr) {
+                      failed = true;
+                      return rollbackAndReject(`Failed to insert hier row ${id} on ${tableName}: ${insertExecErr.message}`);
+                    }
+                    insertCount++;
+                    checkAndResolve();
+                  });
+                });
+              };
+
+              conn.prepare(insertSql, (insertPrepErr, insertStmt) => {
+                if (insertPrepErr) {
+                  const errMsg = insertPrepErr.message.toLowerCase();
+                  if (errMsg.includes('identifier') || errMsg.includes('column') || errMsg.includes('invalid')) {
+                    console.log(`[HanaClient] Detected missing IDENTIFIER column in custom hier table ${tableName}. Attempting auto-migration...`);
+                    const alterSql = `RENAME COLUMN "${schemaName}"."${tableName}"."ID" TO "IDENTIFIER"`;
+                    return conn.exec(alterSql, (alterErr) => {
+                      if (alterErr) {
+                        console.error(`[HanaClient] Auto-migration failed for ${tableName}:`, alterErr.message);
+                        return rollbackAndReject(`Failed to prepare hier insert on ${tableName}: ${insertPrepErr.message}`);
+                      }
+                      console.log(`[HanaClient] Auto-migration successful for ${tableName}. Retrying insert prepare...`);
+                      conn.prepare(insertSql, (retryPrepErr, retryStmt) => {
+                        if (retryPrepErr) {
+                          return rollbackAndReject(`Failed to prepare hier insert after migration on ${tableName}: ${retryPrepErr.message}`);
+                        }
+                        executeInserts(retryStmt);
+                      });
+                    });
+                  }
+                  return rollbackAndReject(`Failed to prepare hier insert on ${tableName}: ${insertPrepErr.message}`);
+                }
+
+                executeInserts(insertStmt);
               });
             }
           });

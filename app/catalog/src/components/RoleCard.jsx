@@ -107,6 +107,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
 
   const isOrgRole = role.type === 'ORG_BASED';
   const isDerived = role.type === 'DERIVED';
+  const isDrageRole = role.type === 'DRAGE';
 
   // Wizard derive scopes checks
   const canDeriveFromRole = (role) => {
@@ -130,8 +131,8 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
     });
   };
 
-  const disableEdit = permissions?.isSuperAdmin ? false : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles));
-  const disableDelete = permissions?.isSuperAdmin ? false : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles));
+  const disableEdit = permissions?.isSuperAdmin ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles)));
+  const disableDelete = permissions?.isSuperAdmin ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles)));
   const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role);
   const disableAssign = permissions?.isSuperAdmin ? false : !canAssignRoles;
 

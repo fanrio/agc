@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, Typography, IconButton, Chip, FormControlLabel, Checkbox, OutlinedInput, ListItemText, ListSubheader, Alert, Snackbar } from '@mui/material';
+import { Box, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, Typography, IconButton, Chip, FormControlLabel, Checkbox, OutlinedInput, ListItemText, ListSubheader, Alert, Snackbar, Tooltip } from '@mui/material';
 import * as api from '../api';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -9,14 +9,14 @@ import { Filter, Lock, Unlock, X, Plus, Globe, Building2, MapPin, Factory, Brief
 function getHierarchyOptions(flatNodes) {
   const map = {};
   flatNodes.forEach(node => {
-    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
+    const id = node.localId || node.id || node.ID;
     map[id] = { ...node, children: [] };
   });
 
   const roots = [];
   flatNodes.forEach(node => {
-    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
-    const parentId = node.parent_ID !== undefined && node.parent_ID !== null ? node.parent_ID : node.parent_id;
+    const id = node.localId || node.id || node.ID;
+    const parentId = node.localParentId || node.parent_ID || node.parent_id;
     const mappedNode = map[id];
     if (parentId && map[parentId]) {
       map[parentId].children.push(mappedNode);
@@ -42,31 +42,32 @@ export function isAncestorSelected(nodeId, currentSelection, flatNodes) {
   
   const nodeMap = new Map();
   flatNodes.forEach(node => {
-    const id = node.id !== undefined && node.id !== null ? node.id : node.ID;
-    const localId = node.localId !== undefined && node.localId !== null ? node.localId : id;
+    const localId = node.localId || node.id || node.ID;
     nodeMap.set(String(localId), node);
   });
 
-  // Map currentSelection (which contains original IDs) to localIds
   const selectionLocalIds = currentSelection.map(id => {
-    const matchingNode = flatNodes.find(n => (n.id !== undefined ? n.id : n.ID) === id);
+    const matchingNode = flatNodes.find(n => {
+      const nid = n.id || n.ID;
+      return nid === id || n.localId === id;
+    });
     return matchingNode ? (matchingNode.localId || id) : id;
   }).map(String);
 
-  const node = flatNodes.find(n => (n.id !== undefined ? n.id : n.ID) === nodeId);
+  const node = flatNodes.find(n => {
+    const nid = n.id || n.ID;
+    return nid === nodeId || n.localId === nodeId;
+  });
   if (!node) return false;
 
   let curr = node;
   while (curr) {
-    const parentId = curr.localParentId !== undefined && curr.localParentId !== null
-      ? curr.localParentId
-      : (curr.parent_ID !== undefined && curr.parent_ID !== null ? curr.parent_ID : curr.parent_id);
-    if (parentId === undefined || parentId === null || parentId === '') break;
+    const parentId = curr.localParentId || curr.parent_ID || curr.parent_id;
+    if (!parentId) break;
     if (selectionLocalIds.includes(String(parentId))) {
       return true;
     }
-    const localParentIdStr = String(parentId);
-    curr = nodeMap.get(localParentIdStr);
+    curr = nodeMap.get(String(parentId));
   }
   return false;
 }
@@ -161,10 +162,13 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
 
   useEffect(() => {
     setSelectedHierarchyDirectory('');
+  }, [fieldConfig, filterType]);
+
+  useEffect(() => {
     if (['ALL', 'N', 'NN'].includes(filterType) && value !== '') {
       onChange('');
     }
-  }, [fieldConfig, filterType, value, onChange]);
+  }, [filterType, value, onChange]);
 
   useEffect(() => {
     if (!fieldConfig || !fieldConfig.bdcConnection) {
@@ -238,14 +242,21 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
     }
     if (hasBdcOptions) {
+      // Parse current stored value: may be {id,text} object or plain string
+      const parsedSingleVal = (() => { try { const p = JSON.parse(value); return p && typeof p === 'object' && !Array.isArray(p) ? p : null; } catch { return null; } })();
+      const selectedId = parsedSingleVal ? parsedSingleVal.id : value;
       return (
         <FormControl size="small" fullWidth>
           <InputLabel id="restriction-bdc-label">Select {field}</InputLabel>
           <Select
             labelId="restriction-bdc-label"
             label={`Select ${field}`}
-            value={value}
-            onChange={e => onChange(e.target.value)}
+            value={selectedId}
+            onChange={e => {
+              const chosen = bdcValues.find(v => v.id === e.target.value);
+              onChange(chosen ? JSON.stringify({ id: chosen.id, text: chosen.text || chosen.id }) : '');
+            }}
+            renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
           >
             <MenuItem value=""><em>None</em></MenuItem>
             {bdcValues.map(v => (
@@ -288,7 +299,9 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
     }
     if (hasBdcOptions) {
-      const selectedIds = value ? JSON.parse(value) : [];
+      // Parse stored value: may be [{id,text}] or [id] (legacy)
+      const rawMulti = value ? (() => { try { return JSON.parse(value); } catch { return []; } })() : [];
+      const selectedIds = rawMulti.map(item => (item && typeof item === 'object' ? item.id : item));
       return (
         <FormControl size="small" fullWidth>
           <InputLabel id="restriction-multivalue-bdc-label">Select {field} (Multiple)</InputLabel>
@@ -296,7 +309,13 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
             labelId="restriction-multivalue-bdc-label"
             multiple
             value={selectedIds}
-            onChange={e => onChange(JSON.stringify(e.target.value))}
+            onChange={e => {
+              const chosen = e.target.value.map(id => {
+                const v = bdcValues.find(x => x.id === id);
+                return v ? { id: v.id, text: v.text || v.id } : { id, text: id };
+              });
+              onChange(JSON.stringify(chosen));
+            }}
             input={<OutlinedInput label={`Select ${field} (Multiple)`} />}
             renderValue={selected => selected.map(id => bdcValues.find(x => x.id === id)?.text || id).join(', ')}
           >
@@ -358,6 +377,11 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       return <TextField size="small" fullWidth disabled value="Loading values from Datasphere..." />;
     }
     if (hasBdcOptions) {
+      // Parse stored range: may be {from:{id,text}, to:{id,text}} or {from:id, to:id} (legacy)
+      const fromObj = range.from && typeof range.from === 'object' ? range.from : null;
+      const toObj   = range.to   && typeof range.to   === 'object' ? range.to   : null;
+      const fromId  = fromObj ? fromObj.id : (range.from || '');
+      const toId    = toObj   ? toObj.id   : (range.to   || '');
       return (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
           <FormControl size="small" sx={{ flex: 1 }}>
@@ -365,8 +389,12 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
             <Select
               labelId="restriction-range-from-label"
               label="From"
-              value={range.from}
-              onChange={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
+              value={fromId}
+              onChange={e => {
+                const chosen = bdcValues.find(v => v.id === e.target.value);
+                onChange(JSON.stringify({ ...range, from: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : e.target.value }));
+              }}
+              renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
             >
               <MenuItem value=""><em>None</em></MenuItem>
               {bdcValues.map(v => (
@@ -380,8 +408,12 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
             <Select
               labelId="restriction-range-to-label"
               label="To"
-              value={range.to}
-              onChange={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
+              value={toId}
+              onChange={e => {
+                const chosen = bdcValues.find(v => v.id === e.target.value);
+                onChange(JSON.stringify({ ...range, to: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : e.target.value }));
+              }}
+              renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
             >
               <MenuItem value=""><em>None</em></MenuItem>
               {bdcValues.map(v => (
@@ -462,9 +494,13 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       let initialDir = '';
       const rawSelected = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
       if (isWithDirectory && rawSelected.length > 0) {
-        const firstWithSlash = rawSelected.find(x => typeof x === 'string' && x.includes('/'));
-        if (firstWithSlash) {
-          initialDir = firstWithSlash.split('/')[0];
+        const first = rawSelected.find(x => {
+          const idStr = typeof x === 'object' ? x.id : x;
+          return typeof idStr === 'string' && idStr.includes('/');
+        });
+        if (first) {
+          const idStr = typeof first === 'object' ? first.id : first;
+          initialDir = idStr.split('/')[0];
         }
       }
 
@@ -475,10 +511,15 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
         ? bdcValues.filter(v => v.hierarchy === activeDir)
         : bdcValues;
 
-      // Clean prefix for UI rendering
-      const selectedIds = isWithDirectory && activeDir
-        ? rawSelected.map(id => (typeof id === 'string' && id.includes('/')) ? id.split('/').slice(1).join('/') : id)
-        : rawSelected;
+      // Clean prefix for UI rendering but keeping it unique using localId
+      const selectedLocalIds = rawSelected.map(val => {
+        const valId = typeof val === 'object' ? val.id : val;
+        const matchingNode = bdcValues.find(n => {
+          const dbVal = n.hierarchy ? `${n.hierarchy}/${n.id}` : n.id;
+          return dbVal === valId || n.id === valId || n.value === valId;
+        });
+        return matchingNode ? (matchingNode.localId || valId) : valId;
+      });
 
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
@@ -507,28 +548,43 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
             <Select
               labelId="restriction-hierarchy-bdc-label"
               multiple
-              value={selectedIds}
+              value={selectedLocalIds}
               onChange={e => {
                 const nextSelected = e.target.value;
                 const filtered = filterSelectedNodes(nextSelected, filteredOptions);
-                const finalValues = isWithDirectory && activeDir
-                  ? filtered.map(id => `${activeDir}/${id}`)
-                  : filtered;
+                const finalValues = filtered.map(localId => {
+                  const matchingNode = filteredOptions.find(n => n.localId === localId);
+                  if (matchingNode) {
+                    const idStr = isWithDirectory && activeDir
+                      ? `${activeDir}/${matchingNode.id}`
+                      : matchingNode.id;
+                    const savedId = matchingNode.value || idStr;
+                    return {
+                      id: savedId,
+                      nodeType: matchingNode.nodeType || '',
+                      text: matchingNode.text || matchingNode.id || idStr,
+                      hierarchy: matchingNode.hierarchy || ''
+                    };
+                  }
+                  return { id: localId, nodeType: '', text: localId };
+                });
                 onChange(JSON.stringify(finalValues));
               }}
               input={<OutlinedInput label="Select Hierarchy Nodes" />}
+
               renderValue={(selected) => {
-                return selected.map(id => bdcValues.find(x => x.id === id)?.text || id).join(', ');
+                return selected.map(localId => bdcValues.find(x => x.localId === localId)?.text || localId).join(', ');
               }}
             >
               {getHierarchyOptions(filteredOptions).map(v => {
-                const isChecked = selectedIds.includes(v.id);
-                const isDisabled = isAncestorSelected(v.id, selectedIds, filteredOptions);
+                const itemKey = v.localId || v.id;
+                const isChecked = selectedLocalIds.includes(itemKey);
+                const isDisabled = isAncestorSelected(itemKey, selectedLocalIds, filteredOptions);
                 const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
                 return (
                   <MenuItem 
-                    key={v.id} 
-                    value={v.id}
+                    key={itemKey} 
+                    value={itemKey}
                     disabled={isDisabled}
                     sx={{
                       pl: 2 + (v.depth || 0) * 3, // Indent based on depth hierarchy
@@ -554,7 +610,8 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
 
     // Default local orgNodes fallback if no BDC hierarchy asset defined
     const sortedNodes = getHierarchyOptions(orgNodes);
-    const selectedIds = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
+    const rawSelected = value ? (value.startsWith('[') ? JSON.parse(value) : [value]) : [];
+    const selectedIds = rawSelected.map(val => typeof val === 'object' ? val.id : val);
 
     return (
       <FormControl size="small" fullWidth>
@@ -567,9 +624,18 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
           onChange={e => {
             const nextSelected = e.target.value;
             const filtered = filterSelectedNodes(nextSelected, orgNodes);
-            onChange(JSON.stringify(filtered));
+            const finalValues = filtered.map(id => {
+              const matchingNode = orgNodes.find(n => n.ID === id);
+              return {
+                id: id,
+                nodeType: matchingNode?.type || '',
+                text: matchingNode?.name || id
+              };
+            });
+            onChange(JSON.stringify(finalValues));
           }}
           input={<OutlinedInput label="Select Hierarchy Nodes" />}
+
           renderValue={(selected) => {
             const names = selected.map(id => orgNodes.find(n => n.ID === id)?.name).filter(Boolean);
             return names.join(', ');
@@ -628,15 +694,44 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
   const color = TYPE_COLOR[restriction.filterType] || 'primary';
   const label = TYPE_LABEL[restriction.filterType] || restriction.filterType;
 
+  // Helper: extract display text from a stored value that may be a plain string or an {id,text} object
+  function extractText(val) {
+    if (val && typeof val === 'object') return val.text || val.id || String(val);
+    return String(val ?? '');
+  }
+
   let display = restriction.value;
   if (restriction.filterType === 'MULTI_VALUE') {
-    try { display = JSON.parse(restriction.value).join(', '); } catch {}
+    try {
+      const parsed = JSON.parse(restriction.value);
+      display = parsed.map(extractText).join(', ');
+    } catch {}
   } else if (restriction.filterType === 'RANGE' || restriction.filterType === 'BT') {
-    try { const r = JSON.parse(restriction.value); display = `${r.from} and ${r.to}`; } catch {}
+    try {
+      const r = JSON.parse(restriction.value);
+      display = `${extractText(r.from)} and ${extractText(r.to)}`;
+    } catch {}
   } else if (restriction.filterType === 'HIERARCHY') {
     try {
       if (restriction.value.startsWith('[')) {
-        display = JSON.parse(restriction.value).join(', ');
+        const parsed = JSON.parse(restriction.value);
+        display = parsed.map(val => {
+          if (val && typeof val === 'object') {
+            if (val.hierarchy && val.id) {
+              return val.hierarchy === val.id ? val.id : `${val.hierarchy}/${val.id}`;
+            }
+            return val.text || val.id;
+          }
+          return val;
+        }).join(', ');
+      }
+    } catch {}
+  } else {
+    // SINGLE_VALUE / EQ / NE / GT / GE / LT / LE / CP / PATTERN — may be stored as {id, text}
+    try {
+      const parsed = JSON.parse(restriction.value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        display = parsed.text || parsed.id || restriction.value;
       }
     } catch {}
   }

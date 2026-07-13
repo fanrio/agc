@@ -325,19 +325,25 @@ class BdcClient {
     const nodeIdCol = Object.keys(row).find(k => k.toLowerCase() === 'nodeid');
     const salesOrgCol = Object.keys(row).find(k => k.toLowerCase() === 'salesorg');
     const regionIdCol = Object.keys(row).find(k => k.toLowerCase() === 'regionid');
+    const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
+    const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
     
     let idVal;
     let textVal;
 
     if (nodeIdCol) {
       idVal = row[nodeIdCol] !== undefined && row[nodeIdCol] !== null ? String(row[nodeIdCol]) : '';
+      const descCol = Object.keys(row).find(k => k.toLowerCase() === 'description' || k.toLowerCase() === 'name');
+      const descVal = descCol && row[descCol] !== undefined && row[descCol] !== null ? String(row[descCol]).trim() : '';
       const salesOrgVal = salesOrgCol && row[salesOrgCol] !== undefined && row[salesOrgCol] !== null ? String(row[salesOrgCol]).trim() : '';
       const regionIdVal = regionIdCol && row[regionIdCol] !== undefined && row[regionIdCol] !== null ? String(row[regionIdCol]).trim() : '';
-      
+
       if (salesOrgVal) {
-        textVal = `${idVal} - ${salesOrgVal}`;
+        textVal = salesOrgVal;
       } else if (regionIdVal) {
-        textVal = `${idVal} - ${regionIdVal}`;
+        textVal = regionIdVal;
+      } else if (descVal) {
+        textVal = descVal;
       } else {
         textVal = idVal;
       }
@@ -356,11 +362,26 @@ class BdcClient {
       }
     }
 
-    const hierarchyCol = Object.keys(row).find(k => k.toLowerCase() === 'hierarchy');
-    const hierarchyVal = hierarchyCol && row[hierarchyCol] !== undefined && row[hierarchyCol] !== null ? String(row[hierarchyCol]) : undefined;
-
     const parentIdCol = Object.keys(row).find(k => k.toLowerCase() === 'parentid');
     const parentIdVal = parentIdCol && row[parentIdCol] !== undefined && row[parentIdCol] !== null ? String(row[parentIdCol]) : null;
+
+    const nodeTypeCol = Object.keys(row).find(k => k.toLowerCase() === 'nodetype' || k.toLowerCase() === 'node_type');
+    const nodeTypeVal = nodeTypeCol && row[nodeTypeCol] !== undefined && row[nodeTypeCol] !== null ? String(row[nodeTypeCol]) : undefined;
+
+    let valueVal = undefined;
+    if (nodeIdCol) {
+      const valCol = Object.keys(row).find(k => {
+        const kl = k.toLowerCase();
+        const isMetadata = kl === 'nodeid' || kl === 'parentid' || kl === 'hierarchy' || kl === 'nodetype' || kl === 'node_type' || kl === 'description' || kl === 'name' || kl === 'id';
+        if (isMetadata) return false;
+        
+        const val = row[k];
+        return val !== undefined && val !== null && String(val).trim() !== '';
+      });
+      if (valCol) {
+        valueVal = String(row[valCol]).trim();
+      }
+    }
 
     const returnObj = {
       id: idVal,
@@ -371,6 +392,12 @@ class BdcClient {
     }
     if (hierarchyVal !== undefined) {
       returnObj.hierarchy = hierarchyVal;
+    }
+    if (nodeTypeVal !== undefined) {
+      returnObj.nodeType = nodeTypeVal;
+    }
+    if (valueVal !== undefined) {
+      returnObj.value = valueVal;
     }
     return returnObj;
   }

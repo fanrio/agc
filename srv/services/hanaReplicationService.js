@@ -42,10 +42,24 @@ function cartesianProduct(obj) {
   return results;
 }
 
-function buildHanaEntries(restrictions, roleName, userId) {
+/**
+ * Extracts the raw ID string from a stored restriction value.
+ * Handles enriched {id, text} objects (new format) as well as plain strings (legacy).
+ * @param {string|object} val - stored value or parsed item
+ * @returns {string}
+ */
+function extractId(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') return String(val.id ?? '');
+  return String(val);
+}
+
+
+function buildFlatAuthorizationsForHana(restrictions, roleName, userId) {
   // Group resolved restrictions by field name
   const restrictionsByField = {};
   for (const r of restrictions) {
+    if (r.filterType === 'HIERARCHY') continue; // Skip HIERARCHY types for flat table
     if (!restrictionsByField[r.field]) {
       restrictionsByField[r.field] = [];
     }
@@ -61,6 +75,16 @@ function buildHanaEntries(restrictions, roleName, userId) {
       let low = r.value;
       let high = '';
 
+      // Unwrap {id, text} enriched single value (new format)
+      if (low && typeof low === 'string') {
+        try {
+          const p = JSON.parse(low);
+          if (p && typeof p === 'object' && !Array.isArray(p) && p.id !== undefined) {
+            low = extractId(p);
+          }
+        } catch { /* plain string — leave as-is */ }
+      }
+
       // Map legacy filterType names to HANA operators if needed
       if (r.filterType === 'SINGLE_VALUE') {
         op = 'EQ';
@@ -74,13 +98,13 @@ function buildHanaEntries(restrictions, roleName, userId) {
         op = 'BT';
         if (r.value) {
           if (typeof r.value === 'object') {
-            low  = String(r.value.from !== undefined ? r.value.from : '');
-            high = String(r.value.to !== undefined ? r.value.to : '');
+            low  = extractId(r.value.from !== undefined ? r.value.from : '');
+            high = extractId(r.value.to   !== undefined ? r.value.to   : '');
           } else {
             try {
               const rangeObj = JSON.parse(r.value);
-              low  = String(rangeObj.from !== undefined ? rangeObj.from : '');
-              high = String(rangeObj.to !== undefined ? rangeObj.to : '');
+              low  = extractId(rangeObj.from !== undefined ? rangeObj.from : '');
+              high = extractId(rangeObj.to   !== undefined ? rangeObj.to   : '');
             } catch (e) {
               console.warn(`[HanaReplication] Malformed RANGE/BT value for restriction ${r.restrictionId}: ${e.message}`);
             }
@@ -98,7 +122,7 @@ function buildHanaEntries(restrictions, roleName, userId) {
           console.warn(`[HanaReplication] Malformed MULTI_VALUE for restriction ${r.restrictionId}: ${e.message}`);
         }
         for (const val of values) {
-          vals.push({ field, operator: op, low: String(val), high });
+          vals.push({ field, operator: op, low: extractId(val), high });
         }
       } else {
         if (['ALL', 'N', 'NN'].includes(op)) {
@@ -133,6 +157,75 @@ function buildHanaEntries(restrictions, roleName, userId) {
 
   return finalEntries;
 }
+
+function buildHierAuthorizationsForHana(restrictions, roleName, userId) {
+  const entries = [];
+
+  /**
+   * Extracts the hierarchy directory identifier from a node ID.
+   * DataSphere "Hierarchy with Directory" DAC maps:
+   *   - HIERARCHY_IDENTIFIERS → Hierarchy Identifier (the directory prefix, e.g. 'DACH' from 'DACH/0')
+   *   - ROOT_VALUES           → Hierarchy Node compound key (e.g. 'DACH/0')
+   *
+   * The directory prefix is everything before the first '/'.
+   * If no separator is present, the full value is used.
+   */
+  function extractHierarchyId(nodeId) {
+    if (!nodeId) return '';
+    const slashIdx = String(nodeId).indexOf('/');
+    return slashIdx > 0 ? String(nodeId).substring(0, slashIdx) : String(nodeId);
+  }
+
+  for (const r of restrictions) {
+    if (r.filterType !== 'HIERARCHY') continue;
+    
+    let parsed = null;
+    try {
+      parsed = JSON.parse(r.value);
+    } catch (e) {
+      parsed = r.value;
+    }
+
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        if (item && typeof item === 'object') {
+          const nodeId = item.id || '';
+          entries.push({
+            identifier:     userId,
+            restriction:    roleName,
+            targetNodeType: r.field,
+            rootNodeType:   item.nodeType || '',
+            rootValues:     nodeId,
+            hierIdentifier: item.hierarchy || extractHierarchyId(nodeId)
+          });
+        } else {
+          const nodeId = item || '';
+          entries.push({
+            identifier:     userId,
+            restriction:    roleName,
+            targetNodeType: r.field,
+            rootNodeType:   '',
+            rootValues:     nodeId,
+            hierIdentifier: extractHierarchyId(nodeId)
+          });
+        }
+      }
+    } else {
+      const nodeId = r.value || '';
+      entries.push({
+        identifier:     userId,
+        restriction:    roleName,
+        targetNodeType: r.field,
+        rootNodeType:   '',
+        rootValues:     nodeId,
+        hierIdentifier: extractHierarchyId(nodeId)
+      });
+    }
+  }
+
+  return entries;
+}
+
 
 /**
  * Recursively fetches only the roles, restrictions, and inheritances belonging
@@ -181,8 +274,6 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
   const db = cds.db;
   const { Roles, Restrictions, RoleInheritance, BdcSettings } = entities;
 
-  let entries = [];
-
   console.log(`[HanaReplication] Starting sync for assignment ${assignmentId}, user: ${userId}, role: ${roleId}, isDelete: ${isDelete}`);
 
   const role = await db.run(SELECT.one.from(Roles).where({ ID: roleId }));
@@ -193,13 +284,19 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
 
   // Resolve custom table name corresponding to application context
   let customTableName = null;
+  let customHierTableName = null;
   if (role.stream_ID) {
     const { Streams } = cds.entities('fanrio.auth');
     const appCtx = await db.run(SELECT.one.from(Streams).columns('name').where({ ID: role.stream_ID }));
     if (appCtx && appCtx.name) {
-      customTableName = `${appCtx.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '')}_flat_authorizations`;
+      const cleanStreamName = appCtx.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+      customTableName = `${cleanStreamName}_flat_authorizations`;
+      customHierTableName = `${cleanStreamName}_hier_authorizations`;
     }
   }
+
+  let entries = [];
+  let hierEntries = [];
 
   if (!isDelete) {
     let preloadedData = preloaded;
@@ -220,8 +317,10 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
     }
 
     console.log(`[HanaReplication] Resolved restrictions count: ${resolved.length}`);
-    entries = buildHanaEntries(resolved, role.name, userId);
+    entries = buildFlatAuthorizationsForHana(resolved, role.name, userId);
+    hierEntries = buildHierAuthorizationsForHana(resolved, role.name, userId);
     console.log(`[HanaReplication] Built HANA flat entries count: ${entries.length}`, JSON.stringify(entries));
+    console.log(`[HanaReplication] Built HANA hier entries count: ${hierEntries.length}`, JSON.stringify(hierEntries));
   }
 
   const bdcSettings = await db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }));
@@ -229,19 +328,35 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
   if (bdcSettings.length === 0) return;
 
   for (const setting of bdcSettings) {
+    console.log(`[HanaReplication] Starting sync steps for system [${setting.systemName}]...`);
+    
+    // 1. Sync to default flat table (if exists)
     try {
-      console.log(`[HanaReplication] Syncing to default table on [${setting.systemName}]...`);
+      console.log(`[HanaReplication] Syncing to default flat table on [${setting.systemName}]...`);
       await HanaClient.syncAssignment(setting, assignmentId, isDelete, entries);
-
-      if (customTableName) {
-        console.log(`[HanaReplication] Syncing to custom context table [${customTableName}] on [${setting.systemName}]...`);
-        await HanaClient.syncCustomAssignment(setting, customTableName, assignmentId, isDelete, entries, role.name);
-      }
-
-      console.log(`[HanaReplication] Sync completed successfully for system [${setting.systemName}]!`);
     } catch (err) {
-      console.error(`[HanaReplication] Sync failed for system [${setting.systemName}]:`, err.message);
+      const errMsg = err.message.toLowerCase();
+      const isTableMissing = errMsg.includes('authorization_flat') && (errMsg.includes('could not find table') || errMsg.includes('invalid table name'));
+      if (isTableMissing) {
+        console.warn(`[HanaReplication] Default flat table sync skipped (missing global table):`, err.message);
+      } else {
+        throw err;
+      }
     }
+
+    // 2. Sync to custom flat table (if stream configured)
+    if (customTableName) {
+      console.log(`[HanaReplication] Syncing to custom flat table [${customTableName}] on [${setting.systemName}]...`);
+      await HanaClient.syncCustomAssignment(setting, customTableName, assignmentId, isDelete, entries, role.name);
+    }
+
+    // 3. Sync to custom hier table (if stream configured)
+    if (customHierTableName) {
+      console.log(`[HanaReplication] Syncing to custom hier table [${customHierTableName}] on [${setting.systemName}]...`);
+      await HanaClient.syncCustomHierAssignment(setting, customHierTableName, assignmentId, isDelete, hierEntries);
+    }
+
+    console.log(`[HanaReplication] All sync steps completed for system [${setting.systemName}]`);
   }
 }
 
@@ -285,16 +400,18 @@ async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
     );
 
     for (const assignment of assignments) {
-      try {
-        await syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false, preloaded);
-      } catch (e) {
-        console.error(`[HanaReplication] Failed to re-sync assignment ${assignment.ID}:`, e.message);
-      }
+      await syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false, preloaded);
     }
   } catch (err) {
     console.error(`[HanaReplication] Failed to sync role assignments for role ${roleId}:`, err.message);
   }
 }
 
-module.exports = { syncAssignmentToHana, syncRoleAssignmentsToHana, fetchRoleAncestryChain, buildHanaEntries };
+module.exports = {
+  syncAssignmentToHana,
+  syncRoleAssignmentsToHana,
+  fetchRoleAncestryChain,
+  buildFlatAuthorizationsForHana,
+  buildHierAuthorizationsForHana
+};
 

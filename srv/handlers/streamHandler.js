@@ -14,6 +14,16 @@ function sanitizeTableName(name) {
   return `${baseName}_flat_authorizations`;
 }
 
+function sanitizeHierTableName(name) {
+  const clean = (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, ''); // Trim leading/trailing underscores
+  
+  const baseName = clean || 'stream';
+  return `${baseName}_hier_authorizations`;
+}
+
 /**
  * Register stream handlers
  */
@@ -50,40 +60,60 @@ function registerStreamHandlers(service) {
     }
   });
 
+  // Before DELETE of Streams, fetch the name to drop associated custom HANA tables
+  service.before('DELETE', 'Streams', async (req) => {
+    const id = req.data.ID;
+    if (!id) return;
+    const stream = await cds.db.run(SELECT.one.from(Streams).columns('name').where({ ID: id }));
+    if (!stream || !stream.name) return;
+
+    const flatTable = sanitizeTableName(stream.name);
+    const hierTable = sanitizeHierTableName(stream.name);
+
+    const dbBdcSettings = cds.entities('fanrio.auth').BdcSettings;
+    const hanaConnections = await cds.db.run(
+      SELECT.from(dbBdcSettings).where({ connectionType: 'SAP Hana', isActive: true })
+    );
+
+    if (hanaConnections.length === 0) {
+      console.log('[StreamHandler] No active HANA connections configured for dropping tables.');
+      return;
+    }
+
+    console.log(`[StreamHandler] Dropping custom tables "${flatTable}" and "${hierTable}" on ${hanaConnections.length} active HANA connections...`);
+
+    for (const conn of hanaConnections) {
+      await HanaClient.dropCustomTable(conn, flatTable);
+      await HanaClient.dropCustomTable(conn, hierTable);
+    }
+  });
+
   service.before(['CREATE', 'UPDATE', 'DELETE'], 'StreamAttributes', async (req) => {
     await checkSettingsPermission(req);
   });
 
   // After CREATE of Streams, create custom HANA table
-  service.after('CREATE', 'Streams', (node, req) => {
-    cds.spawn({ user: req?.user }, async () => {
-      try {
-        const dbBdcSettings = cds.entities('fanrio.auth').BdcSettings;
-        const hanaConnections = await cds.db.run(
-          SELECT.from(dbBdcSettings).where({ connectionType: 'SAP Hana', isActive: true })
-        );
+  service.after('CREATE', 'Streams', async (node, req) => {
+    const dbBdcSettings = cds.entities('fanrio.auth').BdcSettings;
+    const hanaConnections = await cds.db.run(
+      SELECT.from(dbBdcSettings).where({ connectionType: 'SAP Hana', isActive: true })
+    );
 
-        console.log(`[StreamHandler] Active HANA connections found: ${hanaConnections.length}`);
+    console.log(`[StreamHandler] Active HANA connections found: ${hanaConnections.length}`);
 
-        if (hanaConnections.length === 0) {
-          console.log('[StreamHandler] No active HANA connections configured. Skipping table creation.');
-          return;
-        }
+    if (hanaConnections.length === 0) {
+      console.log('[StreamHandler] No active HANA connections configured. Skipping table creation.');
+      return;
+    }
 
-        const tableName = sanitizeTableName(node.name);
-        console.log(`[StreamHandler] Creating custom table "${tableName}" on ${hanaConnections.length} active HANA connections...`);
+    const tableName = sanitizeTableName(node.name);
+    const hierTableName = sanitizeHierTableName(node.name);
+    console.log(`[StreamHandler] Creating custom tables "${tableName}" and "${hierTableName}" on ${hanaConnections.length} active HANA connections...`);
 
-        for (const conn of hanaConnections) {
-          try {
-            await HanaClient.createCustomFlatTable(conn, tableName);
-          } catch (err) {
-            console.error(`[StreamHandler] Failed to create table "${tableName}" on connection ${conn.systemName}:`, err.message);
-          }
-        }
-      } catch (err) {
-        console.error('[StreamHandler] Error in background HANA table creation:', err.message);
-      }
-    });
+    for (const conn of hanaConnections) {
+      await HanaClient.createCustomFlatTable(conn, tableName);
+      await HanaClient.createCustomHierTable(conn, hierTableName);
+    }
   });
 }
 

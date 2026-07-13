@@ -41,14 +41,10 @@ function registerAssignmentHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   // HANA sync + replication queue — after CREATE (first handler registered)
   // -------------------------------------------------------------------------
-  service.after('CREATE', 'RoleAssignments', (assignment, req) => {
-    cds.spawn({ user: req?.user }, async () => {
-      try {
-        await syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
-      } catch (e) {
-        console.error('[AssignmentHandlers] Failed to replicate assignment creation to HANA:', e.message);
-      }
-    });
+  service.after('CREATE', 'RoleAssignments', async (assignment, req) => {
+    // Run HANA sync synchronously (lets errors propagate to frontend)
+    await syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
+
     cds.spawn({ user: req?.user }, async () => {
       try {
         const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
@@ -143,12 +139,18 @@ function registerAssignmentHandlers(service, entities, deps) {
   // HANA sync + audit log — before DELETE
   // -------------------------------------------------------------------------
   service.before('DELETE', 'RoleAssignments', async (req) => {
-    try {
-      const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
-      if (!id) return;
+    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
+    if (!id) return;
 
+    let targetUserId = null;
+    let targetRoleId = null;
+
+    try {
       const assignment = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: id }));
       if (assignment) {
+        targetUserId = assignment.userId;
+        targetRoleId = assignment.role_ID;
+
         const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
         if (role) {
           await queueReplication(`${role.name} (ASSIGNMENT DELETED)`, role.environment_ID, req?.user?.id);
@@ -163,17 +165,12 @@ function registerAssignmentHandlers(service, entities, deps) {
           details:    JSON.stringify(assignment)
         }));
       }
-
-      cds.spawn({ user: req?.user }, async () => {
-        try {
-          await syncAssignmentToHana(id, null, null, true);
-        } catch (e) {
-          console.error('[AssignmentHandlers] Failed to replicate assignment deletion:', e.message);
-        }
-      });
-    } catch (e) {
-      console.error('[AssignmentHandlers] Failed to replicate assignment deletion:', e.message);
+    } catch (err) {
+      console.error('[AssignmentHandlers] Deletion audit logs failed:', err.message);
     }
+
+    // Pass targetUserId and targetRoleId to clean stream-specific custom tables
+    await syncAssignmentToHana(id, targetUserId, targetRoleId, true);
   });
 }
 

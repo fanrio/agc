@@ -19,11 +19,60 @@ function registerRestrictionHandlers(service, entities, deps) {
   const { Roles, Restrictions, AuditLogs } = entities;
 
   // -------------------------------------------------------------------------
+  // Prevent duplicate restrictions on derived roles (matching parent role restrictions)
+  // -------------------------------------------------------------------------
+  service.before(['CREATE', 'UPDATE'], 'Restrictions', async (req) => {
+    let roleId = req.data.role_ID;
+    let field = req.data.field;
+    let filterType = req.data.filterType;
+    let value = req.data.value;
+
+    const id = req.data.ID || req.params?.[0]?.ID || req.params?.[0];
+    if (id && (!roleId || !field || !filterType || !value)) {
+      const current = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
+      if (current) {
+        roleId = roleId || current.role_ID;
+        field = field || current.field;
+        filterType = filterType || current.filterType;
+        value = value || current.value;
+      }
+    }
+
+    if (!roleId || !field || !filterType || !value) return;
+
+    // Check if role is DERIVED
+    const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+    if (!role || role.type !== 'DERIVED') return;
+
+    // Get parent role IDs
+    const inheritances = await cds.db.run(
+      SELECT.from('fanrio.auth.RoleInheritance').where({ role_ID: roleId })
+    );
+    if (!inheritances || inheritances.length === 0) return;
+
+    const parentIds = inheritances.map(i => i.parent_ID);
+
+    // Check if any parent role has the exact same restriction
+    const duplicate = await cds.db.run(
+      SELECT.one.from(Restrictions)
+        .where({ role_ID: { in: parentIds } })
+        .and({ field })
+        .and({ filterType })
+        .and({ value })
+    );
+
+    if (duplicate) {
+      req.error(400, `Derived role cannot have the same restriction as its parent role (Field: ${field}, Value: ${value}).`);
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // Audit log + queue + HANA sync — after CREATE
   // -------------------------------------------------------------------------
   service.after('CREATE', 'Restrictions', async (restriction, req) => {
+    if (!restriction.role_ID) return;
+
     try {
-      if (!restriction.role_ID) return;
       const role     = await cds.db.run(SELECT.one.from(Roles).where({ ID: restriction.role_ID }));
       const roleName = role ? role.name : 'Unknown Role';
       const details  = {
@@ -41,10 +90,12 @@ function registerRestrictionHandlers(service, entities, deps) {
         details:    JSON.stringify(details)
       }));
       await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-      await syncRoleAssignmentsToHana(restriction.role_ID);
     } catch (err) {
-      console.error('[RestrictionHandlers] Audit Log failed for Restrictions CREATE:', err.message);
+      console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions CREATE:', err.message);
     }
+
+    // Run HANA re-sync synchronously (lets errors propagate to frontend)
+    await syncRoleAssignmentsToHana(restriction.role_ID);
   });
 
   // -------------------------------------------------------------------------
@@ -69,20 +120,20 @@ function registerRestrictionHandlers(service, entities, deps) {
   // Diff + audit + queue + HANA sync — after UPDATE
   // -------------------------------------------------------------------------
   service.after('UPDATE', 'Restrictions', async (res, req) => {
-    try {
-      const id = req.data.ID || req.params?.[0]?.ID || req.params?.[0];
-      if (!id) return;
+    const id = req.data.ID || req.params?.[0]?.ID || req.params?.[0];
+    if (!id) return;
 
-      const afterState  = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
-      const beforeState = req.context?.beforeStateRestriction;
+    const afterState  = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
+    const beforeState = req.context?.beforeStateRestriction;
 
-      const hasChanges = beforeState && afterState && (
-        beforeState.filterType !== afterState.filterType ||
-        beforeState.value      !== afterState.value      ||
-        beforeState.field      !== afterState.field
-      );
+    const hasChanges = beforeState && afterState && (
+      beforeState.filterType !== afterState.filterType ||
+      beforeState.value      !== afterState.value      ||
+      beforeState.field      !== afterState.field
+    );
 
-      if (hasChanges && beforeState.role_ID) {
+    if (hasChanges && beforeState.role_ID) {
+      try {
         const role     = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
         const roleName = role ? role.name : 'Unknown Role';
         const details  = {
@@ -100,10 +151,12 @@ function registerRestrictionHandlers(service, entities, deps) {
           details:    JSON.stringify(details)
         }));
         await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-        await syncRoleAssignmentsToHana(beforeState.role_ID);
+      } catch (err) {
+        console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions UPDATE:', err.message);
       }
-    } catch (err) {
-      console.error('[RestrictionHandlers] Audit Log failed for Restrictions UPDATE:', err.message);
+
+      // Run HANA re-sync synchronously (lets errors propagate to frontend)
+      await syncRoleAssignmentsToHana(beforeState.role_ID);
     }
   });
 
@@ -111,13 +164,13 @@ function registerRestrictionHandlers(service, entities, deps) {
   // Audit log + queue + HANA sync — before DELETE
   // -------------------------------------------------------------------------
   service.before('DELETE', 'Restrictions', async (req) => {
+    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
+    if (!id) return;
+
+    const beforeState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
+    if (!beforeState?.role_ID) return;
+
     try {
-      const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
-      if (!id) return;
-
-      const beforeState = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: id }));
-      if (!beforeState?.role_ID) return;
-
       const role     = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
       const roleName = role ? role.name : 'Unknown Role';
       const details  = {
@@ -135,10 +188,12 @@ function registerRestrictionHandlers(service, entities, deps) {
         details:    JSON.stringify(details)
       }));
       await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
-      await syncRoleAssignmentsToHana(beforeState.role_ID);
     } catch (err) {
-      console.error('[RestrictionHandlers] Audit Log failed for Restrictions DELETE:', err.message);
+      console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions DELETE:', err.message);
     }
+
+    // Run HANA re-sync synchronously (lets errors propagate to frontend)
+    await syncRoleAssignmentsToHana(beforeState.role_ID);
   });
 }
 

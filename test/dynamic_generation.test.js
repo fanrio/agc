@@ -1,3 +1,31 @@
+// Mock @sap/hana-client in Node require cache before any other modules load
+const mockHana = {
+  createConnection: () => ({
+    connect: (params, cb) => cb(null),
+    setAutoCommit: (auto, cb) => cb(null),
+    commit: (cb) => cb(null),
+    rollback: (cb) => cb(null),
+    prepare: (sql, cb) => cb(null, {
+      exec: (params, cb) => cb(null)
+    }),
+    exec: (sql, paramsOrCb, maybeCb) => {
+      const cb = typeof paramsOrCb === 'function' ? paramsOrCb : maybeCb;
+      cb(null, []);
+    },
+    disconnect: (cb) => cb ? cb() : null
+  })
+};
+require('module')._cache[require.resolve('@sap/hana-client')] = {
+  id: require.resolve('@sap/hana-client'),
+  filename: require.resolve('@sap/hana-client'),
+  loaded: true,
+  exports: mockHana
+};
+
+// Apply driver dependency injection
+const HanaClient = require('./../srv/lib/hanaClient');
+HanaClient.setDriver(mockHana);
+
 const test = require('node:test');
 const assert = require('node:assert');
 const cds = require('@sap/cds');
@@ -29,6 +57,8 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
       generationMode: 'USER_CONSOLIDATED_ROLE',
       filterType: 'MULTI_VALUE',
       sourceFilterCondition: '{"field":"status","value":"ACTIVE"}',
+      stream_ID: 'app-finance',
+      environment_ID: 'Q',
       mappings: [
         { sourceKeyField: 'ID', targetRestrictionField: 'CustomerNumber' }
       ]
@@ -63,6 +93,9 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     const roleName = 'ROLE_DYN_CUST_RESP_ALICE_COMPANY_COM';
     const role = await db.run(SELECT.one.from('fanrio.auth.Roles').where({ name: roleName }));
     assert.ok(role, 'Dynamic role for Alice should be created');
+    assert.strictEqual(role.type, 'DRAGE', 'Dynamic role should be created with type DRAGE');
+    assert.strictEqual(role.environment_ID, 'Q', 'Dynamic role should inherit environment_ID from rule definition');
+    assert.strictEqual(role.stream_ID, 'app-finance', 'Dynamic role should inherit stream_ID from rule definition');
 
     // Verify generated Restriction exists
     const restriction = await db.run(SELECT.one.from('fanrio.auth.Restrictions').where({ role_ID: role.ID }));

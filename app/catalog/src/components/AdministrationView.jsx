@@ -14,20 +14,54 @@ export default function AdministrationView() {
   const { permissions } = usePermissions();
   const [activeTab, setActiveTab] = useState(0);
 
-  const TABS = [];
-  if (permissions?.isSuperAdmin || permissions?.canManageSettings) {
-    TABS.push({ id: 0, label: 'Restriction Fields', icon: <Settings size={16} />, component: <RestrictionFieldsView /> });
-    TABS.push({ id: 1, label: 'Streams', icon: <Network size={16} />, component: <StreamsView /> });
-    TABS.push({ id: 2, label: 'BDC Connections', icon: <Cloud size={16} />, component: <BdcSettingsView /> });
-    TABS.push({ id: 3, label: 'BDC API Tester', icon: <Terminal size={16} />, component: <BdcApiTesterView /> });
-  }
-  if (permissions?.isSuperAdmin || permissions?.canManageAppUsers) {
-    TABS.push({ id: 4, label: 'App Authorizations', icon: <ShieldAlert size={16} />, component: <AppAuthorizationsView /> });
-  }
-  if (permissions?.isSuperAdmin || permissions?.canManageSettings) {
-    TABS.push({ id: 5, label: 'Dynamic Rules', icon: <GitFork size={16} />, component: <DynamicRulesView /> });
-    TABS.push({ id: 6, label: 'Master Data Editor', icon: <Database size={16} />, component: <MasterDataEditorView /> });
-  }
+  const allTabs = [
+    {
+      label: 'BDC Connections',
+      icon: <Cloud size={16} />,
+      component: <BdcSettingsView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    },
+    {
+      label: 'Restriction Fields',
+      icon: <Settings size={16} />,
+      component: <RestrictionFieldsView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    },
+    {
+      label: 'Streams',
+      icon: <Network size={16} />,
+      component: <StreamsView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    },
+    {
+      label: 'App Authorizations',
+      icon: <ShieldAlert size={16} />,
+      component: <AppAuthorizationsView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageAppUsers
+    },
+    {
+      label: 'Dynamic Rules',
+      icon: <GitFork size={16} />,
+      component: <DynamicRulesView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    },
+    {
+      label: 'Master Data Editor',
+      icon: <Database size={16} />,
+      component: <MasterDataEditorView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    },
+    {
+      label: 'BDC API Tester',
+      icon: <Terminal size={16} />,
+      component: <BdcApiTesterView />,
+      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
+    }
+  ];
+
+  const TABS = allTabs
+    .filter(t => t.visible)
+    .map((t, idx) => ({ id: idx, ...t }));
 
   const visibleTabIndices = TABS.map(t => t.id);
   const selectedTabIndex = visibleTabIndices.includes(activeTab) ? activeTab : (visibleTabIndices[0] !== undefined ? visibleTabIndices[0] : 0);

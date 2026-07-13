@@ -195,7 +195,7 @@ module.exports = cds.service.impl(async function () {
             if (pr.parent_ID) parentIds.push(pr.parent_ID);
           });
         }
-        if (roleId && parentIds.length === 0) {
+        if (parentIds.length === 0 && roleId) {
           const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
           parentIds = inherits.map(i => i.parent_ID);
         }
@@ -207,6 +207,8 @@ module.exports = cds.service.impl(async function () {
           }
         }
       }
+    } else if (roleType === 'DRAGE') {
+      requirePermission(perms, 'isSuperAdmin', req);
     } else {
       requirePermission(perms, 'canManageSingleRoles', req);
     }
@@ -234,6 +236,15 @@ module.exports = cds.service.impl(async function () {
       if (role?.environment_ID) {
         requireEnvironment(perms, role.environment_ID, req);
       }
+
+      // If user has authorization to manage derived roles ONLY, they can only assign derived roles, not parent roles
+      if (!perms.isSuperAdmin && perms.canManageDerivedRoles && !perms.canManageSingleRoles) {
+        if (req.event === 'CREATE' || req.event === 'UPDATE') {
+          if (role && role.type !== 'DERIVED') {
+            req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');
+          }
+        }
+      }
     }
   });
 
@@ -258,6 +269,7 @@ module.exports = cds.service.impl(async function () {
         if (role.environment_ID) requireEnvironment(perms, role.environment_ID, req);
         if (role.type === 'ORG_BASED') requirePermission(perms, 'canManageOrgRoles', req);
         else if (role.type === 'DERIVED') requirePermission(perms, 'canManageDerivedRoles', req);
+        else if (role.type === 'DRAGE') requirePermission(perms, 'isSuperAdmin', req);
         else requirePermission(perms, 'canManageSingleRoles', req);
       }
     }

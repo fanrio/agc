@@ -739,6 +739,9 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
   // 10. Replications & Replication Status Trigger checks
   await t.test('triggerReplication and checkReplicationStatuses triggers', async () => {
+    // Keep track of which connections were active
+    const activeSettings = await cds.db.run(SELECT.from('fanrio.auth.BdcSettings').where({ isActive: true }));
+
     // Deactivate all existing connections to avoid OData connection collision
     await cds.db.run(UPDATE('fanrio.auth.BdcSettings').set({ isActive: false }));
     await cds.db.run(cds.ql.DELETE.from('fanrio.auth.Replications'));
@@ -795,17 +798,23 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     // Clean up
     await DELETE(`/odata/v4/auth/Replications(ID=${rep.data.ID})`);
     await DELETE(`/odata/v4/auth/BdcSettings(ID=${setting.data.ID})`);
+
+    // Restore active status
+    if (activeSettings.length > 0) {
+      const activeIds = activeSettings.map(s => s.ID);
+      await cds.db.run(UPDATE('fanrio.auth.BdcSettings').set({ isActive: true }).where({ ID: { in: activeIds } }));
+    }
   });
 
-  test('HANA Flat Replication - Cartesian Product buildHanaEntries', () => {
-    const { buildHanaEntries } = require('../srv/services/hanaReplicationService');
+  await t.test('HANA Flat Replication - Cartesian Product buildFlatAuthorizationsForHana', () => {
+    const { buildFlatAuthorizationsForHana } = require('../srv/services/hanaReplicationService');
     
     const restrictions = [
       { field: 'Plant', filterType: 'MULTI_VALUE', value: '["10", "20"]' },
       { field: 'Company Code', filterType: 'SINGLE_VALUE', value: 'CC01' }
     ];
     
-    const entries = buildHanaEntries(restrictions, 'ROLE_TEST', 'user1');
+    const entries = buildFlatAuthorizationsForHana(restrictions, 'ROLE_TEST', 'user1');
     
     assert.strictEqual(entries.length, 4);
     
@@ -820,4 +829,200 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.ok(role2Entries.some(e => e.field === 'Company Code' && e.low === 'CC01'));
   });
 
+  await t.test('HANA Hier Replication - buildHierAuthorizationsForHana', () => {
+    const { buildHierAuthorizationsForHana } = require('../srv/services/hanaReplicationService');
+    
+    const restrictions = [
+      { field: 'Plant', filterType: 'MULTI_VALUE', value: '["10", "20"]' },
+      { field: '0HIER_PROFIT_CENTER', filterType: 'HIERARCHY', value: 'PC_ROOT' },
+      { field: 'SalesOrg', filterType: 'HIERARCHY', value: '["DACH/0"]' },
+      { field: 'Region', filterType: 'HIERARCHY', value: '[{"id":"US/1","nodeType":"RegionType"}]' },
+      { field: 'SalesOrg', filterType: 'HIERARCHY', value: '[{"id":"DE03","nodeType":"SALES_ORG","hierarchy":"DACH"}]' }
+    ];
+    
+    const entries = buildHierAuthorizationsForHana(restrictions, 'ROLE_TEST', 'user1');
+    
+    assert.strictEqual(entries.length, 4);
+
+    // Entry 1 (Fallback case for plain string 'PC_ROOT')
+    assert.strictEqual(entries[0].identifier, 'user1');
+    assert.strictEqual(entries[0].restriction, 'ROLE_TEST');
+    assert.strictEqual(entries[0].targetNodeType, '0HIER_PROFIT_CENTER');
+    assert.strictEqual(entries[0].rootValues, 'PC_ROOT');
+    assert.strictEqual(entries[0].hierIdentifier, 'PC_ROOT');
+    assert.strictEqual(entries[0].rootNodeType, '');
+
+    // Entry 2 (Parsed JSON array directory case '["DACH/0"]')
+    assert.strictEqual(entries[1].identifier, 'user1');
+    assert.strictEqual(entries[1].restriction, 'ROLE_TEST');
+    assert.strictEqual(entries[1].targetNodeType, 'SalesOrg');
+    assert.strictEqual(entries[1].rootValues, 'DACH/0');       // full node key
+    assert.strictEqual(entries[1].hierIdentifier, 'DACH');     // directory prefix before '/'
+    assert.strictEqual(entries[1].rootNodeType, '');
+
+    // Entry 3 (New object format case)
+    assert.strictEqual(entries[2].identifier, 'user1');
+    assert.strictEqual(entries[2].restriction, 'ROLE_TEST');
+    assert.strictEqual(entries[2].targetNodeType, 'Region');
+    assert.strictEqual(entries[2].rootValues, 'US/1');          // full node key
+    assert.strictEqual(entries[2].hierIdentifier, 'US');        // directory prefix before '/'
+    assert.strictEqual(entries[2].rootNodeType, 'RegionType');
+
+    // Entry 4 (Stored hierarchy attribute case with DE03 value)
+    assert.strictEqual(entries[3].identifier, 'user1');
+    assert.strictEqual(entries[3].restriction, 'ROLE_TEST');
+    assert.strictEqual(entries[3].targetNodeType, 'SalesOrg');
+    assert.strictEqual(entries[3].rootValues, 'DE03');          // business value only!
+    assert.strictEqual(entries[3].hierIdentifier, 'DACH');      // directory prefix from hierarchy attribute
+    assert.strictEqual(entries[3].rootNodeType, 'SALES_ORG');
+  });
+
+  await t.test('HANA Hier Replication - syncCustomHierAssignment and auto-migration', async () => {
+    const HanaClient = require('../srv/lib/hanaClient');
+
+    let prepareCount = 0;
+    let alterTableExecuted = false;
+    let insertExecuted = false;
+
+    const testMockHana = {
+      createConnection: () => ({
+        connect: (params, cb) => cb(null),
+        commit: (cb) => cb(null),
+        rollback: (cb) => cb(null),
+        disconnect: (cb) => cb ? cb() : null,
+        exec: (sql, cb) => {
+          if (sql.includes('RENAME COLUMN') && sql.includes('."ID" TO "IDENTIFIER"')) {
+            alterTableExecuted = true;
+            return cb(null);
+          }
+          cb(null, []);
+        },
+        prepare: (sql, cb) => {
+          if (sql.includes('INSERT INTO') && sql.includes('IDENTIFIER')) {
+            prepareCount++;
+            if (prepareCount === 1) {
+              return cb(new Error('invalid column name: IDENTIFIER'));
+            }
+            return cb(null, {
+              exec: (params, execCb) => {
+                insertExecuted = true;
+                execCb(null);
+              }
+            });
+          }
+          cb(null, {
+            exec: (params, execCb) => execCb(null)
+          });
+        }
+      })
+    };
+
+    const originalDriver = HanaClient.driver;
+    HanaClient.setDriver(testMockHana);
+
+    try {
+      const setting = { systemName: 'TestHana', username: 'dbUser', password: 'pwd', host: 'localhost', port: 30015 };
+      const hierEntries = [{
+        identifier: 'user1',
+        restriction: 'ROLE_TEST',
+        targetNodeType: '0HIER_PROFIT_CENTER',
+        rootNodeType: '',
+        rootValues: 'PC_ROOT',
+        hierIdentifier: '0HIER_PROFIT_CENTER'
+      }];
+
+      await HanaClient.syncCustomHierAssignment(setting, 'test_hier_table', 'assignment-abc', false, hierEntries);
+
+      assert.strictEqual(alterTableExecuted, true, 'Should execute RENAME COLUMN statement to rename ID to IDENTIFIER');
+      assert.strictEqual(prepareCount, 2, 'Should prepare insert twice (first failed, second retry after alter table)');
+      assert.strictEqual(insertExecuted, true, 'Should successfully execute the insert after migration');
+    } finally {
+      HanaClient.setDriver(originalDriver);
+    }
+  });
+
+  await t.test('Derived Role Duplicate Restriction Checks', async (t2) => {
+    // 1. Create a parent single role
+    const parentRoleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_PARENT_DUP',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      stream_ID: 'app-global'
+    });
+    const parentRoleId = parentRoleRes.data.ID;
+
+    // 2. Add a restriction to the parent role
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: parentRoleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // 3. Create a derived role
+    const derivedRoleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_DERIVED_DUP',
+      type: 'DERIVED',
+      environment_ID: 'D',
+      stream_ID: 'app-global'
+    });
+    const derivedRoleId = derivedRoleRes.data.ID;
+
+    // 4. Associate derived role with parent role via inheritance
+    await POST('/odata/v4/auth/RoleInheritance', {
+      role_ID: derivedRoleId,
+      parent_ID: parentRoleId
+    });
+
+    // 5. Try to add the EXACT same restriction to the derived role - should fail
+    try {
+      await POST('/odata/v4/auth/Restrictions', {
+        role_ID: derivedRoleId,
+        field: 'SalesOrg',
+        filterType: 'SINGLE_VALUE',
+        value: 'DE01'
+      });
+      assert.fail('Should have failed to create a duplicate restriction on derived role');
+    } catch (err) {
+      assert.strictEqual(err.status, 400, 'Should return 400 Bad Request');
+      assert.ok(err.message.includes('Derived role cannot have the same restriction as its parent'), 'Should throw the duplicate restriction error');
+    }
+
+    // 6. Test case where we add restriction to the derived role first, and then associate the parent role (which has the duplicate restriction)
+    // Create a new derived role
+    const derivedRoleRes2 = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_DERIVED_DUP_2',
+      type: 'DERIVED',
+      environment_ID: 'D',
+      stream_ID: 'app-global'
+    });
+    const derivedRoleId2 = derivedRoleRes2.data.ID;
+
+    // Add own restriction first
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: derivedRoleId2,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // Try to associate with the parent role - should fail because parent has duplicate restriction
+    try {
+      await POST('/odata/v4/auth/RoleInheritance', {
+        role_ID: derivedRoleId2,
+        parent_ID: parentRoleId
+      });
+      assert.fail('Should have failed to create inheritance due to duplicate restriction');
+    } catch (err) {
+      assert.strictEqual(err.status, 400, 'Should return 400 Bad Request');
+      assert.ok(err.message.includes('duplicate restrictions'), 'Should throw the duplicate inheritance error');
+    }
+
+    // Cleanup
+    await DELETE(`/odata/v4/auth/Roles('${derivedRoleId}')`);
+    await DELETE(`/odata/v4/auth/Roles('${derivedRoleId2}')`);
+    await DELETE(`/odata/v4/auth/Roles('${parentRoleId}')`);
+  });
+
 });
+

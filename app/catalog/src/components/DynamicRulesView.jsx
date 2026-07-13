@@ -17,6 +17,8 @@ export default function DynamicRulesView() {
   const [roles, setRoles] = useState([]);
   const [fields, setFields] = useState([]);
   const [connections, setConnections] = useState([]);
+  const [streams, setStreams] = useState([]);
+  const [environments, setEnvironments] = useState([]);
   const [assets, setAssets] = useState([]);
   const [assetColumns, setAssetColumns] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,8 @@ export default function DynamicRulesView() {
     generationMode: 'USER_CONSOLIDATED_ROLE',
     templateRole_ID: '',
     bdcConnection_ID: '',
+    stream_ID: '',
+    environment_ID: '',
     mappings: []
   });
 
@@ -47,16 +51,20 @@ export default function DynamicRulesView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rData, rolesData, fieldsData, connData] = await Promise.all([
+      const [rData, rolesData, fieldsData, connData, streamsData, envsData] = await Promise.all([
         api.getDynamicRules(),
         api.getRoles(),
         api.getRestrictionFields(),
-        api.getBdcSettings()
+        api.getBdcSettings(),
+        api.getStreamsFlat(),
+        api.getEnvironments()
       ]);
       setRules(rData || []);
       setRoles(filterRolesByPermissions(rolesData || [], permissions));
       setFields(fieldsData || []);
       setConnections(connData || []);
+      setStreams(streamsData || []);
+      setEnvironments(envsData || []);
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
     }
@@ -143,6 +151,8 @@ export default function DynamicRulesView() {
       generationMode: 'USER_CONSOLIDATED_ROLE',
       templateRole_ID: '',
       bdcConnection_ID: connections[0]?.ID || '',
+      stream_ID: '',
+      environment_ID: '',
       mappings: []
     });
     setAssetColumns([]);
@@ -163,6 +173,8 @@ export default function DynamicRulesView() {
       generationMode: rule.generationMode,
       templateRole_ID: rule.templateRole_ID || '',
       bdcConnection_ID: rule.bdcConnection_ID || '',
+      stream_ID: rule.stream_ID || '',
+      environment_ID: rule.environment_ID || '',
       mappings: (rule.mappings || []).map(m => ({
         sourceKeyField: m.sourceKeyField,
         targetRestrictionField: m.targetRestrictionField
@@ -201,6 +213,14 @@ export default function DynamicRulesView() {
     }
     if (!form.bdcConnection_ID) {
       setSnackbar({ open: true, message: 'BDC Connection is required', severity: 'error' });
+      return;
+    }
+    if (!form.stream_ID) {
+      setSnackbar({ open: true, message: 'Stream is required', severity: 'error' });
+      return;
+    }
+    if (!form.environment_ID) {
+      setSnackbar({ open: true, message: 'Environment is required', severity: 'error' });
       return;
     }
     if (!form.sourceEntity) {
@@ -353,6 +373,30 @@ export default function DynamicRulesView() {
               control={<Checkbox checked={form.isActive} onChange={(e) => setForm(p => ({ ...p, isActive: e.target.checked }))} />}
               label="Active Rule"
             />
+            
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Role Settings</Typography>
+            
+            <FormControl size="small" fullWidth>
+              <InputLabel>Stream</InputLabel>
+              <Select
+                value={form.stream_ID}
+                label="Stream"
+                onChange={(e) => setForm(p => ({ ...p, stream_ID: e.target.value }))}
+              >
+                {streams.map(s => <MenuItem key={s.ID} value={s.ID}>{s.name} ({s.description})</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" fullWidth>
+              <InputLabel>Environment</InputLabel>
+              <Select
+                value={form.environment_ID}
+                label="Environment"
+                onChange={(e) => setForm(p => ({ ...p, environment_ID: e.target.value }))}
+              >
+                {environments.map(env => <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>)}
+              </Select>
+            </FormControl>
             
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Source Master Data Settings</Typography>
             

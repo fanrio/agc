@@ -19,7 +19,50 @@
  */
 function registerRoleHandlers(service, entities, deps) {
   const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
-  const { Roles, RoleAssignments, RoleInheritance, AuditLogs } = entities;
+  const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs } = entities;
+
+  // -------------------------------------------------------------------------
+  // Prevent duplicate restrictions when creating/updating RoleInheritance
+  // -------------------------------------------------------------------------
+  service.before(['CREATE', 'UPDATE'], 'RoleInheritance', async (req) => {
+    let { role_ID, parent_ID } = req.data;
+
+    const id = req.data.ID || req.params?.[0]?.ID || req.params?.[0];
+    if (id && (!role_ID || !parent_ID)) {
+      const current = await cds.db.run(SELECT.one.from(RoleInheritance).where({ ID: id }));
+      if (current) {
+        role_ID = role_ID || current.role_ID;
+        parent_ID = parent_ID || current.parent_ID;
+      }
+    }
+
+    if (!role_ID || !parent_ID) return;
+
+    // Get all own restrictions of the child role
+    const childRestrictions = await cds.db.run(
+      SELECT.from(Restrictions).where({ role_ID })
+    );
+    if (!childRestrictions || childRestrictions.length === 0) return;
+
+    // Get all restrictions of the parent role
+    const parentRestrictions = await cds.db.run(
+      SELECT.from(Restrictions).where({ role_ID: parent_ID })
+    );
+    if (!parentRestrictions || parentRestrictions.length === 0) return;
+
+    // Compare child own restrictions with parent restrictions
+    for (const childRes of childRestrictions) {
+      const duplicate = parentRestrictions.find(parentRes =>
+        parentRes.field === childRes.field &&
+        parentRes.filterType === childRes.filterType &&
+        parentRes.value === childRes.value
+      );
+      if (duplicate) {
+        req.error(400, `Derived role cannot inherit from parent role because they have duplicate restrictions (Field: ${childRes.field}, Value: ${childRes.value}).`);
+        break;
+      }
+    }
+  });
 
   // -------------------------------------------------------------------------
   // UUID auto-generation
@@ -105,14 +148,14 @@ function registerRoleHandlers(service, entities, deps) {
   // Diff + audit log + HANA re-sync — UPDATE
   // -------------------------------------------------------------------------
   service.after('UPDATE', 'Roles', async (res, req) => {
-    try {
-      let id = req.data.ID;
-      if (!id && req.params?.length > 0) {
-        const p = req.params[0];
-        id = typeof p === 'object' ? p.ID : p;
-      }
-      if (!id) return;
+    let id = req.data.ID;
+    if (!id && req.params?.length > 0) {
+      const p = req.params[0];
+      id = typeof p === 'object' ? p.ID : p;
+    }
+    if (!id) return;
 
+    try {
       const afterState  = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
       const beforeState = req.context?.beforeStateRole;
 
@@ -141,10 +184,12 @@ function registerRoleHandlers(service, entities, deps) {
           req?.user?.id
         );
       }
-      await syncRoleAssignmentsToHana(id);
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles UPDATE:', err.message);
     }
+
+    // Run HANA re-sync synchronously (lets errors propagate to frontend)
+    await syncRoleAssignmentsToHana(id);
   });
 
   // -------------------------------------------------------------------------

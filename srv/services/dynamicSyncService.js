@@ -83,7 +83,7 @@ async function syncDynamicRule(ruleId, cds) {
   if (!bdcConnection && rule.bdcConnection_ID) {
     bdcConnection = await db.run(SELECT.one.from(BdcSettings).where({ ID: rule.bdcConnection_ID }));
   }
-  const envId = bdcConnection?.environment_ID || 'D';
+  const envId = rule.environment_ID;
 
   const userIds = Object.keys(userRecordMapping);
 
@@ -152,6 +152,8 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
   let role = existingRoles.find(r => r.name === roleName);
   let roleId = role?.ID;
 
+  const streamId = rule.stream_ID;
+
   // Check if keys have changed
   const newSerializedKeys = keys.map(k => JSON.stringify(k)).sort();
   const existingSerializedKeys = activeMappings
@@ -165,6 +167,12 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
 
   let assignment = roleId ? existingAssignments.find(a => a.role_ID === roleId && a.userId === userId) : null;
 
+  // Update existing role's stream if it changed
+  if (role && role.stream_ID !== streamId) {
+    await db.run(UPDATE(Roles).set({ stream_ID: streamId }).where({ ID: role.ID }));
+    role.stream_ID = streamId;
+  }
+
   if (keysUnchanged && role && assignment) {
     return;
   }
@@ -175,10 +183,10 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
     const newRole = {
       ID: roleId,
       name: roleName,
-      type: 'DERIVED',
+      type: 'DRAGE',
       description: `Dynamic Role created via rule: ${rule.code} for user ${userId}`,
       environment_ID: envId,
-      stream_ID: 'app-global'
+      stream_ID: streamId
     };
     await db.run(INSERT.into(Roles).entries(newRole));
     existingRoles.push(newRole);

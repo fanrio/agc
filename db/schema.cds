@@ -191,6 +191,8 @@ entity DynamicGenerationRules : managed {
   generationMode          : String(30) not null;                 // 'USER_CONSOLIDATED_ROLE' | 'TEMPLATE_ASSIGNMENT'
   templateRole            : Association to Roles;
   bdcConnection           : Association to BdcSettings;
+  stream                  : Association to Streams not null;     // Mapped Stream definition
+  environment             : Association to Environments not null; // Mapped Environment definition
   mappings                : Composition of many DynamicRuleFieldMappings on mappings.rule = $self;
   filterType              : String(20) @default : 'MULTI_VALUE';
 }

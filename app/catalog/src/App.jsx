@@ -65,7 +65,7 @@ function AppContent({ simulatedUser, setSimulatedUser }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Network size={20} color="#0F172A" />
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', color: 'primary.main' }}>
-              fanrio <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
+              cortex <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

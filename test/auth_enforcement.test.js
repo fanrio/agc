@@ -1,8 +1,32 @@
 'use strict';
 
-/**
- * auth_enforcement.test.js - Integration tests for the new authorization system
- */
+// Mock @sap/hana-client in Node require cache before any other modules load
+const mockHana = {
+  createConnection: () => ({
+    connect: (params, cb) => cb(null),
+    setAutoCommit: (auto, cb) => cb(null),
+    commit: (cb) => cb(null),
+    rollback: (cb) => cb(null),
+    prepare: (sql, cb) => cb(null, {
+      exec: (params, cb) => cb(null)
+    }),
+    exec: (sql, paramsOrCb, maybeCb) => {
+      const cb = typeof paramsOrCb === 'function' ? paramsOrCb : maybeCb;
+      cb(null, []);
+    },
+    disconnect: (cb) => cb ? cb() : null
+  })
+};
+require('module')._cache[require.resolve('@sap/hana-client')] = {
+  id: require.resolve('@sap/hana-client'),
+  filename: require.resolve('@sap/hana-client'),
+  loaded: true,
+  exports: mockHana
+};
+
+// Apply driver dependency injection
+const HanaClient = require('./../srv/lib/hanaClient');
+HanaClient.setDriver(mockHana);
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -160,4 +184,95 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     // Clean up
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: replUser }));
   });
+
+  await t.test('Assign Roles restriction enforcement (Derived roles only)', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations } = db.entities;
+
+    const assignUser = 'assign-user';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: assignUser }));
+
+    // User with permission to manage derived roles only, and can assign roles
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: assignUser,
+      userName: 'Assign User with derived roles only',
+      canAssignRoles: true,
+      canManageDerivedRoles: true,
+      canManageSingleRoles: false,
+      isActive: true
+    }));
+
+    // Setup: create a parent single role and a derived role (with restrictions so they can be assigned)
+    const singleRoleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_SINGLE_ASSIGN',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      stream_ID: 'app-global'
+    });
+    const singleRoleId = singleRoleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: singleRoleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    const derivedRoleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_DERIVED_ASSIGN',
+      type: 'DERIVED',
+      environment_ID: 'D',
+      stream_ID: 'app-global'
+    });
+    const derivedRoleId = derivedRoleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: derivedRoleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE02'
+    });
+
+    let assignmentId;
+
+    // 1. Allow assigning the derived role
+    await t2.test('Allow derived role assignment', async () => {
+      const res = await POST('/odata/v4/auth/RoleAssignments', {
+        role_ID: derivedRoleId,
+        userId: 'target-user-1',
+        userName: 'Target User 1'
+      }, {
+        headers: { 'x-simulated-user': assignUser }
+      });
+      assert.strictEqual(res.status, 201);
+      assignmentId = res.data.ID;
+    });
+
+    // 2. Block assigning the single (parent) role
+    await t2.test('Block parent (single) role assignment', async () => {
+      try {
+        await POST('/odata/v4/auth/RoleAssignments', {
+          role_ID: singleRoleId,
+          userId: 'target-user-2',
+          userName: 'Target User 2'
+        }, {
+          headers: { 'x-simulated-user': assignUser }
+        });
+        assert.fail('Expected parent role assignment to fail with 403');
+      } catch (err) {
+        assert.strictEqual(err.status || err.response?.status, 403);
+      }
+    });
+
+    // Clean up
+    if (assignmentId) {
+      await DELETE(`/odata/v4/auth/RoleAssignments('${assignmentId}')`);
+    }
+    await DELETE(`/odata/v4/auth/Roles('${derivedRoleId}')`);
+    await DELETE(`/odata/v4/auth/Roles('${singleRoleId}')`);
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: assignUser }));
+  });
+
 });
+
