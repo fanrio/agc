@@ -29,12 +29,6 @@
         "credentials": {
           "url": "sqlite.db"
         }
-      },
-      "scim-api": {
-        "kind": "rest",
-        "credentials": {
-          "url": "https://mock-scim-api.com"
-        }
       }
     },
     "[development]": {

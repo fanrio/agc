@@ -181,6 +181,16 @@ const test = require('node:test');
 const assert = require('node:assert');
 const cds = require('@sap/cds');
 
+// Configure scim-api rest mock service dynamically if not already configured in cds.env
+if (!cds.env.requires['scim-api']) {
+  cds.env.requires['scim-api'] = {
+    kind: 'rest',
+    credentials: {
+      url: 'https://mock-scim-api.com'
+    }
+  };
+}
+
 const { GET, POST, PATCH, DELETE } = cds.test(__dirname + '/..');
 
 test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
