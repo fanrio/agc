@@ -365,23 +365,24 @@ function makeSearchScimUsersHandler(cds) {
         }));
       } catch (err) {
         console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
-        // Fallback to local stub in case of error (with warning)
+        return req.error(500, `SCIM Integration Query Failed: ${err.message}`);
       }
     }
 
     // Default mock users fallback for local development/testing (A-02)
     const users = [
-      { username: 'john.doe@fanrio.com',      displayName: 'John',       email: 'john.doe@fanrio.com',      department: 'Finance' },
-      { username: 'alice.smith@fanrio.com',    displayName: 'Alice',     email: 'alice.smith@fanrio.com',    department: 'Human Resources' },
-      { username: 'bob.martin@fanrio.com',      displayName: 'Bob',      email: 'bob.martin@fanrio.com',     department: 'IT Operations' },
-      { username: 'charlie.white@fanrio.com',   displayName: 'Charlie',   email: 'charlie.white@fanrio.com',  department: 'Sales' },
-      { username: 'emily.miller@fanrio.com',    displayName: 'Emily',    email: 'emily.miller@fanrio.com',   department: 'Global Operations' },
-      { username: 'david.brown@fanrio.com',     displayName: 'David',     email: 'david.brown@fanrio.com',    department: 'Finance' },
-      { username: 'sarah.johnson@fanrio.com',   displayName: 'Sarah',   email: 'sarah.johnson@fanrio.com',  department: 'IT Development' },
-      { username: 'maria.garcia@fanrio.com',    displayName: 'Maria',    email: 'maria.garcia@fanrio.com',   department: 'Sales' },
-      { username: 'robert.wilson@fanrio.com',   displayName: 'Robert',   email: 'robert.wilson@fanrio.com',  department: 'Security' },
-      { username: 'linda.harris@fanrio.com',    displayName: 'Linda',    email: 'linda.harris@fanrio.com',   department: 'Human Resources' },
-      { username: 'admin@fanrio.com',          displayName: 'System',    email: 'admin@fanrio.com',          department: 'IT Operations' }
+      { username: 'john.doe@fanrio.com',       displayName: 'John',            email: 'john.doe@fanrio.com',       department: 'Finance' },
+      { username: 'alice.smith@fanrio.com',     displayName: 'Alice',           email: 'alice.smith@fanrio.com',     department: 'Human Resources' },
+      { username: 'bob.martin@fanrio.com',      displayName: 'Bob',             email: 'bob.martin@fanrio.com',      department: 'IT Operations' },
+      { username: 'charlie.white@fanrio.com',   displayName: 'Charlie',         email: 'charlie.white@fanrio.com',   department: 'Sales' },
+      { username: 'emily.miller@fanrio.com',    displayName: 'Emily',           email: 'emily.miller@fanrio.com',    department: 'Global Operations' },
+      { username: 'david.brown@fanrio.com',     displayName: 'David',           email: 'david.brown@fanrio.com',     department: 'Finance' },
+      { username: 'sarah.meissner@fanrio.com',  displayName: 'Sarah Meissner',  email: 'sarah.meissner@fanrio.com',  department: 'IT Development' },
+      { username: 'eisen.schmidt@fanrio.com',   displayName: 'Eisen',           email: 'eisen.schmidt@fanrio.com',   department: 'Finance' },
+      { username: 'maria.garcia@fanrio.com',    displayName: 'Maria',           email: 'maria.garcia@fanrio.com',    department: 'Sales' },
+      { username: 'robert.wilson@fanrio.com',   displayName: 'Robert',          email: 'robert.wilson@fanrio.com',   department: 'Security' },
+      { username: 'linda.harris@fanrio.com',    displayName: 'Linda',           email: 'linda.harris@fanrio.com',    department: 'Human Resources' },
+      { username: 'admin@fanrio.com',           displayName: 'System',          email: 'admin@fanrio.com',           department: 'IT Operations' }
     ];
     if (!query || !query.trim()) return users;
     const q = query.toLowerCase().trim();

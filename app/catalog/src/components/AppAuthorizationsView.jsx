@@ -756,7 +756,7 @@ export default function AppAuthorizationsView() {
         </DialogContent>
         <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
           <Button onClick={() => setOpenAdd(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" onClick={handleAddAuthorization} disabled={!selectedLdapUser}>Add</Button>
+          <Button variant="contained" onClick={handleAddAuthorization} disabled={!selectedScimUser}>Add</Button>
         </DialogActions>
       </Dialog>
 
