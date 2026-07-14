@@ -37,6 +37,7 @@ HanaClient.setDriver(mockHana);
 // Mock global.fetch to intercept external BDC/Datasphere calls
 const originalFetch = global.fetch;
 global.fetch = async (url, options) => {
+  console.log('MOCK FETCH:', url);
   if (typeof url === 'string') {
     // Error simulations based on query keywords
     if (url.includes('fail-token')) {
@@ -134,6 +135,42 @@ global.fetch = async (url, options) => {
           status: isCompleted ? 'COMPLETED' : 'RUNNING',
           endTime: new Date().toISOString()
         })
+      };
+    }
+    if (url.includes('mock-scim-api.com/Users')) {
+      const urlObj = new URL(url);
+      const filter = urlObj.searchParams.get('filter') || '';
+      
+      const mockResources = [
+        { userName: 'john.doe@fanrio.com', emails: [{ value: 'john.doe@fanrio.com' }], name: { givenName: 'John', familyName: 'Doe' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
+        { userName: 'alice.smith@fanrio.com', emails: [{ value: 'alice.smith@fanrio.com' }], name: { givenName: 'Alice', familyName: 'Smith' } },
+        { userName: 'bob.martin@fanrio.com', emails: [{ value: 'bob.martin@fanrio.com' }], name: { givenName: 'Bob', familyName: 'Martin' } },
+        { userName: 'charlie.white@fanrio.com', emails: [{ value: 'charlie.white@fanrio.com' }], name: { givenName: 'Charlie', familyName: 'White' } },
+        { userName: 'emily.miller@fanrio.com', emails: [{ value: 'emily.miller@fanrio.com' }], name: { givenName: 'Emily', familyName: 'Miller' } },
+        { userName: 'david.brown@fanrio.com', emails: [{ value: 'david.brown@fanrio.com' }], name: { givenName: 'David', familyName: 'Brown' } },
+        { userName: 'sarah.meissner@fanrio.com', emails: [{ value: 'sarah.meissner@fanrio.com' }], name: { givenName: 'Sarah', familyName: 'Meissner' } },
+        { userName: 'eisen.schmidt@fanrio.com', emails: [{ value: 'eisen.schmidt@fanrio.com' }], name: { givenName: 'Eisen', familyName: 'Schmidt' } }
+      ];
+
+      let filtered = mockResources;
+      if (filter) {
+        const match = filter.match(/co "([^"]+)"/);
+        if (match && match[1]) {
+          const q = match[1].toLowerCase();
+          filtered = mockResources.filter(r => 
+            r.userName.toLowerCase().includes(q) || 
+            (r.emails && r.emails[0] && r.emails[0].value.toLowerCase().includes(q)) ||
+            (r.name && r.name.givenName.toLowerCase().includes(q))
+          );
+        }
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ Resources: filtered }),
+        text: async () => JSON.stringify({ Resources: filtered })
       };
     }
   }

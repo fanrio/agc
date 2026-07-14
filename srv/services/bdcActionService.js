@@ -341,57 +341,27 @@ function makeFetchBdcTaskChainLogHandler(BdcClient) {
 function makeSearchScimUsersHandler(cds) {
   return async function searchScimUsersHandler(req) {
     const { query } = req.data;
-    
-    // Check if real SCIM API service is configured in cds.requires
-    const hasScim = cds && cds.env && cds.env.requires && cds.env.requires['scim-api'];
-    
-    if (hasScim) {
-      try {
-        const scim = await cds.connect.to('scim-api');
-        const q = query ? query.trim() : '';
-        const filter = q 
-          ? `userName co "${q}" or emails.value co "${q}" or name.givenName co "${q}" or name.familyName co "${q}"`
-          : '';
-        
-        const params = filter ? { filter } : {};
-        const response = await scim.get('/Users', params);
-        
-        const resources = response.Resources || [];
-        return resources.map(u => ({
-          username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
-          displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
-          email: u.emails && u.emails[0] ? u.emails[0].value : '',
-          department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
-        }));
-      } catch (err) {
-        console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
-        return req.error(500, `SCIM Integration Query Failed: ${err.message}`);
-      }
+    try {
+      const scim = await cds.connect.to('scim-api');
+      const q = query ? query.trim() : '';
+      const filter = q 
+        ? `userName co "${q}" or emails.value co "${q}" or name.givenName co "${q}" or name.familyName co "${q}"`
+        : '';
+      
+      const path = filter ? `/Users?filter=${encodeURIComponent(filter)}` : '/Users';
+      const response = await scim.get(path);
+      
+      const resources = response.Resources || [];
+      return resources.map(u => ({
+        username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
+        displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
+        email: u.emails && u.emails[0] ? u.emails[0].value : '',
+        department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
+      }));
+    } catch (err) {
+      console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
+      return req.error(500, `SCIM Integration Query Failed: ${err.message}`);
     }
-
-    // Default mock users fallback for local development/testing (A-02)
-    const users = [
-      { username: 'john.doe@fanrio.com',       displayName: 'John',            email: 'john.doe@fanrio.com',       department: 'Finance' },
-      { username: 'alice.smith@fanrio.com',     displayName: 'Alice',           email: 'alice.smith@fanrio.com',     department: 'Human Resources' },
-      { username: 'bob.martin@fanrio.com',      displayName: 'Bob',             email: 'bob.martin@fanrio.com',      department: 'IT Operations' },
-      { username: 'charlie.white@fanrio.com',   displayName: 'Charlie',         email: 'charlie.white@fanrio.com',   department: 'Sales' },
-      { username: 'emily.miller@fanrio.com',    displayName: 'Emily',           email: 'emily.miller@fanrio.com',    department: 'Global Operations' },
-      { username: 'david.brown@fanrio.com',     displayName: 'David',           email: 'david.brown@fanrio.com',     department: 'Finance' },
-      { username: 'sarah.meissner@fanrio.com',  displayName: 'Sarah Meissner',  email: 'sarah.meissner@fanrio.com',  department: 'IT Development' },
-      { username: 'eisen.schmidt@fanrio.com',   displayName: 'Eisen',           email: 'eisen.schmidt@fanrio.com',   department: 'Finance' },
-      { username: 'maria.garcia@fanrio.com',    displayName: 'Maria',           email: 'maria.garcia@fanrio.com',    department: 'Sales' },
-      { username: 'robert.wilson@fanrio.com',   displayName: 'Robert',          email: 'robert.wilson@fanrio.com',   department: 'Security' },
-      { username: 'linda.harris@fanrio.com',    displayName: 'Linda',           email: 'linda.harris@fanrio.com',    department: 'Human Resources' },
-      { username: 'admin@fanrio.com',           displayName: 'System',          email: 'admin@fanrio.com',           department: 'IT Operations' }
-    ];
-    if (!query || !query.trim()) return users;
-    const q = query.toLowerCase().trim();
-    return users.filter(u =>
-      u.username.toLowerCase().includes(q)    ||
-      u.displayName.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q)       ||
-      u.department.toLowerCase().includes(q)
-    );
   };
 }
 
