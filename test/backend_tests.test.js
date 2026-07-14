@@ -682,16 +682,16 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/BdcSettings(ID=${hanaSetting.data.ID})`);
   });
 
-  // 8. searchLdapUsers
-  await t.test('searchLdapUsers action', async () => {
+  // 8. searchScimUsers
+  await t.test('searchScimUsers action', async () => {
     // With query
-    const res = await POST('/odata/v4/auth/searchLdapUsers', { query: 'jdoe' });
+    const res = await POST('/odata/v4/auth/searchScimUsers', { query: 'john.doe' });
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.data.value.length, 1);
-    assert.strictEqual(res.data.value[0].username, 'jdoe');
+    assert.strictEqual(res.data.value[0].username, 'john.doe@fanrio.com');
 
     // Without query (returns all)
-    const resAll = await POST('/odata/v4/auth/searchLdapUsers', { query: '' });
+    const resAll = await POST('/odata/v4/auth/searchScimUsers', { query: '' });
     assert.strictEqual(resAll.status, 200);
     assert.ok(resAll.data.value.length > 5);
   });

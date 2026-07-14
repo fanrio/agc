@@ -88,11 +88,11 @@ export default function AppAuthorizationsView() {
   const [allRoles, setAllRoles]             = useState([]);
   const [restrictionFields, setRestrictionFields] = useState([]);
   const [loading, setLoading]               = useState(true);
-  const [ldapOptions, setLdapOptions]       = useState([]);
-  const [ldapLoading, setLdapLoading]       = useState(false);
-  const [ldapInput, setLdapInput]           = useState('');
+  const [scimOptions, setScimOptions]       = useState([]);
+  const [scimLoading, setScimLoading]       = useState(false);
+  const [scimInput, setScimInput]           = useState('');
   const [openAdd, setOpenAdd]               = useState(false);
-  const [selectedLdapUser, setSelectedLdapUser] = useState(null);
+  const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [confirmDialog, setConfirmDialog]   = useState({ open: false, title: '', message: '', onConfirm: null });
   const [snackbar, setSnackbar]             = useState({ open: false, message: '', severity: 'success' });
 
@@ -136,17 +136,21 @@ export default function AppAuthorizationsView() {
 
   useEffect(() => { loadData(); }, []);
 
-  // LDAP debounced search
+  // SCIM debounced search calling API when input has >= 3 characters
   useEffect(() => {
+    const trimmed = scimInput.trim();
+    if (trimmed.length < 3) {
+      setScimOptions([]);
+      return;
+    }
     const t = setTimeout(() => {
-      if (!ldapInput.trim()) return;
-      setLdapLoading(true);
-      api.searchLdapUsers(ldapInput)
-        .then(res => { setLdapOptions(res || []); setLdapLoading(false); })
-        .catch(() => setLdapLoading(false));
+      setScimLoading(true);
+      api.searchScimUsers(trimmed)
+        .then(res => { setScimOptions(res || []); setScimLoading(false); })
+        .catch(() => setScimLoading(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [ldapInput]);
+  }, [scimInput]);
 
   // ─── Update handlers ────────────────────────────────────────────────────────
   const handleTogglePermission = async (id, field, value) => {
@@ -192,13 +196,13 @@ export default function AppAuthorizationsView() {
 
   // ─── Add / Delete ───────────────────────────────────────────────────────────
   const handleAddAuthorization = async () => {
-    if (!selectedLdapUser) {
-      setSnackbar({ open: true, message: 'Please select a user from LDAP', severity: 'error' });
+    if (!selectedScimUser) {
+      setSnackbar({ open: true, message: 'Please select a user from SCIM', severity: 'error' });
       return;
     }
-    const exists = authorizations.some(a => a.userId.toLowerCase() === selectedLdapUser.username.toLowerCase());
+    const exists = authorizations.some(a => a.userId.toLowerCase() === selectedScimUser.username.toLowerCase());
     if (exists) {
-      setSnackbar({ open: true, message: `User "${selectedLdapUser.displayName}" is already configured`, severity: 'error' });
+      setSnackbar({ open: true, message: `User "${selectedScimUser.displayName}" is already configured`, severity: 'error' });
       return;
     }
     try {
@@ -206,8 +210,8 @@ export default function AppAuthorizationsView() {
         ? 'ALL'
         : serializeStreams(newPermissions.allowedStreams, streams);
       const newAuth = await api.createAppAuthorization({
-        userId:                   selectedLdapUser.username,
-        userName:                 selectedLdapUser.displayName,
+        userId:                   selectedScimUser.username,
+        userName:                 selectedScimUser.displayName,
         isSuperAdmin:             newPermissions.isSuperAdmin,
         canManageAppUsers:        newPermissions.canManageAppUsers,
         canManageOrgRoles:        newPermissions.canManageOrgRoles,
@@ -228,7 +232,8 @@ export default function AppAuthorizationsView() {
         await loadData();
       }
       setOpenAdd(false);
-      setSelectedLdapUser(null);
+      setSelectedScimUser(null);
+      setScimInput('');
       setNewPermissions(defaultPermissions);
       setSnackbar({ open: true, message: 'User authorization added', severity: 'success' });
     } catch (err) {
@@ -580,18 +585,18 @@ export default function AppAuthorizationsView() {
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* User search */}
           <Autocomplete
-            value={selectedLdapUser}
-            onChange={(e, v) => setSelectedLdapUser(v)}
-            inputValue={ldapInput}
-            onInputChange={(e, v) => setLdapInput(v)}
-            options={ldapOptions}
-            loading={ldapLoading}
+            value={selectedScimUser}
+            onChange={(e, v) => setSelectedScimUser(v)}
+            inputValue={scimInput}
+            onInputChange={(e, v) => setScimInput(v)}
+            options={scimOptions}
+            loading={scimLoading}
             getOptionLabel={(o) => `${o.displayName} (${o.username})`}
             renderInput={(params) => (
-              <TextField {...params} label="Search User (LDAP)" size="small" placeholder="Type username or name..."
+              <TextField {...params} label="Search User (SCIM)" size="small" placeholder="Type username or email..."
                 InputProps={{
                   ...(params.InputProps || {}),
-                  endAdornment: <>{ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps?.endAdornment}</>
+                  endAdornment: <>{scimLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps?.endAdornment}</>
                 }}
               />
             )}

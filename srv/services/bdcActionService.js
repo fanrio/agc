@@ -338,8 +338,8 @@ function makeFetchBdcTaskChainLogHandler(BdcClient) {
   };
 }
 
-function makeSearchLdapUsersHandler(cds) {
-  return async function searchLdapUsersHandler(req) {
+function makeSearchScimUsersHandler(cds) {
+  return async function searchScimUsersHandler(req) {
     const { query } = req.data;
     
     // Check if real SCIM API service is configured in cds.requires
@@ -358,30 +358,30 @@ function makeSearchLdapUsersHandler(cds) {
         
         const resources = response.Resources || [];
         return resources.map(u => ({
-          username: u.userName,
-          displayName: u.displayName || (u.name ? `${u.name.givenName || ''} ${u.name.familyName || ''}`.trim() : u.userName),
+          username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
+          displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
           email: u.emails && u.emails[0] ? u.emails[0].value : '',
           department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
         }));
       } catch (err) {
-        console.error('[SearchLdapUsers] SCIM integration query failed:', err.message);
+        console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
         // Fallback to local stub in case of error (with warning)
       }
     }
 
     // Default mock users fallback for local development/testing (A-02)
     const users = [
-      { username: 'jdoe',      displayName: 'John Doe',       email: 'john.doe@fanrio.com',      department: 'Finance' },
-      { username: 'asmith',    displayName: 'Alice Smith',     email: 'alice.smith@fanrio.com',    department: 'Human Resources' },
-      { username: 'bobm',      displayName: 'Bob Martin',      email: 'bob.martin@fanrio.com',     department: 'IT Operations' },
-      { username: 'cwhite',    displayName: 'Charlie White',   email: 'charlie.white@fanrio.com',  department: 'Sales' },
-      { username: 'emiller',   displayName: 'Emily Miller',    email: 'emily.miller@fanrio.com',   department: 'Global Operations' },
-      { username: 'dbrown',    displayName: 'David Brown',     email: 'david.brown@fanrio.com',    department: 'Finance' },
-      { username: 'sjohnson',  displayName: 'Sarah Johnson',   email: 'sarah.johnson@fanrio.com',  department: 'IT Development' },
-      { username: 'mgarcia',   displayName: 'Maria Garcia',    email: 'maria.garcia@fanrio.com',   department: 'Sales' },
-      { username: 'rwilson',   displayName: 'Robert Wilson',   email: 'robert.wilson@fanrio.com',  department: 'Security' },
-      { username: 'lharris',   displayName: 'Linda Harris',    email: 'linda.harris@fanrio.com',   department: 'Human Resources' },
-      { username: 'admin',     displayName: 'System Admin',    email: 'admin@fanrio.com',          department: 'IT Operations' }
+      { username: 'john.doe@fanrio.com',      displayName: 'John',       email: 'john.doe@fanrio.com',      department: 'Finance' },
+      { username: 'alice.smith@fanrio.com',    displayName: 'Alice',     email: 'alice.smith@fanrio.com',    department: 'Human Resources' },
+      { username: 'bob.martin@fanrio.com',      displayName: 'Bob',      email: 'bob.martin@fanrio.com',     department: 'IT Operations' },
+      { username: 'charlie.white@fanrio.com',   displayName: 'Charlie',   email: 'charlie.white@fanrio.com',  department: 'Sales' },
+      { username: 'emily.miller@fanrio.com',    displayName: 'Emily',    email: 'emily.miller@fanrio.com',   department: 'Global Operations' },
+      { username: 'david.brown@fanrio.com',     displayName: 'David',     email: 'david.brown@fanrio.com',    department: 'Finance' },
+      { username: 'sarah.johnson@fanrio.com',   displayName: 'Sarah',   email: 'sarah.johnson@fanrio.com',  department: 'IT Development' },
+      { username: 'maria.garcia@fanrio.com',    displayName: 'Maria',    email: 'maria.garcia@fanrio.com',   department: 'Sales' },
+      { username: 'robert.wilson@fanrio.com',   displayName: 'Robert',   email: 'robert.wilson@fanrio.com',  department: 'Security' },
+      { username: 'linda.harris@fanrio.com',    displayName: 'Linda',    email: 'linda.harris@fanrio.com',   department: 'Human Resources' },
+      { username: 'admin@fanrio.com',          displayName: 'System',    email: 'admin@fanrio.com',          department: 'IT Operations' }
     ];
     if (!query || !query.trim()) return users;
     const q = query.toLowerCase().trim();
@@ -407,6 +407,19 @@ function makeFetchBdcAssetKeyColumnsHandler(BdcClient) {
   };
 }
 
+function makeFetchRawBdcUsersHandler(BdcClient) {
+  return async function fetchRawBdcUsersHandler(req) {
+    const { url, tokenUrl, clientId, clientSecret } = req.data;
+    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    try {
+      const data = await BdcClient.fetchRawBdcUsers(url, tokenUrl, clientId, clientSecret);
+      return JSON.stringify(data, null, 2);
+    } catch (e) {
+      return req.error(500, `Datasphere Users API Raw Error: ${e.message}`);
+    }
+  };
+}
+
 module.exports = {
   makeTestBdcConnectionHandler,
   makeFetchBdcSpacesHandler,
@@ -418,9 +431,10 @@ module.exports = {
   makeFetchRawBdcAssetsHandler,
   makeFetchRawBdcRelationalValuesHandler,
   makeFetchRawBdcAssetColumnsHandler,
+  makeFetchRawBdcUsersHandler,
   makeFetchBdcAssociationsHandler,
   makeFetchRawHanaViewsHandler,
   makeRunBdcTaskChainHandler,
   makeFetchBdcTaskChainLogHandler,
-  makeSearchLdapUsersHandler
+  makeSearchScimUsersHandler
 };

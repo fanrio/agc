@@ -31,7 +31,7 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity BdcSettings            as projection on db.BdcSettings;
 
 
-  action searchLdapUsers(query: String)                                         returns array of {
+  action searchScimUsers(query: String)                                         returns array of {
     username    : String;
     displayName : String;
     email       : String;
@@ -127,6 +127,8 @@ service AuthorizationService @(path: '/odata/v4/auth') {
 
   action fetchBdcAssociations(url: String, tokenUrl: String, clientId: String, clientSecret: String,
                               space: String, asset: String)                    returns LargeString;
+
+  action fetchRawBdcUsers(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns LargeString;
 
   action runBdcTaskChain(url: String, tokenUrl: String, clientId: String, clientSecret: String,
                          space: String, taskChainId: String)                   returns LargeString;

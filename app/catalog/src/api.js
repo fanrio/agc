@@ -85,9 +85,10 @@ export const generateOrgRole   = (orgNodeId)    => request('POST', '/generateOrg
 export const generateAllOrgRoles = ()           => request('POST', '/generateAllOrgRoles');
 export const resolveEffective   = (roleId)      => request('POST', '/resolveEffectiveRestrictions', { roleId });
 export const simulateAccess     = (roleId, rows, restrictions) => request('POST', '/simulateAccess', { roleId, sampleData: JSON.stringify(rows), restrictions: restrictions ? JSON.stringify(restrictions) : undefined });
-export const searchLdapUsers    = (query)        => request('POST', '/searchLdapUsers', { query });
+export const searchScimUsers    = (query)        => request('POST', '/searchScimUsers', { query });
 export const fetchRawBdcSpaces  = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchRawBdcSpaces', { url, tokenUrl, clientId, clientSecret });
 export const fetchRawBdcAssets  = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchRawBdcAssets', { url, tokenUrl, clientId, clientSecret });
+export const fetchRawBdcUsers   = (url, tokenUrl, clientId, clientSecret) => request('POST', '/fetchRawBdcUsers', { url, tokenUrl, clientId, clientSecret });
 export const fetchRawBdcRelationalValues = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchRawBdcRelationalValues', { url, tokenUrl, clientId, clientSecret, space, asset });
 export const fetchRawBdcAssetColumns = (url, tokenUrl, clientId, clientSecret, space, asset) => request('POST', '/fetchRawBdcAssetColumns', { url, tokenUrl, clientId, clientSecret, space, asset });
 export const fetchRawHanaViews = (settingId) => request('POST', '/fetchRawHanaViews', { settingId });

@@ -44,9 +44,11 @@ Split the 1135-line `Wizard.jsx` monolith into a clean, modular component direct
 
 ---
 
-## 4. Verification Results
+## 4. Verification & Tests
 
-All backend integration tests and Vitest component test suites pass successfully.
+- **Frontend Compilation**: Ran `npm run build --prefix app/catalog` to ensure the frontend production bundle compiles successfully without errors or warnings.
+- **Backend Tests**: Renamed and updated tests in `test/backend_tests.test.js` to target the `searchScimUsers` action. Ran `npm run test` and all 39 integration, DRAGE engine, and authorization enforcement tests passed successfully.
+- **Frontend Tests**: Fixed and updated `app/catalog/src/components/__tests__/WizardDialogs.test.jsx` to mock `getStreamsFlat`, use `searchScimUsers`, and search for `'Between (BT)'` / `'10 and 20'` correctly. Ran `npm run test --prefix app/catalog` and all 21 Vitest tests passed successfully.
 
 ### Backend Tests (32/32 Passed)
 ```bash

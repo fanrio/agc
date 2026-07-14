@@ -22,8 +22,8 @@ export function useWizardState({ context = {}, permissions }) {
   const [done, setDone]                   = useState(false);
   const [isEditMode, setIsEditMode]       = useState(!!context.roleId);
   const [snackbar, setSnackbar]           = useState({ open: false, message: '', severity: 'error' });
-  const [ldapOptions, setLdapOptions]     = useState([]);
-  const [ldapLoading, setLdapLoading]     = useState(false);
+  const [scimOptions, setScimOptions]     = useState([]);
+  const [scimLoading, setScimLoading]     = useState(false);
 
   // States for optional direct assignment on creation
   const [critical, setCritical]           = useState(false);
@@ -160,18 +160,23 @@ export function useWizardState({ context = {}, permissions }) {
     }
   };
 
-  // Debounced LDAP search querying mock server
+  // Debounced SCIM user search calling API when input has >= 3 characters
   useEffect(() => {
+    const trimmed = approverInput.trim();
+    if (trimmed.length < 3) {
+      setScimOptions([]);
+      return;
+    }
     const delayDebounce = setTimeout(() => {
-      setLdapLoading(true);
-      api.searchLdapUsers(approverInput)
+      setScimLoading(true);
+      api.searchScimUsers(trimmed)
         .then(res => {
-          setLdapOptions(res || []);
-          setLdapLoading(false);
+          setScimOptions(res || []);
+          setScimLoading(false);
         })
         .catch(err => {
           console.error(err);
-          setLdapLoading(false);
+          setScimLoading(false);
         });
     }, 250);
     return () => clearTimeout(delayDebounce);
@@ -563,8 +568,8 @@ export function useWizardState({ context = {}, permissions }) {
     done,
     isEditMode,
     snackbar, setSnackbar,
-    ldapOptions,
-    ldapLoading,
+    scimOptions,
+    scimLoading,
     critical, setCritical,
     environmentId, setEnvironmentId,
     environments,

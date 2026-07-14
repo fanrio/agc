@@ -502,6 +502,45 @@ class BdcClient {
       throw e;
     }
   }
+
+  /**
+   * Helper to fetch raw BDC Users (SCIM 2.0 API)
+   */
+  static async fetchRawBdcUsers(url, tokenUrl, clientId, clientSecret) {
+    try {
+      const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
+      const endpoint = `${url.replace(/\/$/, '')}/api/v1/scim2/Users`;
+      const res = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/scim+json, application/json',
+          'x-sap-sac-custom-auth': 'true'
+        }
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Users request failed with status ${res.status}: ${errText}`);
+      }
+
+      return await res.json();
+    } catch (e) {
+      if (isMockUrl(url)) {
+        return {
+          schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+          totalResults: 3,
+          startIndex: 1,
+          itemsPerPage: 3,
+          Resources: [
+            { id: "u001", userName: "admin", name: { givenName: "System", familyName: "Admin" }, emails: [{ value: "admin@cortex.com", primary: true }], active: true },
+            { id: "u002", userName: "jdoe", name: { givenName: "Jane", familyName: "Doe" }, emails: [{ value: "jdoe@company.com", primary: true }], active: true },
+            { id: "u003", userName: "andre", name: { givenName: "Andre", familyName: "User" }, emails: [{ value: "andre@company.com", primary: true }], active: true }
+          ]
+        };
+      }
+      throw e;
+    }
+  }
 }
 
 module.exports = BdcClient;

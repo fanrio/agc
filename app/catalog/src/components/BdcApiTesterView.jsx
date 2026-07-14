@@ -83,6 +83,8 @@ export default function BdcApiTesterView() {
         result = await api.fetchRawBdcSpaces(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
       } else if (selectedApi === 'ASSETS') {
         result = await api.fetchRawBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
+      } else if (selectedApi === 'USERS') {
+        result = await api.fetchRawBdcUsers(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
       } else if (selectedApi === 'VALUES') {
         if (!spaceInput.trim() || !assetInput.trim()) {
           throw new Error('Space and Asset fields are required for Relational Values API.');
@@ -193,6 +195,7 @@ export default function BdcApiTesterView() {
                   [
                     <MenuItem key="SPACES" value="SPACES">fetchRawBdcSpaces (Spaces Catalog)</MenuItem>,
                     <MenuItem key="ASSETS" value="ASSETS">fetchRawBdcAssets (Assets Catalog)</MenuItem>,
+                    <MenuItem key="USERS" value="USERS">fetchRawBdcUsers (SCIM 2.0 User List)</MenuItem>,
                     <MenuItem key="VALUES" value="VALUES">fetchRawBdcRelationalValues (Relational Data)</MenuItem>,
                     <MenuItem key="COLUMNS" value="COLUMNS">fetchRawBdcAssetColumns ($metadata XML Schema)</MenuItem>,
                     <MenuItem key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN">runBdcTaskChain (Start Task Chain Run)</MenuItem>,

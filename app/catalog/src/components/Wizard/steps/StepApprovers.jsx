@@ -5,7 +5,7 @@ import { Shield, X } from 'lucide-react';
 export default function StepApprovers({
   approvers, setApprovers,
   approverInput, setApproverInput,
-  ldapOptions, ldapLoading
+  scimOptions, scimLoading
 }) {
   return (
     <Card sx={{ p: 3 }}>
@@ -30,20 +30,20 @@ export default function StepApprovers({
           onInputChange={(event, newInputValue) => {
             setApproverInput(newInputValue);
           }}
-          options={ldapOptions}
-          loading={ldapLoading}
+          options={scimOptions}
+          loading={scimLoading}
           getOptionLabel={(option) => `${option.displayName} (${option.username}) - ${option.department}`}
           renderInput={(params) => (
             <TextField
               {...params}
-              label="Search Approver (LDAP)"
+              label="Search Approver (SCIM)"
               size="small"
-              placeholder="Type name, department, or username..."
+              placeholder="Type name, department, or email..."
               InputProps={{
                 ...(params.InputProps || {}),
                 endAdornment: (
                   <>
-                    {ldapLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                    {scimLoading ? <CircularProgress color="inherit" size={20} /> : null}
                     {params.InputProps?.endAdornment}
                   </>
                 ),

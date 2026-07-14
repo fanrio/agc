@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Autocomplete } from '@mui/material';
 import { Plus, Trash2, X, Check, Shield, Users } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
@@ -40,7 +40,32 @@ export default function RoleAssignmentsView() {
   };
 
   // Form states
-  const [form, setForm] = useState({ userId: '', userName: '', roleId: '' });
+  const [form, setForm] = useState({ roleId: '' });
+
+  // SCIM User Search States
+  const [scimOptions, setScimOptions]       = useState([]);
+  const [scimLoading, setScimLoading]       = useState(false);
+  const [scimInput, setScimInput]           = useState('');
+  const [selectedScimUser, setSelectedScimUser] = useState(null);
+
+  // Debounced SCIM user search calling API when input has >= 3 characters
+  useEffect(() => {
+    const trimmed = scimInput.trim();
+    if (trimmed.length < 3) {
+      setScimOptions([]);
+      return;
+    }
+    const handler = setTimeout(() => {
+      setScimLoading(true);
+      api.searchScimUsers(trimmed)
+        .then(res => {
+          setScimOptions(res || []);
+          setScimLoading(false);
+        })
+        .catch(() => setScimLoading(false));
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [scimInput]);
 
   async function load() {
     setLoading(true);
@@ -64,21 +89,23 @@ export default function RoleAssignmentsView() {
   }, []);
 
   async function handleCreate() {
-    if (!form.userId.trim() || !form.roleId) {
-      setSnackbar({ open: true, message: 'User ID and Role selection are required.', severity: 'error' });
+    if (!selectedScimUser || !form.roleId) {
+      setSnackbar({ open: true, message: 'User selection and Role selection are required.', severity: 'error' });
       return;
     }
 
     const payload = {
-      userId: form.userId.trim(),
-      userName: form.userName.trim() || form.userId.trim(),
+      userId: selectedScimUser.username,
+      userName: selectedScimUser.displayName || selectedScimUser.username,
       role_ID: form.roleId
     };
 
     setLoading(true);
     try {
       await api.createAssignment(payload);
-      setForm({ userId: '', userName: '', roleId: '' });
+      setForm({ roleId: '' });
+      setSelectedScimUser(null);
+      setScimInput('');
       setShowAdd(false);
       await load();
     } catch (e) {
@@ -136,20 +163,32 @@ export default function RoleAssignmentsView() {
 
       <Collapse in={showAdd}>
         <Card sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1.5fr auto' }, gap: 2, alignItems: 'end' }}>
-            <TextField
-              label="User ID / Group ID"
-              size="small"
-              placeholder="e.g. US12345"
-              value={form.userId}
-              onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
-            />
-            <TextField
-              label="User Name (Optional)"
-              size="small"
-              placeholder="e.g. John Doe"
-              value={form.userName}
-              onChange={e => setForm(f => ({ ...f, userName: e.target.value }))}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1.5fr auto' }, gap: 2, alignItems: 'end' }}>
+            <Autocomplete
+              value={selectedScimUser}
+              onChange={(e, v) => setSelectedScimUser(v)}
+              inputValue={scimInput}
+              onInputChange={(e, v) => setScimInput(v)}
+              options={scimOptions}
+              loading={scimLoading}
+              getOptionLabel={(option) => `${option.displayName} (${option.username})`}
+              renderInput={(params) => (
+                <TextField 
+                  {...params} 
+                  label="Search User (SCIM)" 
+                  size="small" 
+                  placeholder="Type username or email..."
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {scimLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
             />
             <FormControl size="small" fullWidth>
               <InputLabel id="role-select-label">Role</InputLabel>
@@ -174,7 +213,7 @@ export default function RoleAssignmentsView() {
               <Button variant="contained" onClick={handleCreate} disabled={loading} startIcon={<Check size={14} />}>
                 Assign
               </Button>
-              <IconButton onClick={() => setShowAdd(false)} size="small"><X size={16} /></IconButton>
+              <IconButton onClick={() => { setShowAdd(false); setSelectedScimUser(null); setScimInput(''); }} size="small"><X size={16} /></IconButton>
             </Box>
           </Box>
         </Card>

@@ -37,11 +37,12 @@ const {
   makeFetchRawBdcAssetsHandler,
   makeFetchRawBdcRelationalValuesHandler,
   makeFetchRawBdcAssetColumnsHandler,
+  makeFetchRawBdcUsersHandler,
   makeFetchBdcAssociationsHandler,
   makeFetchRawHanaViewsHandler,
   makeRunBdcTaskChainHandler,
   makeFetchBdcTaskChainLogHandler,
-  makeSearchLdapUsersHandler
+  makeSearchScimUsersHandler
 } = require('./services/bdcActionService');
 
 // Handlers
@@ -302,7 +303,7 @@ module.exports = cds.service.impl(async function () {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageReplications', req);
   });
-  this.before('searchLdapUsers', async (req) => {
+  this.before('searchScimUsers', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageAppUsers', req);
   });
@@ -446,11 +447,12 @@ module.exports = cds.service.impl(async function () {
   this.on('fetchRawBdcAssets',              makeFetchRawBdcAssetsHandler(BdcClient));
   this.on('fetchRawBdcRelationalValues',    makeFetchRawBdcRelationalValuesHandler(BdcClient));
   this.on('fetchRawBdcAssetColumns',        makeFetchRawBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchRawBdcUsers',               makeFetchRawBdcUsersHandler(BdcClient));
   this.on('fetchBdcAssociations',           makeFetchBdcAssociationsHandler(BdcClient));
   this.on('fetchRawHanaViews',              makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
   this.on('runBdcTaskChain',                makeRunBdcTaskChainHandler(BdcClient));
   this.on('fetchBdcTaskChainLog',           makeFetchBdcTaskChainLogHandler(BdcClient));
-  this.on('searchLdapUsers',                makeSearchLdapUsersHandler(cds));
+  this.on('searchScimUsers',                makeSearchScimUsersHandler(cds));
 
   // ---------------------------------------------------------------------------
   // Replication actions

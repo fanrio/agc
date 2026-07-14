@@ -22,9 +22,10 @@ vi.mock('../../api', () => ({
   createRoleInheritance: vi.fn(),
   createRoleApprover: vi.fn(),
   createAssignment: vi.fn(),
-  searchLdapUsers: vi.fn(),
+  searchScimUsers: vi.fn(),
   simulateAccess: vi.fn(),
   fetchBdcRelationalValues: vi.fn(() => Promise.resolve([])),
+  getStreamsFlat: vi.fn(() => Promise.resolve([])),
 }));
 
 // Mock the PermissionsContext module
@@ -112,9 +113,10 @@ describe('Wizard Component - Expanded Tests', () => {
     api.getEnvironments.mockResolvedValue(mockEnvironments);
     api.getAllOrgNodesFlat.mockResolvedValue(mockOrgNodes);
     api.getRestrictionFields.mockResolvedValue(mockRestrictionFields);
-    api.searchLdapUsers.mockResolvedValue([
+    api.searchScimUsers.mockResolvedValue([
       { username: 'jdoe', displayName: 'John Doe', email: 'jdoe@comp.com', department: 'IT' }
     ]);
+    api.getStreamsFlat.mockResolvedValue([]);
     api.resolveEffective.mockResolvedValue([]);
   });
 
@@ -209,7 +211,7 @@ describe('Wizard Component - Expanded Tests', () => {
     // Now test a RANGE restriction with lower/upper values
     const typeSelect = screen.getByLabelText(/Type/i);
     fireEvent.mouseDown(typeSelect);
-    const rangeOption = await screen.findByRole('option', { name: 'Range' });
+    const rangeOption = await screen.findByRole('option', { name: 'Between (BT)' });
     fireEvent.click(rangeOption);
 
     // Wait for the range type selection to register and update input fields
@@ -233,7 +235,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Add/i }));
     await waitFor(() => {
-      expect(screen.getByText('10 – 20')).toBeInTheDocument();
+      expect(screen.getByText('10 and 20')).toBeInTheDocument();
     });
   });
 
@@ -247,7 +249,7 @@ describe('Wizard Component - Expanded Tests', () => {
       expect(screen.getByText('Approvers List')).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByPlaceholderText(/Type name, department, or username/i);
+    const searchInput = screen.getByPlaceholderText(/Type name, department, or email/i);
     fireEvent.focus(searchInput);
     fireEvent.change(searchInput, { target: { value: 'jdoe' } });
 
@@ -261,7 +263,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
     // Wait for the mock API call
     await waitFor(() => {
-      const calls = api.searchLdapUsers.mock.calls;
+      const calls = api.searchScimUsers.mock.calls;
       const hasJdoe = calls.some(call => call[0] === 'jdoe');
       expect(hasJdoe).toBe(true);
     }, { timeout: 2000 });
