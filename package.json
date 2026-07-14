@@ -29,28 +29,12 @@
         "credentials": {
           "url": "sqlite.db"
         }
-      },
-      "scim-api": {
-        "kind": "rest",
-        "credentials": {
-          "url": "https://mock-scim-api.com"
-        }
       }
     },
     "[development]": {
       "requires": {
         "auth": {
           "kind": "mocked"
-        }
-      }
-    },
-    "[production]": {
-      "requires": {
-        "scim-api": {
-          "kind": "rest",
-          "credentials": {
-            "destination": "scim-api"
-          }
         }
       }
     },
@@ -63,12 +47,6 @@
           "kind": "sqlite",
           "credentials": {
             "url": ":memory:"
-          }
-        },
-        "scim-api": {
-          "kind": "rest",
-          "credentials": {
-            "url": "https://mock-scim-api.com"
           }
         }
       }

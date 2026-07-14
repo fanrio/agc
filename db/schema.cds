@@ -95,7 +95,7 @@ entity Restrictions : cuid {
   sourceLabel : String(200);  // display hint — which ancestor introduced this
 }
 
-entity RoleAssignments : cuid {
+entity RoleAssignments : cuid, managed {
   role     : Association to Roles not null;
   userId   : String(200) not null;
   userName : String(200);

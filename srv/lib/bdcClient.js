@@ -504,6 +504,35 @@ class BdcClient {
   }
 
   /**
+   * Helper to search/filter BDC Users (SCIM 2.0 API)
+   */
+  static async searchScimUsers(url, tokenUrl, clientId, clientSecret, query) {
+    const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
+    const q = query ? query.trim() : '';
+    const filter = q 
+      ? `userName co "${q}" or emails.value co "${q}" or name.givenName co "${q}" or name.familyName co "${q}"`
+      : '';
+    const endpoint = filter 
+      ? `${url.replace(/\/$/, '')}/api/v1/scim2/Users?filter=${encodeURIComponent(filter)}`
+      : `${url.replace(/\/$/, '')}/api/v1/scim2/Users`;
+      
+    const res = await fetch(endpoint, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/scim+json, application/json',
+        'x-sap-sac-custom-auth': 'true'
+      }
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`SCIM Users request failed with status ${res.status}: ${errText}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
    * Helper to fetch raw BDC Users (SCIM 2.0 API)
    */
   static async fetchRawBdcUsers(url, tokenUrl, clientId, clientSecret) {

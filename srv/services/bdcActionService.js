@@ -338,19 +338,52 @@ function makeFetchBdcTaskChainLogHandler(BdcClient) {
   };
 }
 
-function makeSearchScimUsersHandler(cds) {
+function makeSearchScimUsersHandler(cds, entities, BdcClient) {
   return async function searchScimUsersHandler(req) {
     const { query } = req.data;
+    const { BdcSettings } = entities;
     try {
-      const scim = await cds.connect.to('scim-api');
-      const q = query ? query.trim() : '';
-      const filter = q 
-        ? `userName co "${q}" or emails.value co "${q}" or name.givenName co "${q}" or name.familyName co "${q}"`
-        : '';
-      
-      const path = filter ? `/Users?filter=${encodeURIComponent(filter)}` : '/Users';
-      const response = await scim.get(path);
-      
+      // Find the active OData BDC setting
+      const setting = await cds.db.run(
+        SELECT.one.from(BdcSettings).where({ connectionType: 'OData', isActive: true })
+      );
+      if (!setting) {
+        return req.error(400, 'No active OData BDC Connection configuration found in BdcSettings');
+      }
+
+      // Check if mock URL (local development/tests fallback)
+      if (isMockUrl(setting.url)) {
+        const mockResources = [
+          { userName: 'john.doe@fanrio.com', emails: [{ value: 'john.doe@fanrio.com' }], name: { givenName: 'John', familyName: 'Doe' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
+          { userName: 'alice.smith@fanrio.com', emails: [{ value: 'alice.smith@fanrio.com' }], name: { givenName: 'Alice', familyName: 'Smith' } },
+          { userName: 'bob.martin@fanrio.com', emails: [{ value: 'bob.martin@fanrio.com' }], name: { givenName: 'Bob', familyName: 'Martin' } },
+          { userName: 'charlie.white@fanrio.com', emails: [{ value: 'charlie.white@fanrio.com' }], name: { givenName: 'Charlie', familyName: 'White' } },
+          { userName: 'emily.miller@fanrio.com', emails: [{ value: 'emily.miller@fanrio.com' }], name: { givenName: 'Emily', familyName: 'Miller' } },
+          { userName: 'david.brown@fanrio.com', emails: [{ value: 'david.brown@fanrio.com' }], name: { givenName: 'David', familyName: 'Brown' } },
+          { userName: 'sarah.meissner@fanrio.com', emails: [{ value: 'sarah.meissner@fanrio.com' }], name: { givenName: 'Sarah', familyName: 'Meissner' } },
+          { userName: 'eisen.schmidt@fanrio.com', emails: [{ value: 'eisen.schmidt@fanrio.com' }], name: { givenName: 'Eisen', familyName: 'Schmidt' } }
+        ];
+
+        let filtered = mockResources;
+        if (query && query.trim()) {
+          const q = query.toLowerCase().trim();
+          filtered = mockResources.filter(r =>
+            r.userName.toLowerCase().includes(q) ||
+            (r.emails && r.emails[0] && r.emails[0].value.toLowerCase().includes(q)) ||
+            (r.name && r.name.givenName.toLowerCase().includes(q))
+          );
+        }
+
+        return filtered.map(u => ({
+          username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
+          displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
+          email: u.emails && u.emails[0] ? u.emails[0].value : '',
+          department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
+        }));
+      }
+
+      // Execute real SCIM API call on BDC system
+      const response = await BdcClient.searchScimUsers(setting.url, setting.tokenUrl, setting.clientId, setting.clientSecret, query);
       const resources = response.Resources || [];
       return resources.map(u => ({
         username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,

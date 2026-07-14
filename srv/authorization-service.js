@@ -60,6 +60,14 @@ module.exports = cds.service.impl(async function () {
     AppAuthorizations
   } = entities;
 
+  // Propagate simulated user headers into the CAP request context user
+  this.before('*', async (req) => {
+    const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
+    if (simUser) {
+      req.user = new cds.User({ id: simUser });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Centralized Authorization & Security Enforcement
   // ---------------------------------------------------------------------------
@@ -452,7 +460,7 @@ module.exports = cds.service.impl(async function () {
   this.on('fetchRawHanaViews',              makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
   this.on('runBdcTaskChain',                makeRunBdcTaskChainHandler(BdcClient));
   this.on('fetchBdcTaskChainLog',           makeFetchBdcTaskChainLogHandler(BdcClient));
-  this.on('searchScimUsers',                makeSearchScimUsersHandler(cds));
+  this.on('searchScimUsers',                makeSearchScimUsersHandler(cds, entities, BdcClient));
 
   // ---------------------------------------------------------------------------
   // Replication actions
