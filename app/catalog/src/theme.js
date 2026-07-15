@@ -32,35 +32,35 @@ const theme = createTheme({
     divider: '#e2e8f0', // outline-variant / Slate-200 border
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: 'inherit',
     h5: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontWeight: 700,
       fontSize: '1.5rem',
       letterSpacing: '-0.01em',
     },
     h6: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontWeight: 600,
       fontSize: '1.125rem',
     },
     subtitle1: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontWeight: 600,
       fontSize: '1rem',
     },
     body1: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontSize: '0.875rem', // 14px body-md
       lineHeight: 1.43,
     },
     body2: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontSize: '0.8125rem', // 13px body-sm
       lineHeight: 1.38,
     },
     button: {
-      fontFamily: '"Inter", sans-serif',
+      fontFamily: 'inherit',
       fontWeight: 700,
       textTransform: 'none',
     },

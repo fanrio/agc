@@ -124,9 +124,12 @@ export default function RoleAssignmentsView() {
         api.getRoles()
       ]);
       const filteredRoles = filterRolesByPermissions(roleData, permissions);
-      const allowedRoleIds = new Set(filteredRoles.map(r => r.ID));
+      const allowedRoles = (permissions?.isSuperAdmin || permissions?.canAssignRoles) 
+        ? filteredRoles 
+        : filteredRoles.filter(r => Array.isArray(r.approvers) && r.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase()));
+      const allowedRoleIds = new Set(allowedRoles.map(r => r.ID));
       setAssignments(assignData.filter(a => allowedRoleIds.has(a.role_ID)));
-      setRoles(filteredRoles);
+      setRoles(allowedRoles);
     } catch (e) {
       setError(`Failed to load data: ${e.message}`);
     }
@@ -192,7 +195,7 @@ export default function RoleAssignmentsView() {
         <Button 
           variant="contained" 
           onClick={() => { setShowAdd(s => !s); setSnackbar(prev => ({ ...prev, open: false })); }} 
-          disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles)}
+          disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && roles.length === 0)}
           startIcon={<Plus size={15} />}
         >
           Assign Role
@@ -220,7 +223,7 @@ export default function RoleAssignmentsView() {
               onInputChange={(e, v) => setScimInput(v)}
               options={scimOptions}
               loading={scimLoading}
-              getOptionLabel={(option) => `${option.displayName} (${option.username})`}
+              getOptionLabel={(option) => option.displayName}
               renderInput={(params) => (
                 <TextField 
                   {...params} 
@@ -385,7 +388,7 @@ export default function RoleAssignmentsView() {
               <TableBody>
                 {filteredAssignments.map(a => (
                   <TableRow key={a.ID} hover>
-                    <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                    <TableCell sx={{ fontWeight: 600 }}>
                       {a.userId}
                     </TableCell>
                     <TableCell sx={{ fontWeight: 500 }}>
@@ -394,7 +397,7 @@ export default function RoleAssignmentsView() {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Shield size={14} color={a.role?.type === 'ORG_BASED' ? '#3b82f6' : '#a78bfa'} />
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {a.role?.name || 'Unknown Role'}
                         </Typography>
                       </Box>
@@ -402,14 +405,14 @@ export default function RoleAssignmentsView() {
                     <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                       {a.createdAt ? new Date(a.createdAt).toLocaleString() : 'N/A'}
                     </TableCell>
-                    <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem', fontFamily: 'monospace' }}>
+                    <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                       {a.createdBy || 'System'}
                     </TableCell>
                     <TableCell align="right">
                       <IconButton 
                         color="error" 
                         onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
-                        disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles))} 
+                        disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
                         size="small"
                       >
                         <Trash2 size={15} />

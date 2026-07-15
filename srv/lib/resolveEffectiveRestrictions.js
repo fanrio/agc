@@ -8,13 +8,28 @@ const { safeJsonParse } = require('./utils');
  * Throws if a circular reference is detected.
  */
 function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances = []) {
+  // Pre-index collections into Maps for O(1) lookups
+  const rolesMap = new Map(allRoles.map(r => [r.ID, r]));
+  
+  const inheritanceMap = new Map();
+  for (const i of allInheritances) {
+    if (!inheritanceMap.has(i.role_ID)) inheritanceMap.set(i.role_ID, []);
+    inheritanceMap.get(i.role_ID).push(i);
+  }
+  
+  const restrictionsMap = new Map();
+  for (const r of allRestrictions) {
+    if (!restrictionsMap.has(r.role_ID)) restrictionsMap.set(r.role_ID, []);
+    restrictionsMap.get(r.role_ID).push(r);
+  }
+
   const visiting = new Set();
   const resolved = new Set();
   const result  = [];
 
   function walk(currentRoleId, isOwn) {
     if (visiting.has(currentRoleId)) {
-      const role = allRoles.find(r => r.ID === currentRoleId);
+      const role = rolesMap.get(currentRoleId);
       throw new Error(`Circular inheritance detected at role: ${role ? role.name : currentRoleId}`);
     }
     if (resolved.has(currentRoleId)) {
@@ -22,14 +37,14 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
     }
     visiting.add(currentRoleId);
 
-    const role = allRoles.find(r => r.ID === currentRoleId);
+    const role = rolesMap.get(currentRoleId);
     if (role) {
-      const parents = allInheritances.filter(i => i.role_ID === currentRoleId);
+      const parents = inheritanceMap.get(currentRoleId) || [];
       for (const relation of parents) {
         walk(relation.parent_ID, false);
       }
 
-      const ownRestrictions = allRestrictions.filter(r => r.role_ID === currentRoleId);
+      const ownRestrictions = restrictionsMap.get(currentRoleId) || [];
       for (const restriction of ownRestrictions) {
         result.push({
           restrictionId  : restriction.ID,

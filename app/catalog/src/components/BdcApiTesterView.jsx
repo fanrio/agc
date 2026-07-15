@@ -323,7 +323,7 @@ export default function BdcApiTesterView() {
                   <Typography variant="caption" color="text.secondary">Fetching live payload from Datasphere Cloud Gateway...</Typography>
                 </Box>
               ) : output ? (
-                <pre style={{ margin: 0, fontFamily: 'Consolas, monospace', fontSize: 13, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                <pre style={{ margin: 0, fontSize: 13, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                   {output}
                 </pre>
               ) : (

@@ -642,9 +642,9 @@ export default function BdcSettingsView() {
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {currentType === 'SAP Hana' ? (
-                            <>Host: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{s.host || '—'}:{s.port || 443}</Box></>
+                            <>Host: <Box component="span" sx={{ color: 'text.primary' }}>{s.host || '—'}:{s.port || 443}</Box></>
                           ) : (
-                            <>Basis URL: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{s.url || '—'}</Box></>
+                            <>Basis URL: <Box component="span" sx={{ color: 'text.primary' }}>{s.url || '—'}</Box></>
                           )}
                         </Typography>
                       </Box>
@@ -667,19 +667,19 @@ export default function BdcSettingsView() {
                       <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
                         <Grid item xs={12} sm={5}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Hostname</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.host || '—'}
                           </Typography>
                         </Grid>
                         <Grid item xs={12} sm={2}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Port</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.port || '443'}
                           </Typography>
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>User</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.username || '—'}
                           </Typography>
                         </Grid>
@@ -695,13 +695,13 @@ export default function BdcSettingsView() {
                       <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
                         <Grid item xs={12} sm={3}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Token URL</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.tokenUrl || '—'}
                           </Typography>
                         </Grid>
                         <Grid item xs={12} sm={3}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Client ID</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.clientId || '—'}
                           </Typography>
                         </Grid>
@@ -719,13 +719,13 @@ export default function BdcSettingsView() {
                         </Grid>
                         <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Flat authorization</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.taskChainFlat || '—'}
                           </Typography>
                         </Grid>
                         <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Hierarchy authorization</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.taskChainHierarchy || '—'}
                           </Typography>
                         </Grid>

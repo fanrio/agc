@@ -11,7 +11,7 @@ export default function StepReview({
   simRows, setSimRows, simResults, runSimulation,
   assignUserId, setAssignUserId, assignUserName, setAssignUserName,
   isEditMode, loading, permissions,
-  canManageThisDerivedWizard, handleSaveClick
+  canManageThisDerivedWizard, handleSaveClick, isReadOnly
 }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -21,7 +21,7 @@ export default function StepReview({
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Name</Typography>
-            <Typography variant="body1" sx={{ fontWeight: 700, fontFamily: 'monospace', color: 'primary.light' }}>{roleName || '—'}</Typography>
+            <Typography variant="body1" sx={{ fontWeight: 700, color: 'primary.light' }}>{roleName || '—'}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Type & Environment</Typography>
@@ -78,7 +78,7 @@ export default function StepReview({
           fullWidth
           value={simRows}
           onChange={e => setSimRows(e.target.value)}
-          sx={{ mb: 2, '& textarea': { fontFamily: 'monospace', fontSize: 13 } }}
+          sx={{ mb: 2, '& textarea': { fontSize: 13 } }}
         />
         <Button variant="outlined" color="primary" onClick={runSimulation} disabled={loading} startIcon={<PlayCircle size={14} />} sx={{ mb: 2 }}>
           Run Simulation
@@ -140,7 +140,7 @@ export default function StepReview({
         variant="contained"
         color="primary"
         onClick={handleSaveClick}
-        disabled={loading || !roleName || (permissions?.isSuperAdmin ? false : (permissions && (
+        disabled={loading || isReadOnly || !roleName || (permissions?.isSuperAdmin ? false : (permissions && (
           roleType === 'ORG_BASED' ? !permissions.canManageOrgRoles :
           (selectedParentIds.length > 0) ? !canManageThisDerivedWizard() : !permissions.canManageSingleRoles
         )))}

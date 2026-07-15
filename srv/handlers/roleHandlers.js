@@ -1,5 +1,7 @@
 'use strict';
 
+const { getSessionPermissions, requirePermission, requireEnvironment, requireStream } = require('../lib/authGuard');
+
 /**
  * Role Handlers
  *
@@ -19,7 +21,95 @@
  */
 function registerRoleHandlers(service, entities, deps) {
   const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
-  const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs } = entities;
+  const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations } = entities;
+
+  // -------------------------------------------------------------------------
+  // Roles Action protection
+  // -------------------------------------------------------------------------
+  service.before(['generateOrgRole', 'generateAllOrgRoles'], async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(perms, 'canManageOrgRoles', req);
+  });
+
+  // -------------------------------------------------------------------------
+  // Roles CRUD protection
+  // -------------------------------------------------------------------------
+  service.before(['CREATE', 'UPDATE', 'DELETE'], 'Roles', async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+
+    let roleType = req.data.type;
+    let envId = req.data.environment_ID;
+    let roleId = req.data.ID;
+    if (!roleId && req.params?.length > 0) {
+      const p = req.params[0];
+      roleId = typeof p === 'object' ? p.ID : p;
+    }
+
+    if (req.event === 'UPDATE' || req.event === 'DELETE') {
+      if (roleId) {
+        const existing = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+        if (existing) {
+          if (!roleType) roleType = existing.type;
+          if (!envId) envId = existing.environment_ID;
+        }
+      }
+    }
+
+    if (envId) {
+      requireEnvironment(perms, envId, req);
+    }
+
+    // Stream-based role management scoping
+    let streamId = req.data.stream_ID;
+    if (!streamId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
+      const existingForStream = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+      if (existingForStream) streamId = existingForStream.stream_ID;
+    }
+    if (streamId) {
+      requireStream(perms, streamId, req);
+    }
+
+    if (roleType === 'ORG_BASED') {
+      requirePermission(perms, 'canManageOrgRoles', req);
+    } else if (roleType === 'DERIVED') {
+      requirePermission(perms, 'canManageDerivedRoles', req);
+      
+      // Enforce derived role parent scope checks
+      if (!perms.isSuperAdmin && perms.managedDerivedRolesScope !== 'ALL') {
+        let allowedParentIds = [];
+        try {
+          const scopeList = JSON.parse(perms.managedDerivedRolesScope);
+          if (Array.isArray(scopeList)) {
+            allowedParentIds = scopeList.map(s => s.roleId);
+          }
+        } catch (e) {
+          allowedParentIds = perms.managedDerivedRolesScope.split(',').map(s => s.trim());
+        }
+
+        let parentIds = [];
+        if (req.data.parentRoles && Array.isArray(req.data.parentRoles)) {
+          req.data.parentRoles.forEach(pr => {
+            if (pr.parent_ID) parentIds.push(pr.parent_ID);
+          });
+        }
+        if (parentIds.length === 0 && roleId) {
+          const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
+          parentIds = inherits.map(i => i.parent_ID);
+        }
+
+        if (parentIds.length > 0) {
+          const inScope = parentIds.every(pid => allowedParentIds.includes(pid));
+          if (!inScope) {
+            req.reject(403, 'Access Denied: One or more parent roles are outside your permitted scope.');
+          }
+        }
+      }
+    } else if (roleType === 'DRAGE') {
+      requirePermission(perms, 'isSuperAdmin', req);
+    } else {
+      requirePermission(perms, 'canManageSingleRoles', req);
+    }
+  });
 
   // -------------------------------------------------------------------------
   // Prevent duplicate restrictions when creating/updating RoleInheritance
@@ -188,8 +278,14 @@ function registerRoleHandlers(service, entities, deps) {
       console.error('[RoleHandlers] Audit Log failed for Roles UPDATE:', err.message);
     }
 
-    // Run HANA re-sync synchronously (lets errors propagate to frontend)
-    await syncRoleAssignmentsToHana(id);
+    // Run HANA re-sync in background to prevent blocking HTTP request thread
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        await syncRoleAssignmentsToHana(id);
+      } catch (err) {
+        console.error('[RoleHandlers] Background HANA sync failed for Roles UPDATE:', err.message);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -750,11 +750,11 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       width: '100%',
     }}>
       {isOwn ? <Unlock size={14} color="#0f172a" /> : <Lock size={14} color="#64748b" />}
-      <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.main' : 'text.secondary', fontFamily: 'monospace' }}>
+      <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.main' : 'text.secondary' }}>
         {restriction.field}
       </Typography>
       <Chip label={label} size="small" color={color} sx={{ fontSize: 9, height: 18 }} />
-      <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: 'monospace', flexGrow: 1 }}>
+      <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>
         {display}
       </Typography>
       {restriction.sourceRoleName && (
@@ -766,7 +766,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
   );
 }
 
-export default function RestrictionBuilder({ restrictions, onChange, inheritedRestrictions = [], orgNodes = [], restrictionFields = [] }) {
+export default function RestrictionBuilder({ restrictions, onChange, inheritedRestrictions = [], orgNodes = [], restrictionFields = [], isReadOnly = false }) {
   const [draft, setDraft] = useState({ field: '', filterType: 'EQ', value: '' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
@@ -854,9 +854,11 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
             {restrictions.map(r => (
               <Box key={r.ID} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 <RestrictionDisplay restriction={r} isOwn={true} />
-                <IconButton color="error" onClick={() => removeRestriction(r.ID)} size="small">
-                  <X size={15} />
-                </IconButton>
+                {!isReadOnly && (
+                  <IconButton color="error" onClick={() => removeRestriction(r.ID)} size="small">
+                    <X size={15} />
+                  </IconButton>
+                )}
               </Box>
             ))}
           </Box>
@@ -864,56 +866,58 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
       )}
 
       {/* Add new restriction */}
-      <Card sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Plus size={12} /> Add restriction
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 2fr auto' }, gap: 2, alignItems: 'end' }}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="builder-field-label">Field</InputLabel>
-            <Select
-              labelId="builder-field-label"
-              label="Field"
-              value={draft.field}
-              onChange={e => setDraft(d => ({ ...d, field: e.target.value }))}
-            >
-              <MenuItem value=""><em>Select Field</em></MenuItem>
-              {availableFields.map(f => (
-                <MenuItem key={f.ID} value={f.name}>{f.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+      {!isReadOnly && (
+        <Card sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Plus size={12} /> Add restriction
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 2fr auto' }, gap: 2, alignItems: 'end' }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="builder-field-label">Field</InputLabel>
+              <Select
+                labelId="builder-field-label"
+                label="Field"
+                value={draft.field}
+                onChange={e => setDraft(d => ({ ...d, field: e.target.value }))}
+              >
+                <MenuItem value=""><em>Select Field</em></MenuItem>
+                {availableFields.map(f => (
+                  <MenuItem key={f.ID} value={f.name}>{f.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-          <FormControl size="small" fullWidth>
-            <InputLabel id="builder-type-label">Type</InputLabel>
-            <Select
-              labelId="builder-type-label"
-              label="Type"
-              value={draft.filterType}
-              onChange={e => setDraft(d => ({ ...d, filterType: e.target.value, value: '' }))}
-            >
-              {FILTER_TYPES.map(t => (
-                <MenuItem key={t} value={t}>{TYPE_LABEL[t]}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="builder-type-label">Type</InputLabel>
+              <Select
+                labelId="builder-type-label"
+                label="Type"
+                value={draft.filterType}
+                onChange={e => setDraft(d => ({ ...d, filterType: e.target.value, value: '' }))}
+              >
+                {FILTER_TYPES.map(t => (
+                  <MenuItem key={t} value={t}>{TYPE_LABEL[t]}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-          <Box sx={{ width: '100%' }}>
-            <RestrictionInput
-              field={draft.field}
-              filterType={draft.filterType}
-              value={draft.value}
-              onChange={v => setDraft(d => ({ ...d, value: v }))}
-              orgNodes={orgNodes}
-              restrictionFields={restrictionFields}
-            />
+            <Box sx={{ width: '100%' }}>
+              <RestrictionInput
+                field={draft.field}
+                filterType={draft.filterType}
+                value={draft.value}
+                onChange={v => setDraft(d => ({ ...d, value: v }))}
+                orgNodes={orgNodes}
+                restrictionFields={restrictionFields}
+              />
+            </Box>
+
+            <Button variant="contained" onClick={addRestriction} startIcon={<Plus size={14} />} sx={{ minHeight: 40 }}>
+              Add
+            </Button>
           </Box>
-
-          <Button variant="contained" onClick={addRestriction} startIcon={<Plus size={14} />} sx={{ minHeight: 40 }}>
-            Add
-          </Button>
-        </Box>
-      </Card>
+        </Card>
+      )}
     </Box>
   );
 }

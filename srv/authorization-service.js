@@ -50,6 +50,8 @@ const { registerRoleHandlers }        = require('./handlers/roleHandlers');
 const { registerAssignmentHandlers }  = require('./handlers/assignmentHandlers');
 const { registerRestrictionHandlers } = require('./handlers/restrictionHandlers');
 const { registerStreamHandlers } = require('./handlers/streamHandler');
+const { registerAppAuthorizationsHandlers } = require('./handlers/appAuthorizationsHandlers');
+const { registerSystemHandlers } = require('./handlers/systemHandlers');
 
 module.exports = cds.service.impl(async function () {
   const entities = this.entities;
@@ -57,7 +59,7 @@ module.exports = cds.service.impl(async function () {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
     RoleAssignments, RoleInheritance, RestrictionFields,
     BdcSettings, AuditLogs, Replications, DynamicGenerationRules,
-    AppAuthorizations
+    AppAuthorizations, RoleApprovers
   } = entities;
 
   // Propagate simulated user headers into the CAP request context user
@@ -68,16 +70,7 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // Centralized Authorization & Security Enforcement
-  // ---------------------------------------------------------------------------
-  const {
-    getUserId,
-    getSessionPermissions,
-    requirePermission,
-    requireEnvironment,
-    requireStream
-  } = require('./lib/authGuard');
+  const { getSessionPermissions } = require('./lib/authGuard');
 
   // Action: getCurrentUserPermissions
   this.on('getCurrentUserPermissions', async (req) => {
@@ -121,229 +114,6 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
-  // AppAuthorizations CRUD protection
-  this.before('*', 'AppAuthorizations', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageAppUsers', req);
-  });
-
-  // AuditLogs protection
-  this.before('READ', 'AuditLogs', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canViewAuditLogs', req);
-  });
-
-  // Settings CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], ['BdcSettings', 'RestrictionFields'], async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageSettings', req);
-  });
-
-  // Replications CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], 'Replications', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageReplications', req);
-  });
-
-  // Roles CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], 'Roles', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-
-    let roleType = req.data.type;
-    let envId = req.data.environment_ID;
-    let roleId = req.data.ID;
-    if (!roleId && req.params?.length > 0) {
-      const p = req.params[0];
-      roleId = typeof p === 'object' ? p.ID : p;
-    }
-
-    if (req.event === 'UPDATE' || req.event === 'DELETE') {
-      if (roleId) {
-        const existing = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-        if (existing) {
-          if (!roleType) roleType = existing.type;
-          if (!envId) envId = existing.environment_ID;
-        }
-      }
-    }
-
-    if (envId) {
-      requireEnvironment(perms, envId, req);
-    }
-
-    // Stream-based role management scoping
-    let streamId = req.data.stream_ID;
-    if (!streamId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
-      const existingForStream = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-      if (existingForStream) streamId = existingForStream.stream_ID;
-    }
-    if (streamId) {
-      requireStream(perms, streamId, req);
-    }
-
-    if (roleType === 'ORG_BASED') {
-      requirePermission(perms, 'canManageOrgRoles', req);
-    } else if (roleType === 'DERIVED') {
-      requirePermission(perms, 'canManageDerivedRoles', req);
-      
-      // Enforce derived role parent scope checks
-      if (!perms.isSuperAdmin && perms.managedDerivedRolesScope !== 'ALL') {
-        let allowedParentIds = [];
-        try {
-          const scopeList = JSON.parse(perms.managedDerivedRolesScope);
-          if (Array.isArray(scopeList)) {
-            allowedParentIds = scopeList.map(s => s.roleId);
-          }
-        } catch (e) {
-          allowedParentIds = perms.managedDerivedRolesScope.split(',').map(s => s.trim());
-        }
-
-        let parentIds = [];
-        if (req.data.parentRoles && Array.isArray(req.data.parentRoles)) {
-          req.data.parentRoles.forEach(pr => {
-            if (pr.parent_ID) parentIds.push(pr.parent_ID);
-          });
-        }
-        if (parentIds.length === 0 && roleId) {
-          const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
-          parentIds = inherits.map(i => i.parent_ID);
-        }
-
-        if (parentIds.length > 0) {
-          const inScope = parentIds.every(pid => allowedParentIds.includes(pid));
-          if (!inScope) {
-            req.reject(403, 'Access Denied: One or more parent roles are outside your permitted scope.');
-          }
-        }
-      }
-    } else if (roleType === 'DRAGE') {
-      requirePermission(perms, 'isSuperAdmin', req);
-    } else {
-      requirePermission(perms, 'canManageSingleRoles', req);
-    }
-  });
-
-  // RoleAssignments CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], 'RoleAssignments', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canAssignRoles', req);
-
-    let roleId = req.data.role_ID;
-    let assignmentId = req.data.ID;
-    if (!assignmentId && req.params?.length > 0) {
-      const p = req.params[0];
-      assignmentId = typeof p === 'object' ? p.ID : p;
-    }
-
-    if (!roleId && assignmentId) {
-      const existing = await cds.db.run(SELECT.one.from(RoleAssignments).where({ ID: assignmentId }));
-      roleId = existing?.role_ID;
-    }
-
-    if (roleId) {
-      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-      if (role?.environment_ID) {
-        requireEnvironment(perms, role.environment_ID, req);
-      }
-
-      // If user has authorization to manage derived roles ONLY, they can only assign derived roles, not parent roles
-      if (!perms.isSuperAdmin && perms.canManageDerivedRoles && !perms.canManageSingleRoles) {
-        if (req.event === 'CREATE' || req.event === 'UPDATE') {
-          if (role && role.type !== 'DERIVED') {
-            req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');
-          }
-        }
-      }
-    }
-  });
-
-  // Restrictions CRUD protection
-  this.before(['CREATE', 'UPDATE', 'DELETE'], 'Restrictions', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    let roleId = req.data.role_ID;
-    let restrictionId = req.data.ID;
-    if (!restrictionId && req.params?.length > 0) {
-      const p = req.params[0];
-      restrictionId = typeof p === 'object' ? p.ID : p;
-    }
-
-    if (!roleId && restrictionId) {
-      const existing = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: restrictionId }));
-      roleId = existing?.role_ID;
-    }
-
-    if (roleId) {
-      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-      if (role) {
-        if (role.environment_ID) requireEnvironment(perms, role.environment_ID, req);
-        if (role.type === 'ORG_BASED') requirePermission(perms, 'canManageOrgRoles', req);
-        else if (role.type === 'DERIVED') requirePermission(perms, 'canManageDerivedRoles', req);
-        else if (role.type === 'DRAGE') requirePermission(perms, 'isSuperAdmin', req);
-        else requirePermission(perms, 'canManageSingleRoles', req);
-      }
-    }
-  });
-
-  // Actions protection
-  this.before('generateOrgRole', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageOrgRoles', req);
-  });
-  this.before('generateAllOrgRoles', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageOrgRoles', req);
-  });
-  this.before('syncDynamicRule', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageSettings', req);
-  });
-  this.before([
-    'testBdcConnection', 'fetchBdcSpaces', 'fetchBdcAssets',
-    'fetchBdcRelationalValues', 'fetchBdcAssetColumns', 'fetchBdcAssetKeyColumns', 'fetchRawBdcSpaces',
-    'fetchRawBdcAssets', 'fetchRawBdcRelationalValues', 'fetchRawBdcAssetColumns',
-    'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
-    'fetchRawHanaViews'
-  ], async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageSettings', req);
-  });
-  this.before(['triggerReplication', 'checkReplicationStatuses'], async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageReplications', req);
-  });
-  this.before('searchScimUsers', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageAppUsers', req);
-  });
-
-  // Audit Logs for AppAuthorizations changes
-  this.after(['CREATE', 'UPDATE', 'DELETE'], 'AppAuthorizations', async (result, req) => {
-    try {
-      const userId = getUserId(req);
-      let targetName = result?.userId || req.data?.userId;
-      let recordId = result?.ID || req.data?.ID;
-      if (!recordId && req.params?.length > 0) {
-        const p = req.params[0];
-        recordId = typeof p === 'object' ? p.ID : p;
-      }
-      if (!targetName && recordId) {
-        const target = await cds.db.run(SELECT.one.from(AppAuthorizations).where({ ID: recordId }));
-        targetName = target?.userId;
-      }
-
-      await cds.db.run(INSERT.into(AuditLogs).entries({
-        ID:         cds.utils.uuid(),
-        entityName: 'AppAuthorizations',
-        action:     req.event,
-        recordId:   recordId || 'unknown',
-        targetName: targetName || 'unknown',
-        details:    JSON.stringify({ changedBy: userId, data: req.data || result })
-      }));
-    } catch (err) {
-      console.error('[AuthService] Audit Log failed for AppAuthorizations changes:', err.message);
-    }
-  });
-
   // ---------------------------------------------------------------------------
   // Shared dependency bundles
   // ---------------------------------------------------------------------------
@@ -374,42 +144,6 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
-  this.after(['CREATE', 'UPDATE', 'DELETE'], 'Customers', async (data, req) => {
-    try {
-      const activeRules = await cds.db.run(
-        SELECT.from(DynamicGenerationRules)
-          .where({ isActive: true })
-      );
-      for (const rule of activeRules) {
-        if (rule.sourceEntity === 'Customers' || rule.sourceEntity === 'fanrio.auth.Customers') {
-          await syncDynamicRule(rule.ID, cds);
-        }
-      }
-    } catch (err) {
-      console.error('[AuthService] Failed to trigger dynamic rules synchronization:', err.message);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // UUID auto-generation (consolidated — same for all entities below)
-  // ---------------------------------------------------------------------------
-  ['OrgNodes', 'BdcSettings', 'DynamicGenerationRules', 'DynamicRuleFieldMappings', 'GeneratedResourceMap'].forEach(entity => {
-    this.before('CREATE', entity, (req) => {
-      if (!req.data.ID) req.data.ID = cds.utils.uuid();
-      if (entity === 'BdcSettings') {
-        if (req.data.isActive === undefined || req.data.isActive === null) {
-          req.data.isActive = true;
-        }
-      }
-    });
-  });
-
-  this.before('UPDATE', 'DynamicGenerationRules', async (req) => {
-    if (req.data.mappings) {
-      await cds.db.run(DELETE.from('fanrio.auth.DynamicRuleFieldMappings').where({ rule_ID: req.data.ID }));
-    }
-  });
-
   // ---------------------------------------------------------------------------
   // Entity CRUD handlers (roles, assignments, restrictions)
   // ---------------------------------------------------------------------------
@@ -426,6 +160,8 @@ module.exports = cds.service.impl(async function () {
   registerAssignmentHandlers(this, entities, handlerDeps);
   registerRestrictionHandlers(this, entities, handlerDeps);
   registerStreamHandlers(this);
+  registerAppAuthorizationsHandlers(this, entities);
+  registerSystemHandlers(this, entities);
 
   // ---------------------------------------------------------------------------
   // Org Role Generation actions

@@ -219,7 +219,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           Total Roles
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.roleCount}
                         </Typography>
                       </Grid>
@@ -250,7 +250,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'error.main' }}>
                           Critical
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'error.main', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'error.main' }}>
                           {stats.criticalRoles}
                         </Typography>
                       </Grid>
@@ -281,7 +281,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           Unrestricted
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.rolesWithoutRestriction}
                         </Typography>
                       </Grid>
@@ -312,7 +312,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           No Users
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.statsWithoutAssignment || stats.rolesWithoutAssignment}
                         </Typography>
                       </Grid>
@@ -343,7 +343,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           No Approver
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.rolesWithoutApprover}
                         </Typography>
                       </Grid>
@@ -360,7 +360,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           Unique Users
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.userCount}
                         </Typography>
                       </Grid>
@@ -379,7 +379,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
                           Role Assignments
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                           {stats.assignmentCount}
                         </Typography>
                       </Grid>
@@ -398,7 +398,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                         <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'error.main' }}>
                           Users with Critical Roles
                         </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'error.main', fontFamily: 'monospace' }}>
+                        <Typography variant="h3" sx={{ fontWeight: 800, color: 'error.main' }}>
                           {stats.usersWithCritical}
                         </Typography>
                       </Grid>
@@ -406,7 +406,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                   </Box>
                 ) : isOrgCard && stats?.nodeTypeCounts ? (
                   <Box>
-                    <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace', mb: 1.5 }}>
+                    <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', mb: 1.5 }}>
                       {card.value}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -427,7 +427,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                     </Box>
                   </Box>
                 ) : (
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>
+                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                     {card.value}
                   </Typography>
                 )}
@@ -468,7 +468,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                     </ListItemIcon>
                     <ListItemText 
                       primary={role.name} 
-                      primaryTypographyProps={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}
+                      primaryTypographyProps={{ fontWeight: 700, fontSize: 13 }}
                       secondary={role.description || 'No description provided'}
                       secondaryTypographyProps={{ fontSize: 11, color: 'text.secondary' }}
                     />
@@ -496,7 +496,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                   <Network size={16} color="#3b82f6" />
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>Streams</Typography>
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {stats?.streamCount || 0}
                 </Typography>
               </Box>
@@ -505,7 +505,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                   <Settings size={16} color="#a78bfa" />
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>Restriction Fields</Typography>
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {stats?.fieldCount || 0}
                 </Typography>
               </Box>
@@ -514,7 +514,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
                   <Cloud size={16} color="#10b981" />
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>BDC System Connections</Typography>
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {stats?.bdcCount || 0}
                 </Typography>
               </Box>

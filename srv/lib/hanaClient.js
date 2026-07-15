@@ -31,7 +31,9 @@ class HanaClient {
       pwd:                     setting.password,
       encrypt:                 'true',
       sslValidateCertificate:  'true',
-      sslHostNameInCertificate: setting.host
+      sslHostNameInCertificate: setting.host,
+      pooling:                 'true',
+      maxPoolSize:             10
     };
   }
 

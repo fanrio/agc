@@ -90,12 +90,14 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
   return async function generateAllOrgRolesHandler(req) {
     const { OrgNodes } = entities;
     const nodes = await cds.db.run(SELECT.from(OrgNodes));
-    let count = 0;
-    for (const node of nodes) {
-      await generateRoleForNode(cds, entities, node);
-      count++;
+    
+    const batchSize = 10;
+    for (let i = 0; i < nodes.length; i += batchSize) {
+      const batch = nodes.slice(i, i + batchSize);
+      await Promise.all(batch.map(node => generateRoleForNode(cds, entities, node)));
     }
-    return { count };
+    
+    return { count: nodes.length };
   };
 }
 

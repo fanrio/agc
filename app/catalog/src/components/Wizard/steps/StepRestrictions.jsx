@@ -4,7 +4,7 @@ import RestrictionBuilder from '../../RestrictionBuilder';
 
 export default function StepRestrictions({
   restrictions, setRestrictions,
-  inherited, orgNodes, selectableRestrictionFields
+  inherited, orgNodes, selectableRestrictionFields, isReadOnly
 }) {
   return (
     <Card sx={{ p: 3 }}>
@@ -15,6 +15,7 @@ export default function StepRestrictions({
         inheritedRestrictions={inherited}
         orgNodes={orgNodes}
         restrictionFields={selectableRestrictionFields}
+        isReadOnly={isReadOnly}
       />
     </Card>
   );

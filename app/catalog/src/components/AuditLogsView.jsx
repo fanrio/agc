@@ -467,7 +467,7 @@ export default function AuditLogsView() {
     } catch {
       return (
         <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f2f4f6', borderColor: 'divider', backgroundImage: 'none' }}>
-          <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.8125rem', color: '#191c1e', whiteSpace: 'pre-wrap' }}>
+          <pre style={{ margin: 0, fontSize: '0.8125rem', color: '#191c1e', whiteSpace: 'pre-wrap' }}>
             {log.details}
           </pre>
         </Paper>
@@ -666,10 +666,9 @@ export default function AuditLogsView() {
                           </TableCell>
                           <TableCell sx={{ 
                             color: log.targetName ? 'text.primary' : 'text.secondary', 
-                            fontFamily: log.targetName ? 'inherit' : 'monospace',
                             fontSize: log.targetName ? '0.875rem' : '0.8125rem',
                             fontWeight: log.targetName ? 500 : 'inherit'
-                          }}>
+                           }}>
                             {log.targetName || log.recordId}
                           </TableCell>
                           <TableCell>
@@ -740,7 +739,7 @@ export default function AuditLogsView() {
               </DialogTitle>
               <DialogContent sx={{ mt: 2 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-                  Audit details for target record ID: <Box component="span" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>{selectedLog.recordId}</Box>
+                  Audit details for target record ID: <Box component="span" sx={{ color: 'text.primary' }}>{selectedLog.recordId}</Box>
                 </Typography>
                 {renderDetailsTable(selectedLog)}
               </DialogContent>

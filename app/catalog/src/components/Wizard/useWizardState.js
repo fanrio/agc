@@ -548,7 +548,11 @@ export function useWizardState({ context = {}, permissions }) {
     return restrictionFields.filter(f => allowedFieldsSet.has(f.name.toLowerCase()) && !usedFields.has(f.name.toLowerCase()));
   })();
 
+  const isUserApprover = Array.isArray(approvers) && approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
+  const isReadOnly = isEditMode && isUserApprover;
+
   return {
+    isReadOnly,
     step, setStep,
     roleType, setRoleType,
     selectedOrgNodeId, setOrgNode,

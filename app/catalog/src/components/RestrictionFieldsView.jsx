@@ -517,13 +517,13 @@ export default function RestrictionFieldsView() {
                           </Box>
                         ) : 'None'}
                       </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                      <TableCell sx={{ fontSize: '0.8125rem' }}>
                         {f.asset || '—'}
                       </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                      <TableCell sx={{ fontSize: '0.8125rem' }}>
                         {f.assetText || '—'}
                       </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                      <TableCell sx={{ fontSize: '0.8125rem' }}>
                         {f.assetHierarchy || '—'}
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8125rem' }}>

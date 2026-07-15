@@ -1,5 +1,7 @@
 const { isMockUrl } = require('./urlUtils');
 
+const tokenCache = new Map();
+
 class BdcClient {
   /**
    * Helper to retrieve access token
@@ -8,6 +10,18 @@ class BdcClient {
     if (isMockUrl(tokenUrl)) {
       return 'mock-access-token-12345';
     }
+
+    const cacheKey = `${tokenUrl}::${clientId}`;
+    const cached = tokenCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && cached.expiresAt > now + 60000) {
+      return cached.token;
+    }
+
+    let accessToken = null;
+    let expiresIn = 3600; // default to 1 hour
+
     // Method 1: Try standard Authorization: Basic header (most common)
     try {
       const authHeader = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -21,35 +35,48 @@ class BdcClient {
       });
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json();
-        if (tokenData.access_token) return tokenData.access_token;
+        if (tokenData.access_token) {
+          accessToken = tokenData.access_token;
+          expiresIn = tokenData.expires_in || expiresIn;
+        }
       }
     } catch (e) {
       console.warn('OAuth Basic Auth token request failed, trying body parameters...', e.message);
     }
 
-    // Method 2: Try sending credentials solely in POST body parameters (alternate RFC standard)
-    const bodyParams = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: clientId,
-      client_secret: clientSecret
-    });
-    const tokenRes = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: bodyParams.toString()
-    });
+    if (!accessToken) {
+      // Method 2: Try sending credentials solely in POST body parameters (alternate RFC standard)
+      const bodyParams = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret
+      });
+      const tokenRes = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: bodyParams.toString()
+      });
 
-    if (!tokenRes.ok) {
-      throw new Error(`Token request failed with status ${tokenRes.status}`);
+      if (!tokenRes.ok) {
+        throw new Error(`Token request failed with status ${tokenRes.status}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      accessToken = tokenData.access_token;
+      expiresIn = tokenData.expires_in || expiresIn;
     }
 
-    const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
     if (!accessToken) {
       throw new Error('No access_token returned in OAuth response');
     }
+
+    tokenCache.set(cacheKey, {
+      token: accessToken,
+      expiresAt: now + (expiresIn * 1000)
+    });
+
     return accessToken;
   }
 

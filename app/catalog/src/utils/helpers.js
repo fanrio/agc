@@ -106,6 +106,9 @@ export function filterRolesByPermissions(roles, permissions) {
   const allowedStreams = parseStreams(permissions.allowedStreams);
 
   return roles.filter(role => {
+    const isApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase());
+    if (isApprover) return true;
+
     if (allowedEnvs !== 'ALL') {
       const roleEnv = (role.environment_ID || '').toUpperCase();
       if (!allowedEnvs.includes(roleEnv)) return false;

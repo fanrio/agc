@@ -276,7 +276,7 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
 
   console.log(`[HanaReplication] Starting sync for assignment ${assignmentId}, user: ${userId}, role: ${roleId}, isDelete: ${isDelete}`);
 
-  const role = await db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+  const role = preloaded?.allRoles ? preloaded.allRoles.find(r => r.ID === roleId) : await db.run(SELECT.one.from(Roles).where({ ID: roleId }));
   if (!role) {
     console.log(`[HanaReplication] Role ${roleId} not found in database!`);
     return;
@@ -287,9 +287,9 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
   let customHierTableName = null;
   if (role.stream_ID) {
     const { Streams } = cds.entities('fanrio.auth');
-    const appCtx = await db.run(SELECT.one.from(Streams).columns('name').where({ ID: role.stream_ID }));
-    if (appCtx && appCtx.name) {
-      const cleanStreamName = appCtx.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    const stream = preloaded?.allStreams ? preloaded.allStreams.find(s => s.ID === role.stream_ID) : await db.run(SELECT.one.from(Streams).columns('name').where({ ID: role.stream_ID }));
+    if (stream && stream.name) {
+      const cleanStreamName = stream.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
       customTableName = `${cleanStreamName}_flat_authorizations`;
       customHierTableName = `${cleanStreamName}_hier_authorizations`;
     }
@@ -323,7 +323,7 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
     console.log(`[HanaReplication] Built HANA hier entries count: ${hierEntries.length}`, JSON.stringify(hierEntries));
   }
 
-  const bdcSettings = await db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }));
+  const bdcSettings = preloaded?.bdcSettings || await db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }));
   console.log(`[HanaReplication] Found active HANA connections: ${bdcSettings.length}`);
   if (bdcSettings.length === 0) return;
 
@@ -371,16 +371,19 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
  */
 async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
   const db = cds.db;
-  const { Roles, Restrictions, RoleInheritance, RoleAssignments } = entities;
+  const { Roles, Restrictions, RoleInheritance, RoleAssignments, BdcSettings } = entities;
+  const { Streams } = cds.entities('fanrio.auth');
 
   try {
-    // A-12 fix: pre-fetch all needed tables once, then pass as preloaded to each child call
-    const [allRoles, allRestrictions, allInheritances] = await Promise.all([
+    // A-12 and Issue #4 fix: pre-fetch all needed tables once, then pass as preloaded to each child call
+    const [allRoles, allRestrictions, allInheritances, allStreams, bdcSettings] = await Promise.all([
       db.run(SELECT.from(Roles)),
       db.run(SELECT.from(Restrictions)),
-      db.run(SELECT.from(RoleInheritance))
+      db.run(SELECT.from(RoleInheritance)),
+      db.run(SELECT.from(Streams).columns('ID', 'name')),
+      db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }))
     ]);
-    const preloaded = { allRoles, allRestrictions, allInheritances };
+    const preloaded = { allRoles, allRestrictions, allInheritances, allStreams, bdcSettings };
 
     // Collect the role itself + all descendant roles (roles that inherit from this one)
     const roleIds = new Set([roleId]);
@@ -399,8 +402,13 @@ async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
       SELECT.from(RoleAssignments).where({ role_ID: { in: Array.from(roleIds) } })
     );
 
-    for (const assignment of assignments) {
-      await syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false, preloaded);
+    // Process in batches of 5 to limit concurrency while dramatically speeding up sequential execution
+    const batchSize = 5;
+    for (let i = 0; i < assignments.length; i += batchSize) {
+      const batch = assignments.slice(i, i + batchSize);
+      await Promise.all(batch.map(assignment =>
+        syncAssignmentToHana(cds, HanaClient, entities, assignment.ID, assignment.userId, assignment.role_ID, false, preloaded)
+      ));
     }
   } catch (err) {
     console.error(`[HanaReplication] Failed to sync role assignments for role ${roleId}:`, err.message);

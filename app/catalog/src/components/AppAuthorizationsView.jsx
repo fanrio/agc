@@ -395,7 +395,7 @@ export default function AppAuthorizationsView() {
 
   const IdentityCell = ({ auth }) => (
     <>
-      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{auth.userId}</TableCell>
+      <TableCell sx={{ fontWeight: 600, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{auth.userId}</TableCell>
       <TableCell sx={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{auth.userName}</TableCell>
     </>
   );
@@ -591,7 +591,7 @@ export default function AppAuthorizationsView() {
             onInputChange={(e, v) => setScimInput(v)}
             options={scimOptions}
             loading={scimLoading}
-            getOptionLabel={(o) => `${o.displayName} (${o.username})`}
+            getOptionLabel={(o) => o.displayName}
             renderInput={(params) => (
               <TextField {...params} label="Search User (SCIM)" size="small" placeholder="Type username or email..."
                 InputProps={{
@@ -605,7 +605,7 @@ export default function AppAuthorizationsView() {
               return (
                 <li key={key || option.username} {...rest}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName} ({option.username})</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName}</Typography>
                     <Typography variant="caption" color="text.secondary">{option.department}</Typography>
                   </Box>
                 </li>

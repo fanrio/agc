@@ -478,9 +478,13 @@ export default function DynamicRulesView() {
                 />
                 <Autocomplete
                   size="small"
-                  options={fields}
-                  getOptionLabel={(option) => option.name || ''}
-                  value={fields.find(f => f.name === mapping.targetRestrictionField) || null}
+                  options={[{ name: 'ignore' }, ...fields]}
+                  getOptionLabel={(option) => option.name === 'ignore' ? 'Ignore (Do not map to restriction)' : (option.name || '')}
+                  value={
+                    mapping.targetRestrictionField === 'ignore'
+                      ? { name: 'ignore' }
+                      : (fields.find(f => f.name === mapping.targetRestrictionField) || null)
+                  }
                   onChange={(e, val) => handleMappingChange(idx, val ? val.name : '')}
                   renderInput={(params) => <TextField {...params} label="Target Restriction Field" variant="outlined" />}
                   fullWidth

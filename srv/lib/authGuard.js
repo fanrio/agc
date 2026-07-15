@@ -24,61 +24,30 @@ function getUserId(req) {
 async function getSessionPermissions(req, db, AppAuthorizations) {
   const userId = getUserId(req);
 
-  // Read all AppAuthorizations to check for Open Demo Mode
-  const allAuths = await db.run(SELECT.from(AppAuthorizations));
+  const userAuth = await db.run(
+    SELECT.one.from(AppAuthorizations).where({ userId, isActive: true })
+  );
 
-  if (!allAuths || allAuths.length === 0) {
-    // Open Demo Mode: grant all permissions if enabled
-    const allowDemo = process.env.VITE_ALLOW_DEMO_MODE !== 'false';
-    if (!allowDemo) {
-      req.reject(403, 'Open Demo Mode is disabled. Access denied.');
-    }
-    return {
-      userId: userId,
-      userName: 'Demo Administrator',
-      isSuperAdmin: true,
-      canManageAppUsers: true,
-      canManageOrgRoles: true,
-      canManageSingleRoles: true,
-      canManageDerivedRoles: true,
-      managedDerivedRolesScope: 'ALL',
-      canAssignRoles: true,
-      canViewAuditLogs: true,
-      canManageSettings: true,
-      allowedEnvironments: 'ALL',
-      allowedStreams: 'ALL',
-      isActive: true
-    };
+  if (userAuth) {
+    return userAuth;
   }
 
-  // Find user case-insensitively
-  const userAuth = allAuths.find(a => String(a.userId).toLowerCase() === userId.toLowerCase());
-
-  if (!userAuth) {
-    // User not found in authorizations table
-    return {
-      userId: userId,
-      userName: userId,
-      isSuperAdmin: false,
-      canManageAppUsers: false,
-      canManageOrgRoles: false,
-      canManageSingleRoles: false,
-      canManageDerivedRoles: false,
-      managedDerivedRolesScope: '[]',
-      canAssignRoles: false,
-      canViewAuditLogs: false,
-      canManageSettings: false,
-      allowedEnvironments: '[]',
-      allowedStreams: '[]',
-      isActive: false
-    };
-  }
-
-  if (!userAuth.isActive) {
-    req.reject(403, `User account ${userId} is currently inactive.`);
-  }
-
-  return userAuth;
+  return {
+    userId: userId,
+    userName: userId,
+    isSuperAdmin: false,
+    canManageAppUsers: false,
+    canManageOrgRoles: false,
+    canManageSingleRoles: false,
+    canManageDerivedRoles: false,
+    managedDerivedRolesScope: '[]',
+    canAssignRoles: false,
+    canViewAuditLogs: false,
+    canManageSettings: false,
+    allowedEnvironments: '[]',
+    allowedStreams: '[]',
+    isActive: false
+  };
 }
 
 function requirePermission(permissions, flag, req) {

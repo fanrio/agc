@@ -116,12 +116,17 @@ async function syncDynamicRule(ruleId, cds) {
   const activeMappings = await db.run(SELECT.from(GeneratedResourceMap).where({ rule_ID: rule.ID }));
 
   // 5. Process user updates & creations
-  for (const [userId, keys] of Object.entries(userRecordMapping)) {
-    if (rule.generationMode === 'USER_CONSOLIDATED_ROLE') {
-      await _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments, existingRoles);
-    } else if (rule.generationMode === 'TEMPLATE_ASSIGNMENT') {
-      await _syncTemplateAssignment(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments);
-    }
+  const userEntries = Object.entries(userRecordMapping);
+  const batchSize = 5;
+  for (let i = 0; i < userEntries.length; i += batchSize) {
+    const batch = userEntries.slice(i, i + batchSize);
+    await Promise.all(batch.map(async ([userId, keys]) => {
+      if (rule.generationMode === 'USER_CONSOLIDATED_ROLE') {
+        await _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments, existingRoles);
+      } else if (rule.generationMode === 'TEMPLATE_ASSIGNMENT') {
+        await _syncTemplateAssignment(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments);
+      }
+    }));
   }
 
   // 6. Clean up obsolete mappings
@@ -134,8 +139,11 @@ async function syncDynamicRule(ruleId, cds) {
     }
   }
   
-  for (const obsolete of obsoleteMappings) {
-    await _removeGeneratedAccess(db, rule, obsolete, AuditLogs, cds, envId, preloaded, existingAssignments);
+  for (let i = 0; i < obsoleteMappings.length; i += batchSize) {
+    const batch = obsoleteMappings.slice(i, i + batchSize);
+    await Promise.all(batch.map(obsolete =>
+      _removeGeneratedAccess(db, rule, obsolete, AuditLogs, cds, envId, preloaded, existingAssignments)
+    ));
   }
 }
 
@@ -193,28 +201,34 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
     preloaded.allRoles.push(newRole);
   }
 
-  // Set/update the MULTI_VALUE restriction mapping the collected keys for each field
-  const targetFields = mappings.map(m => m.targetRestrictionField);
+  // Set/update the MULTI_VALUE restriction mapping the collected keys for each field (excluding 'ignore')
+  const targetFields = mappings
+    .map(m => m.targetRestrictionField)
+    .filter(f => f && f.toLowerCase() !== 'ignore');
   
   // Remove old restrictions from database
-  await db.run(DELETE.from(Restrictions).where({ role_ID: roleId, field: { in: targetFields } }));
-  
-  // Update in-memory preloaded cache
-  preloaded.allRestrictions = preloaded.allRestrictions.filter(
-    r => !(r.role_ID === roleId && targetFields.includes(r.field))
-  );
+  if (targetFields.length > 0) {
+    await db.run(DELETE.from(Restrictions).where({ role_ID: roleId, field: { in: targetFields } }));
+    
+    // Update in-memory preloaded cache
+    preloaded.allRestrictions = preloaded.allRestrictions.filter(
+      r => !(r.role_ID === roleId && targetFields.includes(r.field))
+    );
+  }
 
   const newRestrictions = [];
   for (const m of mappings) {
-    const uniqueValues = [...new Set(keys.map(k => String(k[m.sourceKeyField])))];
-    newRestrictions.push({
-      ID: cds.utils.uuid(),
-      role_ID: roleId,
-      field: m.targetRestrictionField,
-      filterType: 'MULTI_VALUE',
-      value: JSON.stringify(uniqueValues),
-      sourceLabel: `Rule Gen: ${rule.code}`,
-    });
+    if (m.targetRestrictionField && m.targetRestrictionField.toLowerCase() !== 'ignore') {
+      const uniqueValues = [...new Set(keys.map(k => String(k[m.sourceKeyField])))];
+      newRestrictions.push({
+        ID: cds.utils.uuid(),
+        role_ID: roleId,
+        field: m.targetRestrictionField,
+        filterType: 'MULTI_VALUE',
+        value: JSON.stringify(uniqueValues),
+        sourceLabel: `Rule Gen: ${rule.code}`,
+      });
+    }
   }
 
   if (newRestrictions.length > 0) {

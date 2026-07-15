@@ -154,6 +154,42 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     assert.strictEqual(map, undefined, 'Ledger mapping should be deleted');
   });
 
+  await t.test('5. Verify ignore mappings ignore restriction generation but still groups and runs', async () => {
+    const res = await POST('/odata/v4/auth/DynamicGenerationRules', {
+      code: 'CUST_IGNORE_TEST',
+      description: 'Ignore test rule',
+      isActive: true,
+      sourceType: 'LOCAL_DB',
+      sourceEntity: 'fanrio.auth.Customers',
+      sourceResponsibleField: 'responsibleUser',
+      generationMode: 'USER_CONSOLIDATED_ROLE',
+      filterType: 'MULTI_VALUE',
+      stream_ID: 'app-finance',
+      environment_ID: 'Q',
+      mappings: [
+        { sourceKeyField: 'ID', targetRestrictionField: 'ignore' }
+      ]
+    });
+    const ignoreRuleId = res.data.ID;
+
+    await POST('/odata/v4/auth/Customers', {
+      ID: 'C1003',
+      name: 'Ignore Customer 3',
+      responsibleUser: 'charlie@company.com',
+      status: 'ACTIVE'
+    });
+
+    const roleName = 'ROLE_DYN_CUST_IGNORE_TEST_CHARLIE_COMPANY_COM';
+    const role = await db.run(SELECT.one.from('fanrio.auth.Roles').where({ name: roleName }));
+    assert.ok(role, 'Dynamic role for Charlie should be created');
+
+    const restriction = await db.run(SELECT.one.from('fanrio.auth.Restrictions').where({ role_ID: role.ID }));
+    assert.strictEqual(restriction, undefined, 'No restriction should be created when field is ignore');
+
+    await DELETE(`/odata/v4/auth/Customers('C1003')`);
+    await DELETE(`/odata/v4/auth/DynamicGenerationRules('${ignoreRuleId}')`);
+  });
+
   // Restore clean state after all tests
   await db.run(cds.ql.DELETE.from('fanrio.auth.GeneratedResourceMap'));
   await db.run(cds.ql.DELETE.from('fanrio.auth.DynamicRuleFieldMappings'));

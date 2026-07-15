@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress } from '@mui/material';
-import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw } from 'lucide-react';
+import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress, Button } from '@mui/material';
+import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw, LogOut } from 'lucide-react';
+import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import OrgStructureView from './components/OrgStructureView';
 import RolesDashboard from './components/RolesDashboard';
@@ -18,12 +19,12 @@ const NAV = [
   { id: 'org',         label: 'Organization',        icon: Building2 },
   { id: 'roles',       label: 'Roles',               icon: Shield },
   { id: 'assignments', label: 'Role Assignments',    icon: Users },
-  { id: 'replications',label: 'Replications',         icon: RefreshCw },
+  // { id: 'replications',label: 'Replications',         icon: RefreshCw },
   { id: 'audit',       label: 'Audit Logs',          icon: History },
   { id: 'admin',       label: 'Administration',      icon: Settings },
 ];
 
-function AppContent({ simulatedUser, setSimulatedUser }) {
+function AppContent({ simulatedUser, onLogout }) {
   const [activeNav, setActiveNav]         = useState('home');
   const [wizardContext, setWizardContext] = useState(null); // { parentRoleId?, orgNodeId? }
   const [rolesFilter, setRolesFilter]     = useState(null);
@@ -68,29 +69,44 @@ function AppContent({ simulatedUser, setSimulatedUser }) {
               cortex <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <Select
-                value={simulatedUser}
-                onChange={(e) => {
-                  setSimulatedUser(e.target.value);
-                  setActiveNav('home'); // Go to home when user switches to refresh state
-                }}
-                sx={{ 
-                  height: 32, 
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  bgcolor: 'background.default',
-                  '& .MuiSelect-select': { py: 0.5 }
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  bgcolor: 'primary.light',
+                  color: 'primary.contrastText',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  textTransform: 'uppercase'
                 }}
               >
-                <MenuItem value="jdoe">John Doe (jdoe)</MenuItem>
-                <MenuItem value="asmith">Alice Smith (asmith)</MenuItem>
-                <MenuItem value="bobm">Bob Martin (bobm)</MenuItem>
-                <MenuItem value="cwhite">Charlie White (cwhite)</MenuItem>
-                <MenuItem value="admin">System Admin (admin)</MenuItem>
-              </Select>
-            </FormControl>
+                {simulatedUser.charAt(0)}
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                  {simulatedUser.includes('@') ? simulatedUser.split('@')[0].replace('.', ' ') : simulatedUser}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
+                  {simulatedUser}
+                </Typography>
+              </Box>
+            </Box>
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={onLogout}
+              startIcon={<LogOut size={14} />}
+              sx={{ textTransform: 'none', fontWeight: 600, height: 32, borderRadius: 1.5 }}
+            >
+              Log Out
+            </Button>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10b981', display: 'inline-block' }} />
               <Typography variant="body2" color="text.secondary">CAP Connected · SQLite (mock)</Typography>
@@ -163,11 +179,27 @@ function AppContent({ simulatedUser, setSimulatedUser }) {
 }
 
 export default function App() {
-  const [simulatedUser, setSimulatedUser] = useState('jdoe');
+  const [simulatedUser, setSimulatedUser] = useState(() => localStorage.getItem('auth_user') || '');
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('auth_user'));
+
+  const handleLoginSuccess = (userId) => {
+    setSimulatedUser(userId);
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_user');
+    setSimulatedUser('');
+    setIsLoggedIn(false);
+  };
+
+  if (!isLoggedIn) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <PermissionsProvider userId={simulatedUser}>
-      <AppContent simulatedUser={simulatedUser} setSimulatedUser={setSimulatedUser} />
+      <AppContent simulatedUser={simulatedUser} onLogout={handleLogout} />
     </PermissionsProvider>
   );
 }

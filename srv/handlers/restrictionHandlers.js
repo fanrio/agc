@@ -1,5 +1,7 @@
 'use strict';
 
+const { getSessionPermissions, requirePermission, requireEnvironment } = require('../lib/authGuard');
+
 /**
  * Restriction Handlers
  *
@@ -16,7 +18,36 @@
  */
 function registerRestrictionHandlers(service, entities, deps) {
   const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
-  const { Roles, Restrictions, AuditLogs } = entities;
+  const { Roles, Restrictions, AuditLogs, AppAuthorizations } = entities;
+
+  // -------------------------------------------------------------------------
+  // Restrictions CRUD protection
+  // -------------------------------------------------------------------------
+  service.before(['CREATE', 'UPDATE', 'DELETE'], 'Restrictions', async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    let roleId = req.data.role_ID;
+    let restrictionId = req.data.ID;
+    if (!restrictionId && req.params?.length > 0) {
+      const p = req.params[0];
+      restrictionId = typeof p === 'object' ? p.ID : p;
+    }
+
+    if (!roleId && restrictionId) {
+      const existing = await cds.db.run(SELECT.one.from(Restrictions).where({ ID: restrictionId }));
+      roleId = existing?.role_ID;
+    }
+
+    if (roleId) {
+      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+      if (role) {
+        if (role.environment_ID) requireEnvironment(perms, role.environment_ID, req);
+        if (role.type === 'ORG_BASED') requirePermission(perms, 'canManageOrgRoles', req);
+        else if (role.type === 'DERIVED') requirePermission(perms, 'canManageDerivedRoles', req);
+        else if (role.type === 'DRAGE') requirePermission(perms, 'isSuperAdmin', req);
+        else requirePermission(perms, 'canManageSingleRoles', req);
+      }
+    }
+  });
 
   // -------------------------------------------------------------------------
   // Prevent duplicate restrictions on derived roles (matching parent role restrictions)
@@ -155,8 +186,14 @@ function registerRestrictionHandlers(service, entities, deps) {
         console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions UPDATE:', err.message);
       }
 
-      // Run HANA re-sync synchronously (lets errors propagate to frontend)
-      await syncRoleAssignmentsToHana(beforeState.role_ID);
+      // Run HANA re-sync in background to prevent blocking HTTP thread
+      cds.spawn({ user: req?.user }, async () => {
+        try {
+          await syncRoleAssignmentsToHana(beforeState.role_ID);
+        } catch (err) {
+          console.error('[RestrictionHandlers] Background HANA sync failed for Restrictions UPDATE:', err.message);
+        }
+      });
     }
   });
 
@@ -192,8 +229,14 @@ function registerRestrictionHandlers(service, entities, deps) {
       console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions DELETE:', err.message);
     }
 
-    // Run HANA re-sync synchronously (lets errors propagate to frontend)
-    await syncRoleAssignmentsToHana(beforeState.role_ID);
+    // Run HANA re-sync in background to prevent blocking HTTP thread
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        await syncRoleAssignmentsToHana(beforeState.role_ID);
+      } catch (err) {
+        console.error('[RestrictionHandlers] Background HANA sync failed for Restrictions DELETE:', err.message);
+      }
+    });
   });
 }
 

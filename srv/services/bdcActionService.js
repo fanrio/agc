@@ -41,8 +41,8 @@ function makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient) {
     // Note: credential logging removed (audit finding F-03)
 
     if (setting.connectionType === 'SAP Hana') {
-      if (!setting.host)                         return { success: false, message: 'Failed: Hostname is required for SAP Hana connection' };
-      if (!setting.port)                         return { success: false, message: 'Failed: Port is required for SAP Hana connection' };
+      if (!setting.host) return { success: false, message: 'Failed: Hostname is required for SAP Hana connection' };
+      if (!setting.port) return { success: false, message: 'Failed: Port is required for SAP Hana connection' };
       if (!setting.username || !setting.password) return { success: false, message: 'Failed: User and Password are required for SAP Hana connection' };
       return HanaClient.testConnectionAndCreateTable(setting);
     }
@@ -126,7 +126,7 @@ function makeFetchBdcRelationalValuesHandler(BdcClient) {
     if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     try {
       const { rawData, assetRecords, assetTextRecords } = await BdcClient.fetchRelationalValues(req.data);
-      
+
       if (isMockUrl(url)) {
         const mockRows = [
           { ID: 'C1001', NAME: 'Acme Corp', REGION: 'US_EAST' },
@@ -180,9 +180,9 @@ function makeFetchRawBdcSpacesHandler(BdcClient) {
     const { url, tokenUrl, clientId, clientSecret } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
     try {
-      const token    = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
+      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
       const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
-      const res      = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+      const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Spaces request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
     } catch (e) {
@@ -196,9 +196,9 @@ function makeFetchRawBdcAssetsHandler(BdcClient) {
     const { url, tokenUrl, clientId, clientSecret } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
     try {
-      const token    = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
+      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
       const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
-      const res      = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+      const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Assets request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
     } catch (e) {
@@ -212,10 +212,10 @@ function makeFetchRawBdcRelationalValuesHandler(BdcClient) {
     const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     try {
-      const token    = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const s        = space.trim(); const a = asset.trim();
+      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
+      const s = space.trim(); const a = asset.trim();
       const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`;
-      const res      = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+      const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Relational Values request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
     } catch (e) {
@@ -229,10 +229,10 @@ function makeFetchRawBdcAssetColumnsHandler(BdcClient) {
     const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
     if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
     try {
-      const token    = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const s        = space.trim(); const a = asset.trim();
+      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
+      const s = space.trim(); const a = asset.trim();
       const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
-      const res      = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' } });
+      const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' } });
       if (!res.ok) throw new Error(`Asset Columns Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return res.text();
     } catch (e) {
@@ -252,13 +252,13 @@ function makeFetchBdcAssociationsHandler(BdcClient) {
 
     if (isMockUrl(url)) {
       return JSON.stringify([
-        { name: 'to_TextTable',           targetType: 'MY_SPACE.COMPANY_TEXT' },
-        { name: 'to_HierarchyDirectory',  targetType: 'MY_SPACE.MY_HIERARCHY_DIRECTORY' }
+        { name: 'to_TextTable', targetType: 'MY_SPACE.COMPANY_TEXT' },
+        { name: 'to_HierarchyDirectory', targetType: 'MY_SPACE.MY_HIERARCHY_DIRECTORY' }
       ], null, 2);
     }
 
     try {
-      const token              = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
+      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
       const analyticalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/analytical/${s}/${a}/$metadata`;
       const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
 
@@ -273,12 +273,12 @@ function makeFetchBdcAssociationsHandler(BdcClient) {
       }
       if (!res.ok) throw new Error(`Asset Metadata request failed: ${res.status}`);
 
-      const xml          = await res.text();
+      const xml = await res.text();
       const associations = [];
       const navPropRegex = /<NavigationProperty\b[^>]*>/g;
-      const nameRegex    = /\bName="([^"]+)"/;
-      const typeRegex    = /\bType="([^"]+)"/;
-      let   match;
+      const nameRegex = /\bName="([^"]+)"/;
+      const typeRegex = /\bType="([^"]+)"/;
+      let match;
       while ((match = navPropRegex.exec(xml)) !== null) {
         const nameMatch = nameRegex.exec(match[0]);
         const typeMatch = typeRegex.exec(match[0]);
@@ -299,7 +299,7 @@ function makeFetchRawHanaViewsHandler(cds, entities, HanaClient) {
     if (!setting) return req.error(404, `BDC Setting with ID ${settingId} not found`);
     try {
       // F-04 fix: use parameterized query against SYS.VIEWS to prevent SQL injection
-      const sql  = 'SELECT SCHEMA_NAME, VIEW_NAME FROM SYS.VIEWS WHERE SCHEMA_NAME NOT IN (?, ?, ?, ?, ?) ORDER BY SCHEMA_NAME, VIEW_NAME';
+      const sql = 'SELECT SCHEMA_NAME, VIEW_NAME FROM SYS.VIEWS WHERE SCHEMA_NAME NOT IN (?, ?, ?, ?, ?) ORDER BY SCHEMA_NAME, VIEW_NAME';
       const rows = await HanaClient.execute(setting, sql, ['SYS', '_SYS_BI', '_SYS_BIC', '_SYS_STATISTICS', '_SYS_XS']);
       return JSON.stringify(rows, null, 2);
     } catch (err) {
@@ -354,7 +354,7 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
       // Check if mock URL (local development/tests fallback)
       if (isMockUrl(setting.url)) {
         const mockResources = [
-          { userName: 'john.doe@fanrio.com', emails: [{ value: 'john.doe@fanrio.com' }], name: { givenName: 'John', familyName: 'Doe' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
+          { userName: 'tim.waecken@cimt-ag.de', emails: [{ value: 'tim.waecken@cimt-ag.de' }], name: { givenName: 'Tim', familyName: 'Wäcken' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
           { userName: 'alice.smith@fanrio.com', emails: [{ value: 'alice.smith@fanrio.com' }], name: { givenName: 'Alice', familyName: 'Smith' } },
           { userName: 'bob.martin@fanrio.com', emails: [{ value: 'bob.martin@fanrio.com' }], name: { givenName: 'Bob', familyName: 'Martin' } },
           { userName: 'charlie.white@fanrio.com', emails: [{ value: 'charlie.white@fanrio.com' }], name: { givenName: 'Charlie', familyName: 'White' } },
@@ -374,23 +374,35 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
           );
         }
 
-        return filtered.map(u => ({
-          username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
-          displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
-          email: u.emails && u.emails[0] ? u.emails[0].value : '',
-          department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
-        }));
+        return filtered.map(u => {
+          const emailVal = u.emails && u.emails[0] ? u.emails[0].value : u.userName;
+          const formattedName = u.name && u.name.formatted ? u.name.formatted :
+            (u.name && u.name.givenName && u.name.familyName ? `${u.name.givenName} ${u.name.familyName}` : (u.displayName || u.userName));
+          const dispName = formattedName.toLowerCase().includes(emailVal.toLowerCase()) ? formattedName : `${formattedName} (${emailVal})`;
+          return {
+            username: emailVal,
+            displayName: dispName,
+            email: u.emails && u.emails[0] ? u.emails[0].value : '',
+            department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
+          };
+        });
       }
 
       // Execute real SCIM API call on BDC system
       const response = await BdcClient.searchScimUsers(setting.url, setting.tokenUrl, setting.clientId, setting.clientSecret, query);
       const resources = response.Resources || [];
-      return resources.map(u => ({
-        username: u.emails && u.emails[0] ? u.emails[0].value : u.userName,
-        displayName: u.name && u.name.givenName ? u.name.givenName : (u.displayName || u.userName),
-        email: u.emails && u.emails[0] ? u.emails[0].value : '',
-        department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
-      }));
+      return resources.map(u => {
+        const emailVal = u.emails && u.emails[0] ? u.emails[0].value : u.userName;
+        const formattedName = u.name && u.name.formatted ? u.name.formatted :
+          (u.name && u.name.givenName && u.name.familyName ? `${u.name.givenName} ${u.name.familyName}` : (u.displayName || u.userName));
+        const dispName = formattedName.toLowerCase().includes(emailVal.toLowerCase()) ? formattedName : `${formattedName} (${emailVal})`;
+        return {
+          username: emailVal,
+          displayName: dispName,
+          email: u.emails && u.emails[0] ? u.emails[0].value : '',
+          department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
+        };
+      });
     } catch (err) {
       console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
       return req.error(500, `SCIM Integration Query Failed: ${err.message}`);

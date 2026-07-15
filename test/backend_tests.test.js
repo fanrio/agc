@@ -142,7 +142,7 @@ global.fetch = async (url, options) => {
       const filter = urlObj.searchParams.get('filter') || '';
       
       const mockResources = [
-        { userName: 'john.doe@fanrio.com', emails: [{ value: 'john.doe@fanrio.com' }], name: { givenName: 'John', familyName: 'Doe' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
+        { userName: 'tim.waecken@cimt-ag.de', emails: [{ value: 'tim.waecken@cimt-ag.de' }], name: { givenName: 'Tim', familyName: 'Wäcken' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
         { userName: 'alice.smith@fanrio.com', emails: [{ value: 'alice.smith@fanrio.com' }], name: { givenName: 'Alice', familyName: 'Smith' } },
         { userName: 'bob.martin@fanrio.com', emails: [{ value: 'bob.martin@fanrio.com' }], name: { givenName: 'Bob', familyName: 'Martin' } },
         { userName: 'charlie.white@fanrio.com', emails: [{ value: 'charlie.white@fanrio.com' }], name: { givenName: 'Charlie', familyName: 'White' } },
@@ -722,10 +722,10 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
   // 8. searchScimUsers
   await t.test('searchScimUsers action', async () => {
     // With query
-    const res = await POST('/odata/v4/auth/searchScimUsers', { query: 'john.doe' });
-    assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.data.value.length, 1);
-    assert.strictEqual(res.data.value[0].username, 'john.doe@fanrio.com');
+     const res = await POST('/odata/v4/auth/searchScimUsers', { query: 'tim.waecken' });
+     assert.strictEqual(res.status, 200);
+     assert.strictEqual(res.data.value.length, 1);
+     assert.strictEqual(res.data.value[0].username, 'tim.waecken@cimt-ag.de');
 
     // Without query (returns all)
     const resAll = await POST('/odata/v4/auth/searchScimUsers', { query: '' });

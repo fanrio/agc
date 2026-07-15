@@ -131,10 +131,11 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
     });
   };
 
-  const disableEdit = permissions?.isSuperAdmin ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles)));
+  const isUserApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
+  const disableEdit = permissions?.isSuperAdmin ? false : (isUserApprover ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles))));
   const disableDelete = permissions?.isSuperAdmin ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles)));
   const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role);
-  const disableAssign = permissions?.isSuperAdmin ? false : !canAssignRoles;
+  const disableAssign = permissions?.isSuperAdmin ? false : (!canAssignRoles && !isUserApprover);
 
   if (isCompact) {
     return (
@@ -226,7 +227,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                 <IconButton size="small" onClick={fetchEffective} title="View Effective Access" color="info">
                   {loading ? <CircularProgress size={16} /> : <Eye size={16} />}
                 </IconButton>
-                <IconButton size="small" onClick={() => onEdit(role)} title="Edit Role Settings" disabled={disableEdit} color="primary">
+                <IconButton size="small" onClick={() => onEdit(role)} title={isUserApprover ? "View Role Settings" : "Edit Role Settings"} disabled={disableEdit} color="primary">
                   <Edit3 size={16} />
                 </IconButton>
                 <IconButton size="small" onClick={() => setConfirmDeleteOpen(true)} title="Delete Role" disabled={disableDelete} color="error">

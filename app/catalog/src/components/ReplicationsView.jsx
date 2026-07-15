@@ -196,7 +196,7 @@ export default function ReplicationsView() {
                       <TableCell sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
                         {formatDateTime(item.endTime)}
                       </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, color: 'text.primary', fontSize: '0.8125rem' }}>
+                      <TableCell sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.8125rem' }}>
                         {item.replicationRoles}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.8125rem' }}>
