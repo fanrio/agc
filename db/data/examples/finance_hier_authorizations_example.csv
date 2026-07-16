@@ -1,0 +1,7 @@
+PERMISSION_ID,ID,RESTRICTION,TARGET_NODE_TYPE,ROOT_NODE_TYPE,ROOT_VALUES,HIERARCHY_IDENTIFIERS
+assign-001_0,jdoe,OrgNode,,,node-global,OrgNode_Hierarchy
+assign-002_0,mmustermann,OrgNode,,,node-emea,OrgNode_Hierarchy
+assign-003_0,jsmith,OrgNode,,,node-de,OrgNode_Hierarchy
+assign-004_0,aduval,OrgNode,,,node-fr,OrgNode_Hierarchy
+assign-005_0,hwagner,OrgNode,,,node-de01,OrgNode_Hierarchy
+assign-006_0,kbauer,OrgNode,,,node-de-fin,OrgNode_Hierarchy
