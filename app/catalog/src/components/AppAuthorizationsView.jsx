@@ -27,7 +27,9 @@ import {
   MenuItem,
   OutlinedInput,
   Chip,
-  Divider
+  Divider,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { Plus, Trash2, Shield, Settings, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
@@ -95,6 +97,9 @@ export default function AppAuthorizationsView() {
   const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [confirmDialog, setConfirmDialog]   = useState({ open: false, title: '', message: '', onConfirm: null });
   const [snackbar, setSnackbar]             = useState({ open: false, message: '', severity: 'success' });
+
+  const [activeTab, setActiveTab]           = useState(0); // 0 = System, 1 = Roles
+  const [addMode, setAddMode]               = useState('system'); // 'system' | 'roles'
 
   const defaultPermissions = {
     isSuperAdmin: false,
@@ -206,25 +211,27 @@ export default function AppAuthorizationsView() {
       return;
     }
     try {
-      const accessDomainVal = newPermissions.allowedAccessDomains === null
-        ? 'ALL'
-        : serializeAccessDomains(newPermissions.allowedAccessDomains, accessDomains);
+      const accessDomainVal = addMode === 'system'
+        ? '[]'
+        : (newPermissions.allowedAccessDomains === null
+          ? 'ALL'
+          : serializeAccessDomains(newPermissions.allowedAccessDomains, accessDomains));
       const newAuth = await api.createAppAuthorization({
         userId:                   selectedScimUser.username,
         userName:                 selectedScimUser.displayName,
-        isSuperAdmin:             newPermissions.isSuperAdmin,
-        canManageAppUsers:        newPermissions.canManageAppUsers,
-        canManageOrgRoles:        newPermissions.canManageOrgRoles,
-        canManageSingleRoles:     newPermissions.canManageSingleRoles,
-        canManageDerivedRoles:    newPermissions.canManageDerivedRoles,
-        managedDerivedRolesScope: newPermissions.managedDerivedRolesScope || 'ALL',
-        canAssignRoles:           newPermissions.canAssignRoles,
-        canManageReplications:    newPermissions.canManageReplications,
-        canViewAuditLogs:         newPermissions.canViewAuditLogs,
-        canManageSettings:        newPermissions.canManageSettings,
-        allowedEnvironments:      serializeEnvironments(newPermissions.allowedEnvironments),
+        isSuperAdmin:             addMode === 'system' ? newPermissions.isSuperAdmin : false,
+        canManageAppUsers:        addMode === 'system' ? newPermissions.canManageAppUsers : false,
+        canManageOrgRoles:        addMode === 'roles' ? newPermissions.canManageOrgRoles : false,
+        canManageSingleRoles:     addMode === 'roles' ? newPermissions.canManageSingleRoles : false,
+        canManageDerivedRoles:    addMode === 'roles' ? newPermissions.canManageDerivedRoles : false,
+        managedDerivedRolesScope: addMode === 'roles' ? (newPermissions.managedDerivedRolesScope || 'ALL') : '[]',
+        canAssignRoles:           addMode === 'roles' ? newPermissions.canAssignRoles : false,
+        canManageReplications:    addMode === 'system' ? newPermissions.canManageReplications : false,
+        canViewAuditLogs:         addMode === 'system' ? newPermissions.canViewAuditLogs : false,
+        canManageSettings:        addMode === 'system' ? newPermissions.canManageSettings : false,
+        allowedEnvironments:      addMode === 'roles' ? serializeEnvironments(newPermissions.allowedEnvironments) : '[]',
         allowedAccessDomains:     accessDomainVal,
-        isActive:                 newPermissions.isActive
+        isActive:                 addMode === 'system' ? newPermissions.isActive : true
       });
       if (newAuth) {
         setAuthorizations(prev => [...prev, newAuth].filter(Boolean));
@@ -426,9 +433,17 @@ export default function AppAuthorizationsView() {
             Manage permission levels for administrators within the Auth Wizard.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setOpenAdd(true)}>
+        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => { setAddMode(activeTab === 0 ? 'system' : 'roles'); setOpenAdd(true); }}>
           Add User
         </Button>
+      </Box>
+
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} textColor="primary" indicatorColor="primary">
+          <Tab icon={<Settings size={16} />} iconPosition="start" label="System Management" sx={{ fontWeight: 600, minHeight: 48 }} />
+          <Tab icon={<Shield size={16} />} iconPosition="start" label="Role Management" sx={{ fontWeight: 600, minHeight: 48 }} />
+        </Tabs>
       </Box>
 
       {/* Open Demo Mode banner */}
@@ -450,129 +465,133 @@ export default function AppAuthorizationsView() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={30} /></Box>
       ) : (
         <>
-          {/* ── Area 1: Manage Application ─────────────────────────────────── */}
-          <Card>
-            <SectionHeading icon={Settings} title="Manage Application"
-              subtitle="System configuration, settings, and monitoring access" />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Active</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Super Admin</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Users</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Settings</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">View Audit Logs</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Manage Replications</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {authorizations.length === 0
-                    ? emptyRow(9)
-                    : authorizations.map(auth => !auth ? null : (
-                      <TableRow key={auth.ID} hover>
-                        <IdentityCell auth={auth} />
-                        <BoolCell auth={auth} field="isActive" color="#ef4444" />
-                        <BoolCell auth={auth} field="isSuperAdmin" color="#f43f5e" />
-                        <BoolCell auth={auth} field="canManageAppUsers" />
-                        <BoolCell auth={auth} field="canManageSettings" />
-                        <BoolCell auth={auth} field="canViewAuditLogs" />
-                        <BoolCell auth={auth} field="canManageReplications" color="#0ea5e9" />
-                        <TableCell align="right">
-                          <IconButton color="error" size="small"
-                            onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}>
-                            <Trash2 size={15} />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Card>
+          {/* ── Area 1: Manage Application (System Management) ────────────────── */}
+          {activeTab === 0 && (
+            <Card>
+              <SectionHeading icon={Settings} title="Manage Application"
+                subtitle="System configuration, settings, and monitoring access" />
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Active</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Super Admin</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Manage Users</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Manage Settings</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">View Audit Logs</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Manage Replications</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {authorizations.length === 0
+                      ? emptyRow(9)
+                      : authorizations.map(auth => !auth ? null : (
+                        <TableRow key={auth.ID} hover>
+                          <IdentityCell auth={auth} />
+                          <BoolCell auth={auth} field="isActive" color="#ef4444" />
+                          <BoolCell auth={auth} field="isSuperAdmin" color="#f43f5e" />
+                          <BoolCell auth={auth} field="canManageAppUsers" />
+                          <BoolCell auth={auth} field="canManageSettings" />
+                          <BoolCell auth={auth} field="canViewAuditLogs" />
+                          <BoolCell auth={auth} field="canManageReplications" color="#0ea5e9" />
+                          <TableCell align="right">
+                            <IconButton color="error" size="small"
+                              onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}>
+                              <Trash2 size={15} />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Card>
+          )}
 
-          {/* ── Area 2: Manage Roles ───────────────────────────────────────── */}
-          <Card>
-            <SectionHeading icon={Shield} title="Manage Roles"
-              subtitle="Role creation, assignment, and stream-based scoping" color="#2563eb" />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Org Roles</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Single Roles</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Derived Roles</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Assign Roles</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Environments</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Access Domains</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {authorizations.length === 0
-                    ? emptyRow(8)
-                    : authorizations.map(auth => !auth ? null : (
-                      <TableRow key={auth.ID} hover>
-                        <IdentityCell auth={auth} />
-                        <BoolCell auth={auth} field="canManageOrgRoles" color="#3b82f6" />
-                        <BoolCell auth={auth} field="canManageSingleRoles" color="#a78bfa" />
-                        {/* Derived roles + scope selector */}
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                            <Checkbox
-                              size="small"
-                              checked={!!auth.canManageDerivedRoles}
-                              onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
-                              disabled={!!auth.isSuperAdmin}
-                              sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
-                            />
-                            {!auth.isSuperAdmin && auth.canManageDerivedRoles && (
-                              <ScopeSelector
-                                scopeStr={auth.managedDerivedRolesScope}
-                                onChange={(val) => handleUpdateScope(auth.ID, val)}
+          {/* ── Area 2: Manage Roles (Role Management) ───────────────────────── */}
+          {activeTab === 1 && (
+            <Card>
+              <SectionHeading icon={Shield} title="Manage Roles"
+                subtitle="Role creation, assignment, and stream-based scoping" color="#2563eb" />
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Org Roles</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Single Roles</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Derived Roles</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Assign Roles</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Environments</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Access Domains</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {authorizations.length === 0
+                      ? emptyRow(8)
+                      : authorizations.map(auth => !auth ? null : (
+                        <TableRow key={auth.ID} hover>
+                          <IdentityCell auth={auth} />
+                          <BoolCell auth={auth} field="canManageOrgRoles" color="#3b82f6" />
+                          <BoolCell auth={auth} field="canManageSingleRoles" color="#a78bfa" />
+                          {/* Derived roles + scope selector */}
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                              <Checkbox
+                                size="small"
+                                checked={!!auth.canManageDerivedRoles}
+                                onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
+                                disabled={!!auth.isSuperAdmin}
+                                sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
                               />
-                            )}
-                          </Box>
-                        </TableCell>
-                        <BoolCell auth={auth} field="canAssignRoles" color="#10b981" />
-                        {/* Environments */}
-                        <TableCell align="center">
-                          {auth.isSuperAdmin ? (
-                            <Chip label="ALL" size="small" color="primary" variant="outlined" />
-                          ) : (
-                            <Select
-                              multiple
-                              value={parseEnvironments(auth.allowedEnvironments)}
-                              onChange={(e) => handleUpdateEnvironments(auth.ID, e.target.value)}
-                              input={<OutlinedInput size="small" style={{ width: 84, fontSize: '0.75rem' }} />}
-                              renderValue={(selected) => (
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.2 }}>
-                                  {selected.map(v => (
-                                    <Typography key={v} style={{ fontSize: '0.75rem', fontWeight: 700 }}>{v}</Typography>
-                                  ))}
-                                </Box>
+                              {!auth.isSuperAdmin && auth.canManageDerivedRoles && (
+                                <ScopeSelector
+                                  scopeStr={auth.managedDerivedRolesScope}
+                                  onChange={(val) => handleUpdateScope(auth.ID, val)}
+                                />
                               )}
-                            >
-                              <MenuItem value="D">D (Dev)</MenuItem>
-                              <MenuItem value="Q">Q (QA)</MenuItem>
-                              <MenuItem value="P">P (Prod)</MenuItem>
-                            </Select>
-                          )}
-                        </TableCell>
-                        {/* Access Domains */}
-                        <TableCell align="center">
-                          <AccessDomainCell auth={auth} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Card>
+                            </Box>
+                          </TableCell>
+                          <BoolCell auth={auth} field="canAssignRoles" color="#10b981" />
+                          {/* Environments */}
+                          <TableCell align="center">
+                            {auth.isSuperAdmin ? (
+                              <Chip label="ALL" size="small" color="primary" variant="outlined" />
+                            ) : (
+                              <Select
+                                multiple
+                                value={parseEnvironments(auth.allowedEnvironments)}
+                                onChange={(e) => handleUpdateEnvironments(auth.ID, e.target.value)}
+                                input={<OutlinedInput size="small" style={{ width: 84, fontSize: '0.75rem' }} />}
+                                renderValue={(selected) => (
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.2 }}>
+                                    {selected.map(v => (
+                                      <Typography key={v} style={{ fontSize: '0.75rem', fontWeight: 700 }}>{v}</Typography>
+                                    ))}
+                                  </Box>
+                                )}
+                              >
+                                <MenuItem value="D">D (Dev)</MenuItem>
+                                <MenuItem value="Q">Q (QA)</MenuItem>
+                                <MenuItem value="P">P (Prod)</MenuItem>
+                              </Select>
+                            )}
+                          </TableCell>
+                          {/* Access Domains */}
+                          <TableCell align="center">
+                            <AccessDomainCell auth={auth} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Card>
+          )}
         </>
       )}
 
@@ -580,7 +599,7 @@ export default function AppAuthorizationsView() {
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="xs" fullWidth
         PaperProps={{ sx: { bgcolor: 'background.paper', backgroundImage: 'none', border: '1px solid', borderColor: 'divider' } }}>
         <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 2 }}>
-          Add User Authorization
+          Add User Authorization ({addMode === 'system' ? 'System Management' : 'Role Management'})
         </DialogTitle>
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* User search */}
@@ -614,28 +633,30 @@ export default function AppAuthorizationsView() {
             fullWidth
           />
 
-          {/* Account */}
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>Account</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Checkbox id="perm-active" checked={newPermissions.isActive}
-                onChange={(e) => setNewPermissions(p => ({ ...p, isActive: e.target.checked }))} />
-              <Box component="label" htmlFor="perm-active" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Active</Typography>
-              </Box>
-              <Checkbox id="perm-super" checked={newPermissions.isSuperAdmin}
-                onChange={(e) => setNewPermissions(p => ({ ...p, isSuperAdmin: e.target.checked }))} />
-              <Box component="label" htmlFor="perm-super" sx={{ cursor: 'pointer' }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Super Admin</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Bypasses all checks</Typography>
+          {/* Account - only in System Mode */}
+          {addMode === 'system' && (
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>Account</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Checkbox id="perm-active" checked={newPermissions.isActive}
+                  onChange={(e) => setNewPermissions(p => ({ ...p, isActive: e.target.checked }))} />
+                <Box component="label" htmlFor="perm-active" sx={{ cursor: 'pointer' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>Active</Typography>
+                </Box>
+                <Checkbox id="perm-super" checked={newPermissions.isSuperAdmin}
+                  onChange={(e) => setNewPermissions(p => ({ ...p, isSuperAdmin: e.target.checked }))} />
+                <Box component="label" htmlFor="perm-super" sx={{ cursor: 'pointer' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>Super Admin</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Bypasses all checks</Typography>
+                </Box>
               </Box>
             </Box>
-          </Box>
+          )}
 
-          {!newPermissions.isSuperAdmin && (
+          {/* Application Permissions - only in System Mode (when not Super Admin) */}
+          {addMode === 'system' && !newPermissions.isSuperAdmin && (
             <>
               <Divider />
-              {/* Application permissions */}
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Settings size={14} />
@@ -657,9 +678,13 @@ export default function AppAuthorizationsView() {
                   </Box>
                 ))}
               </Box>
+            </>
+          )}
 
+          {/* Role management permissions - only in Roles Mode */}
+          {addMode === 'roles' && (
+            <>
               <Divider />
-              {/* Role management permissions */}
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Shield size={14} />

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress, Button } from '@mui/material';
-import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw, LogOut } from 'lucide-react';
+import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw, LogOut, UserCheck } from 'lucide-react';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import OrgStructureView from './components/OrgStructureView';
 import RolesDashboard from './components/RolesDashboard';
 import Wizard from './components/Wizard';
 import RoleAssignmentsView from './components/RoleAssignmentsView';
-import AdministrationView from './components/AdministrationView';
+import SystemView from './components/SystemView';
+import AppAuthorizationsView from './components/AppAuthorizationsView';
 import AuditLogsView from './components/AuditLogsView';
 import ReplicationsView from './components/ReplicationsView';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
@@ -21,7 +22,8 @@ const NAV = [
   { id: 'assignments', label: 'Role Assignments',    icon: Users },
   // { id: 'replications',label: 'Replications',         icon: RefreshCw },
   { id: 'audit',       label: 'Audit Logs',          icon: History },
-  { id: 'admin',       label: 'Administration',      icon: Settings },
+  { id: 'users',       label: 'Users',               icon: UserCheck },
+  { id: 'system',      label: 'System',              icon: Settings },
 ];
 
 function AppContent({ simulatedUser, onLogout }) {
@@ -55,7 +57,8 @@ function AppContent({ simulatedUser, onLogout }) {
     if (item.id === 'org') return !!permissions?.canManageOrgRoles;
     if (item.id === 'replications') return !!permissions?.canManageReplications;
     if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
-    if (item.id === 'admin') return !!permissions?.canManageSettings || !!permissions?.canManageAppUsers;
+    if (item.id === 'users') return !!permissions?.canManageAppUsers;
+    if (item.id === 'system') return !!permissions?.canManageSettings;
     return true;
   });
 
@@ -173,7 +176,8 @@ function AppContent({ simulatedUser, onLogout }) {
         {activeNav === 'assignments' && <RoleAssignmentsView />}
         {activeNav === 'replications' && <ReplicationsView />}
         {activeNav === 'audit'       && <AuditLogsView />}
-        {activeNav === 'admin'       && <AdministrationView />}
+        {activeNav === 'users'       && <AppAuthorizationsView />}
+        {activeNav === 'system'      && <SystemView />}
       </Box>
     </Box>
   );

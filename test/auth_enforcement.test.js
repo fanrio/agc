@@ -274,5 +274,100 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: assignUser }));
   });
 
+  await t.test('Approver-based bypass of canAssignRoles permission', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations, Roles, RoleApprovers, RoleAssignments } = db.entities;
+
+    const mockApprover = 'mock-approver-only';
+    
+    // Seed user without canAssignRoles global permission
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockApprover }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: mockApprover,
+      userName: 'Mock Approver Only',
+      canAssignRoles: false,
+      isActive: true
+    }));
+
+    // Create a single role with restrictions (so it's valid for assignment)
+    const roleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_APPROVER_BYPASS',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const roleId = roleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: roleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // Make mockApprover an approver for this role
+    await db.run(INSERT.into(RoleApprovers).entries({
+      ID: cds.utils.uuid(),
+      role_ID: roleId,
+      userId: mockApprover
+    }));
+
+    // 1. Assert that mockApprover CAN assign this role because they are an approver
+    let assignId;
+    await t2.test('Allow assignment for role where user is approver', async () => {
+      const res = await POST('/odata/v4/auth/RoleAssignments', {
+        role_ID: roleId,
+        userId: 'target-user-approver-flow',
+        userName: 'Target User'
+      }, {
+        headers: { 'x-simulated-user': mockApprover }
+      });
+      assert.strictEqual(res.status, 201);
+      assignId = res.data.ID;
+    });
+
+    // 2. Create another role where mockApprover is NOT an approver
+    const roleRes2 = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_APPROVER_BLOCKED',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const roleId2 = roleRes2.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: roleId2,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // Assert that mockApprover CANNOT assign this second role because they are not an approver and canAssignRoles is false
+    await t2.test('Reject assignment for role where user is not approver', async () => {
+      try {
+        await POST('/odata/v4/auth/RoleAssignments', {
+          role_ID: roleId2,
+          userId: 'target-user-approver-flow',
+          userName: 'Target User'
+        }, {
+          headers: { 'x-simulated-user': mockApprover }
+        });
+        assert.fail('Expected assignment to fail with 403');
+      } catch (err) {
+        assert.strictEqual(err.status || err.response?.status, 403);
+      }
+    });
+
+    // Clean up
+    if (assignId) {
+      await db.run(cds.ql.DELETE(RoleAssignments).where({ ID: assignId }));
+    }
+    await db.run(cds.ql.DELETE(RoleApprovers).where({ role_ID: roleId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: roleId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: roleId2 }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockApprover }));
+  });
+
 });
 
