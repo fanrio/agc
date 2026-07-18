@@ -4,7 +4,7 @@ const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#0F172A', // Deep Navy
+      main: '#000035', // Deep Navy
       light: '#3a485c',
       dark: '#0b1220',
       contrastText: '#ffffff',
@@ -79,7 +79,7 @@ const theme = createTheme({
           backgroundImage: 'none',
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
-            borderColor: '#0F172A', // border-primary
+            borderColor: '#000035', // border-primary
           },
         },
       },
@@ -97,7 +97,7 @@ const theme = createTheme({
           },
         },
         containedPrimary: {
-          backgroundColor: '#0F172A',
+          backgroundColor: '#000035',
           color: '#ffffff',
           '&:hover': {
             backgroundColor: '#1e293b',
@@ -127,7 +127,7 @@ const theme = createTheme({
               borderColor: '#76777d',
             },
             '&.Mui-focused fieldset': {
-              borderColor: '#0F172A',
+              borderColor: '#000035',
               borderWidth: 2,
             },
           },
@@ -146,7 +146,7 @@ const theme = createTheme({
             borderColor: '#76777d',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#0F172A',
+            borderColor: '#000035',
             borderWidth: 2,
           },
         },

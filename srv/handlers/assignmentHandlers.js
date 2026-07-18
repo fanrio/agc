@@ -218,7 +218,7 @@ function registerAssignmentHandlers(service, entities, deps) {
       console.error('[AssignmentHandlers] Deletion audit logs failed:', err.message);
     }
 
-    // Pass targetUserId and targetRoleId to clean stream-specific custom tables in background
+    // Pass targetUserId and targetRoleId to clean access-domain-specific custom tables in background
     cds.spawn({ user: req?.user }, async () => {
       try {
         await syncAssignmentToHana(id, targetUserId, targetRoleId, true);

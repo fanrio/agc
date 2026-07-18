@@ -285,13 +285,13 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
   // Resolve custom table name corresponding to application context
   let customTableName = null;
   let customHierTableName = null;
-  if (role.stream_ID) {
-    const { Streams } = cds.entities('fanrio.auth');
-    const stream = preloaded?.allStreams ? preloaded.allStreams.find(s => s.ID === role.stream_ID) : await db.run(SELECT.one.from(Streams).columns('name').where({ ID: role.stream_ID }));
-    if (stream && stream.name) {
-      const cleanStreamName = stream.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
-      customTableName = `${cleanStreamName}_flat_authorizations`;
-      customHierTableName = `${cleanStreamName}_hier_authorizations`;
+  if (role.accessDomain_ID) {
+    const { AccessDomains } = cds.entities('fanrio.auth');
+    const accessDomain = preloaded?.allAccessDomains ? preloaded.allAccessDomains.find(s => s.ID === role.accessDomain_ID) : await db.run(SELECT.one.from(AccessDomains).columns('name').where({ ID: role.accessDomain_ID }));
+    if (accessDomain && accessDomain.name) {
+      const cleanAccessDomainName = accessDomain.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+      customTableName = `${cleanAccessDomainName}_flat_authorizations`;
+      customHierTableName = `${cleanAccessDomainName}_hier_authorizations`;
     }
   }
 
@@ -372,18 +372,18 @@ async function syncAssignmentToHana(cds, HanaClient, entities, assignmentId, use
 async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
   const db = cds.db;
   const { Roles, Restrictions, RoleInheritance, RoleAssignments, BdcSettings } = entities;
-  const { Streams } = cds.entities('fanrio.auth');
+  const { AccessDomains } = cds.entities('fanrio.auth');
 
   try {
     // A-12 and Issue #4 fix: pre-fetch all needed tables once, then pass as preloaded to each child call
-    const [allRoles, allRestrictions, allInheritances, allStreams, bdcSettings] = await Promise.all([
+    const [allRoles, allRestrictions, allInheritances, allAccessDomains, bdcSettings] = await Promise.all([
       db.run(SELECT.from(Roles)),
       db.run(SELECT.from(Restrictions)),
       db.run(SELECT.from(RoleInheritance)),
-      db.run(SELECT.from(Streams).columns('ID', 'name')),
+      db.run(SELECT.from(AccessDomains).columns('ID', 'name')),
       db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }))
     ]);
-    const preloaded = { allRoles, allRestrictions, allInheritances, allStreams, bdcSettings };
+    const preloaded = { allRoles, allRestrictions, allInheritances, allAccessDomains, bdcSettings };
 
     // Collect the role itself + all descendant roles (roles that inherit from this one)
     const roleIds = new Set([roleId]);

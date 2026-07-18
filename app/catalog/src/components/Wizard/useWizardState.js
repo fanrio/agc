@@ -29,8 +29,8 @@ export function useWizardState({ context = {}, permissions }) {
   const [critical, setCritical]           = useState(false);
   const [environmentId, setEnvironmentId] = useState('D');
   const [environments, setEnvironments]   = useState([]);
-  const [streamId, setStreamId]           = useState(context.streamId || 'app-global');
-  const [streams, setStreams]             = useState([]);
+  const [accessDomainId, setAccessDomainId] = useState(context.accessDomainId || 'app-global');
+  const [accessDomains, setAccessDomains]   = useState([]);
   const [assignUserId, setAssignUserId]   = useState('');
   const [assignUserName, setAssignUserName] = useState('');
 
@@ -52,7 +52,7 @@ export function useWizardState({ context = {}, permissions }) {
     return [];
   };
 
-  const parseAllowedStreams = (val) => {
+  const parseAllowedAccessDomains = (val) => {
     if (!val || val === 'ALL' || val === '*') return 'ALL';
     try {
       const parsed = JSON.parse(val);
@@ -69,10 +69,10 @@ export function useWizardState({ context = {}, permissions }) {
     return parsedAllowedEnvs.includes(env.ID);
   });
 
-  const parsedAllowedStreams = permissions?.isSuperAdmin ? 'ALL' : parseAllowedStreams(permissions?.allowedStreams);
-  const filteredStreams = streams.filter(s => {
-    if (parsedAllowedStreams === 'ALL') return true;
-    return parsedAllowedStreams.includes(s.ID);
+  const parsedAllowedAccessDomains = permissions?.isSuperAdmin ? 'ALL' : parseAllowedAccessDomains(permissions?.allowedAccessDomains);
+  const filteredAccessDomains = accessDomains.filter(s => {
+    if (parsedAllowedAccessDomains === 'ALL') return true;
+    return parsedAllowedAccessDomains.includes(s.ID);
   });
 
   useEffect(() => {
@@ -85,13 +85,13 @@ export function useWizardState({ context = {}, permissions }) {
   }, [filteredEnvironments, environmentId, isEditMode]);
 
   useEffect(() => {
-    if (!isEditMode && filteredStreams.length > 0) {
-      const isCurrentAllowed = filteredStreams.some(s => s.ID === streamId);
+    if (!isEditMode && filteredAccessDomains.length > 0) {
+      const isCurrentAllowed = filteredAccessDomains.some(s => s.ID === accessDomainId);
       if (!isCurrentAllowed) {
-        setStreamId(filteredStreams[0].ID);
+        setAccessDomainId(filteredAccessDomains[0].ID);
       }
     }
-  }, [filteredStreams, streamId, isEditMode]);
+  }, [filteredAccessDomains, accessDomainId, isEditMode]);
 
   useEffect(() => {
     if (step > maxStepReached) {
@@ -103,7 +103,7 @@ export function useWizardState({ context = {}, permissions }) {
     if (targetStep <= step) return true;
     if (isEditMode) return true;
     if (context.allowFreeNavigation) return true; // check prop fallback
-    if (step === 0 && !streamId) return false;
+    if (step === 0 && !accessDomainId) return false;
     if (step === 0 && roleType === 'ORG_BASED' && !selectedOrgNodeId) return false;
     return targetStep <= maxStepReached;
   };
@@ -188,7 +188,7 @@ export function useWizardState({ context = {}, permissions }) {
     api.getAllOrgNodesFlat().then(setOrgNodes).catch(console.error);
     api.getEnvironments().then(setEnvironments).catch(console.error);
     api.getRestrictionFields().then(setFields).catch(console.error);
-    api.getStreamsFlat().then(setStreams).catch(console.error);
+    api.getAccessDomainsFlat().then(setAccessDomains).catch(console.error);
   }, []);
 
   // Fetch existing role details for editing
@@ -215,7 +215,7 @@ export function useWizardState({ context = {}, permissions }) {
             setCritical(!!role.critical);
             setOriginalCritical(!!role.critical);
             setEnvironmentId(role.environment_ID || 'D');
-            setStreamId(role.stream_ID || 'app-global');
+            setAccessDomainId(role.accessDomain_ID || 'app-global');
           } catch (err) {
             console.error('Error populating role details in wizard:', err);
           }
@@ -398,7 +398,7 @@ export function useWizardState({ context = {}, permissions }) {
           description, 
           critical,
           environment_ID: environmentId,
-          stream_ID: streamId,
+          accessDomain_ID: accessDomainId,
           type: roleType === 'DRAGE' ? 'DRAGE' : (roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE'))
         });
 
@@ -434,7 +434,7 @@ export function useWizardState({ context = {}, permissions }) {
       } else if (roleType === 'ORG_BASED') {
         const result = await api.generateOrgRole(selectedOrgNodeId);
         roleId = result.roleId;
-        await api.updateRole(roleId, { name: roleName || result.roleName, description, critical, environment_ID: environmentId, stream_ID: streamId });
+        await api.updateRole(roleId, { name: roleName || result.roleName, description, critical, environment_ID: environmentId, accessDomain_ID: accessDomainId });
       } else {
         const role = await api.createRole({
           name: roleName,
@@ -442,7 +442,7 @@ export function useWizardState({ context = {}, permissions }) {
           description,
           critical,
           environment_ID: environmentId,
-          stream_ID: streamId,
+          accessDomain_ID: accessDomainId,
         });
         roleId = role.ID;
 
@@ -577,8 +577,8 @@ export function useWizardState({ context = {}, permissions }) {
     critical, setCritical,
     environmentId, setEnvironmentId,
     environments,
-    streamId, setStreamId,
-    streams: filteredStreams,
+    accessDomainId, setAccessDomainId,
+    accessDomains: filteredAccessDomains,
     assignUserId, setAssignUserId,
     assignUserName, setAssignUserName,
     showImpactDialog, setShowImpactDialog,

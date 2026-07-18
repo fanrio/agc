@@ -160,7 +160,7 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
   let role = existingRoles.find(r => r.name === roleName);
   let roleId = role?.ID;
 
-  const streamId = rule.stream_ID;
+  const accessDomainId = rule.accessDomain_ID;
 
   // Check if keys have changed
   const newSerializedKeys = keys.map(k => JSON.stringify(k)).sort();
@@ -175,10 +175,10 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
 
   let assignment = roleId ? existingAssignments.find(a => a.role_ID === roleId && a.userId === userId) : null;
 
-  // Update existing role's stream if it changed
-  if (role && role.stream_ID !== streamId) {
-    await db.run(UPDATE(Roles).set({ stream_ID: streamId }).where({ ID: role.ID }));
-    role.stream_ID = streamId;
+  // Update existing role's access domain if it changed
+  if (role && role.accessDomain_ID !== accessDomainId) {
+    await db.run(UPDATE(Roles).set({ accessDomain_ID: accessDomainId }).where({ ID: role.ID }));
+    role.accessDomain_ID = accessDomainId;
   }
 
   if (keysUnchanged && role && assignment) {
@@ -194,7 +194,7 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
       type: 'DRAGE',
       description: `Dynamic Role created via rule: ${rule.code} for user ${userId}`,
       environment_ID: envId,
-      stream_ID: streamId
+      accessDomain_ID: accessDomainId
     };
     await db.run(INSERT.into(Roles).entries(newRole));
     existingRoles.push(newRole);

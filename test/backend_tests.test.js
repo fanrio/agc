@@ -984,7 +984,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       name: 'ROLE_TEST_PARENT_DUP',
       type: 'SINGLE',
       environment_ID: 'D',
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     });
     const parentRoleId = parentRoleRes.data.ID;
 
@@ -1001,7 +1001,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       name: 'ROLE_TEST_DERIVED_DUP',
       type: 'DERIVED',
       environment_ID: 'D',
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     });
     const derivedRoleId = derivedRoleRes.data.ID;
 
@@ -1031,7 +1031,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       name: 'ROLE_TEST_DERIVED_DUP_2',
       type: 'DERIVED',
       environment_ID: 'D',
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     });
     const derivedRoleId2 = derivedRoleRes2.data.ID;
 

@@ -50,8 +50,8 @@ const serializeEnvironments = (arr) => {
   return JSON.stringify(arr);
 };
 
-// ─── Stream helpers ───────────────────────────────────────────────────────────
-const parseStreams = (val) => {
+// ─── Access Domain helpers ───────────────────────────────────────────────────
+const parseAccessDomains = (val) => {
   if (!val || val === 'ALL' || val === '*') return null; // null = ALL
   try {
     const parsed = JSON.parse(val);
@@ -62,13 +62,13 @@ const parseStreams = (val) => {
   return null;
 };
 
-const serializeStreams = (ids, allStreams) => {
-  if (!ids || ids.length === allStreams.length) return 'ALL';
+const serializeAccessDomains = (ids, allAccessDomains) => {
+  if (!ids || ids.length === allAccessDomains.length) return 'ALL';
   return JSON.stringify(ids);
 };
 
 // ─── Section heading ──────────────────────────────────────────────────────────
-function SectionHeading({ icon: Icon, title, subtitle, color = '#0F172A' }) {
+function SectionHeading({ icon: Icon, title, subtitle, color = 'var(--accent-primary)' }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'rgba(15,23,42,0.02)' }}>
       <Box sx={{ width: 32, height: 32, borderRadius: 1.5, bgcolor: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -84,7 +84,7 @@ function SectionHeading({ icon: Icon, title, subtitle, color = '#0F172A' }) {
 
 export default function AppAuthorizationsView() {
   const [authorizations, setAuthorizations] = useState([]);
-  const [streams, setStreams]               = useState([]);
+  const [accessDomains, setAccessDomains]   = useState([]);
   const [allRoles, setAllRoles]             = useState([]);
   const [restrictionFields, setRestrictionFields] = useState([]);
   const [loading, setLoading]               = useState(true);
@@ -108,7 +108,7 @@ export default function AppAuthorizationsView() {
     canViewAuditLogs: true,
     canManageSettings: false,
     allowedEnvironments: ['D', 'Q', 'P'],
-    allowedStreams: null, // null = ALL
+    allowedAccessDomains: null, // null = ALL
     isActive: true
   };
   const [newPermissions, setNewPermissions] = useState(defaultPermissions);
@@ -117,16 +117,16 @@ export default function AppAuthorizationsView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [authData, rolesData, fieldsData, streamsData] = await Promise.all([
+      const [authData, rolesData, fieldsData, accessDomainsData] = await Promise.all([
         api.getAppAuthorizations(),
         api.getRoles(),
         api.getRestrictionFields(),
-        api.getStreamsFlat()
+        api.getAccessDomainsFlat()
       ]);
       setAuthorizations((authData || []).filter(Boolean));
       setAllRoles(rolesData || []);
       setRestrictionFields(fieldsData || []);
-      setStreams((streamsData || []).filter(s => !s.parent)); // root streams only for selection
+      setAccessDomains((accessDomainsData || []).filter(s => !s.parent)); // root access domains only for selection
     } catch (err) {
       setSnackbar({ open: true, message: err.message || 'Failed to load data', severity: 'error' });
     } finally {
@@ -174,12 +174,12 @@ export default function AppAuthorizationsView() {
     }
   };
 
-  const handleUpdateStreams = async (id, streamIds) => {
-    const serialized = serializeStreams(streamIds, streams);
+  const handleUpdateAccessDomains = async (id, accessDomainIds) => {
+    const serialized = serializeAccessDomains(accessDomainIds, accessDomains);
     try {
-      await api.updateAppAuthorization(id, { allowedStreams: serialized });
-      setAuthorizations(prev => prev.map(item => item.ID === id ? { ...item, allowedStreams: serialized } : item));
-      setSnackbar({ open: true, message: 'Stream scope updated', severity: 'success' });
+      await api.updateAppAuthorization(id, { allowedAccessDomains: serialized });
+      setAuthorizations(prev => prev.map(item => item.ID === id ? { ...item, allowedAccessDomains: serialized } : item));
+      setSnackbar({ open: true, message: 'Access Domain scope updated', severity: 'success' });
     } catch (err) {
       setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
     }
@@ -206,9 +206,9 @@ export default function AppAuthorizationsView() {
       return;
     }
     try {
-      const streamVal = newPermissions.allowedStreams === null
+      const accessDomainVal = newPermissions.allowedAccessDomains === null
         ? 'ALL'
-        : serializeStreams(newPermissions.allowedStreams, streams);
+        : serializeAccessDomains(newPermissions.allowedAccessDomains, accessDomains);
       const newAuth = await api.createAppAuthorization({
         userId:                   selectedScimUser.username,
         userName:                 selectedScimUser.displayName,
@@ -223,7 +223,7 @@ export default function AppAuthorizationsView() {
         canViewAuditLogs:         newPermissions.canViewAuditLogs,
         canManageSettings:        newPermissions.canManageSettings,
         allowedEnvironments:      serializeEnvironments(newPermissions.allowedEnvironments),
-        allowedStreams:            streamVal,
+        allowedAccessDomains:     accessDomainVal,
         isActive:                 newPermissions.isActive
       });
       if (newAuth) {
@@ -348,24 +348,24 @@ export default function AppAuthorizationsView() {
     );
   };
 
-  // Stream chip/selector for a single row
-  const StreamCell = ({ auth }) => {
-    const streamIds = parseStreams(auth.allowedStreams);
-    if (auth.isSuperAdmin || streamIds === null) {
-      return <Chip label="All Streams" size="small" color="primary" variant="outlined" />;
+  // Access Domain chip/selector for a single row
+  const AccessDomainCell = ({ auth }) => {
+    const accessDomainIds = parseAccessDomains(auth.allowedAccessDomains);
+    if (auth.isSuperAdmin || accessDomainIds === null) {
+      return <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />;
     }
-    const selectedStreamNames = streamIds.map(id => {
-      const s = streams.find(st => st.ID === id);
+    const selectedAccessDomainNames = accessDomainIds.map(id => {
+      const s = accessDomains.find(st => st.ID === id);
       return s ? s.name : id;
     });
     return (
       <Autocomplete
         multiple
         size="small"
-        options={streams}
+        options={accessDomains}
         getOptionLabel={(o) => o.name || o.ID}
-        value={streams.filter(s => streamIds.includes(s.ID))}
-        onChange={(e, val) => handleUpdateStreams(auth.ID, val.map(s => s.ID))}
+        value={accessDomains.filter(s => accessDomainIds.includes(s.ID))}
+        onChange={(e, val) => handleUpdateAccessDomains(auth.ID, val.map(s => s.ID))}
         renderTags={(value, getTagProps) =>
           value.map((option, index) => {
             const { key, ...tagProps } = getTagProps({ index });
@@ -373,7 +373,7 @@ export default function AppAuthorizationsView() {
           })
         }
         renderInput={(params) => (
-          <TextField {...params} variant="outlined" size="small" placeholder={selectedStreamNames.length === 0 ? 'No streams' : ''} sx={{ minWidth: 160 }} />
+          <TextField {...params} variant="outlined" size="small" placeholder={selectedAccessDomainNames.length === 0 ? 'No access domains' : ''} sx={{ minWidth: 160 }} />
         )}
         sx={{ minWidth: 160 }}
       />
@@ -509,7 +509,7 @@ export default function AppAuthorizationsView() {
                     <TableCell sx={{ fontWeight: 700 }} align="center">Derived Roles</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="center">Assign Roles</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="center">Environments</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="center">Streams</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Access Domains</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -563,9 +563,9 @@ export default function AppAuthorizationsView() {
                             </Select>
                           )}
                         </TableCell>
-                        {/* Streams */}
+                        {/* Access Domains */}
                         <TableCell align="center">
-                          <StreamCell auth={auth} />
+                          <AccessDomainCell auth={auth} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -643,7 +643,7 @@ export default function AppAuthorizationsView() {
                 </Box>
                 {[
                   { id: 'perm-app-users', field: 'canManageAppUsers', label: 'Manage App Users', desc: 'Edit other users permissions' },
-                  { id: 'perm-settings', field: 'canManageSettings', label: 'Manage Settings', desc: 'BDC, Streams, Restriction Fields' },
+                  { id: 'perm-settings', field: 'canManageSettings', label: 'Manage Settings', desc: 'BDC, Access Domains, Restriction Fields' },
                   { id: 'perm-audit', field: 'canViewAuditLogs', label: 'View Audit Logs' },
                   { id: 'perm-repl', field: 'canManageReplications', label: 'Manage Replications', desc: 'Trigger and monitor replication runs' },
                 ].map(({ id, field, label, desc }) => (
@@ -717,36 +717,36 @@ export default function AppAuthorizationsView() {
                   </Select>
                 </Box>
 
-                {/* Streams */}
+                {/* Access Domains */}
                 <Box sx={{ mt: 1.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Allowed Streams</Typography>
-                  {newPermissions.allowedStreams === null ? (
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Allowed Access Domains</Typography>
+                  {newPermissions.allowedAccessDomains === null ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip label="All Streams" size="small" color="primary" variant="outlined" />
-                      <Button size="small" variant="text" onClick={() => setNewPermissions(p => ({ ...p, allowedStreams: [] }))}>
+                      <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />
+                      <Button size="small" variant="text" onClick={() => setNewPermissions(p => ({ ...p, allowedAccessDomains: [] }))}>
                         Restrict
                       </Button>
                     </Box>
                   ) : (
                     <Autocomplete
                       multiple size="small"
-                      options={streams}
+                      options={accessDomains}
                       getOptionLabel={(o) => o.name || o.ID}
-                      value={streams.filter(s => (newPermissions.allowedStreams || []).includes(s.ID))}
-                      onChange={(e, val) => setNewPermissions(p => ({ ...p, allowedStreams: val.map(s => s.ID) }))}
+                      value={accessDomains.filter(s => (newPermissions.allowedAccessDomains || []).includes(s.ID))}
+                      onChange={(e, val) => setNewPermissions(p => ({ ...p, allowedAccessDomains: val.map(s => s.ID) }))}
                       renderTags={(value, getTagProps) =>
                         value.map((option, index) => {
                           const { key, ...tagProps } = getTagProps({ index });
                           return <Chip key={key} label={option.name} size="small" {...tagProps} />;
                         })
                       }
-                      renderInput={(params) => <TextField {...params} placeholder="Select streams..." variant="outlined" />}
+                      renderInput={(params) => <TextField {...params} placeholder="Select access domains..." variant="outlined" />}
                     />
                   )}
-                  {newPermissions.allowedStreams !== null && newPermissions.allowedStreams.length === 0 && (
+                  {newPermissions.allowedAccessDomains !== null && newPermissions.allowedAccessDomains.length === 0 && (
                     <Button size="small" variant="text" sx={{ mt: 0.5 }}
-                      onClick={() => setNewPermissions(p => ({ ...p, allowedStreams: null }))}>
-                      ← Grant all streams
+                      onClick={() => setNewPermissions(p => ({ ...p, allowedAccessDomains: null }))}>
+                      ← Grant all access domains
                     </Button>
                   )}
                 </Box>

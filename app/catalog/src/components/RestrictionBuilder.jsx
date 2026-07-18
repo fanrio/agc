@@ -749,7 +749,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       borderRadius: 1.5,
       width: '100%',
     }}>
-      {isOwn ? <Unlock size={14} color="#0f172a" /> : <Lock size={14} color="#64748b" />}
+      {isOwn ? <Unlock size={14} color="var(--accent-primary)" /> : <Lock size={14} color="#64748b" />}
       <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.main' : 'text.secondary' }}>
         {restriction.field}
       </Typography>

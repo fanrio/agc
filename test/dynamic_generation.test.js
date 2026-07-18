@@ -57,7 +57,7 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
       generationMode: 'USER_CONSOLIDATED_ROLE',
       filterType: 'MULTI_VALUE',
       sourceFilterCondition: '{"field":"status","value":"ACTIVE"}',
-      stream_ID: 'app-finance',
+      accessDomain_ID: 'app-finance',
       environment_ID: 'Q',
       mappings: [
         { sourceKeyField: 'ID', targetRestrictionField: 'CustomerNumber' }
@@ -95,7 +95,7 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
     assert.ok(role, 'Dynamic role for Alice should be created');
     assert.strictEqual(role.type, 'DRAGE', 'Dynamic role should be created with type DRAGE');
     assert.strictEqual(role.environment_ID, 'Q', 'Dynamic role should inherit environment_ID from rule definition');
-    assert.strictEqual(role.stream_ID, 'app-finance', 'Dynamic role should inherit stream_ID from rule definition');
+    assert.strictEqual(role.accessDomain_ID, 'app-finance', 'Dynamic role should inherit accessDomain_ID from rule definition');
 
     // Verify generated Restriction exists
     const restriction = await db.run(SELECT.one.from('fanrio.auth.Restrictions').where({ role_ID: role.ID }));
@@ -164,7 +164,7 @@ test('DRAGE (Dynamic Role & Assignment Generation Engine) Integration Tests', as
       sourceResponsibleField: 'responsibleUser',
       generationMode: 'USER_CONSOLIDATED_ROLE',
       filterType: 'MULTI_VALUE',
-      stream_ID: 'app-finance',
+      accessDomain_ID: 'app-finance',
       environment_ID: 'Q',
       mappings: [
         { sourceKeyField: 'ID', targetRestrictionField: 'ignore' }

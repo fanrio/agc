@@ -208,7 +208,7 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       name: 'ROLE_TEST_SINGLE_ASSIGN',
       type: 'SINGLE',
       environment_ID: 'D',
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     });
     const singleRoleId = singleRoleRes.data.ID;
 
@@ -223,7 +223,7 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       name: 'ROLE_TEST_DERIVED_ASSIGN',
       type: 'DERIVED',
       environment_ID: 'D',
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     });
     const derivedRoleId = derivedRoleRes.data.ID;
 

@@ -15,11 +15,11 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
     setLoading(true);
     setError('');
     try {
-      const [rawRoles, nodes, assignments, streams, fields, bdcSettings] = await Promise.all([
+      const [rawRoles, nodes, assignments, accessDomains, fields, bdcSettings] = await Promise.all([
         api.getRoles(),
         api.getAllOrgNodesFlat(),
         api.getAssignments(),
-        api.getStreamsFlat(),
+        api.getAccessDomainsFlat(),
         api.getRestrictionFields(),
         api.getBdcSettings()
       ]);
@@ -81,7 +81,7 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
         nodeTypeCounts,
         assignmentCount: assignments.length,
         userCount: uniqueUsers.size,
-        streamCount: streams.length,
+        accessDomainCount: accessDomains.length,
         fieldCount: fields.length,
         bdcCount: bdcSettings.length,
         recentRoles: sortedRoles
@@ -494,10 +494,10 @@ export default function HomeView({ setActiveNav, onCreateRole, navigateToRoles }
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Network size={16} color="#3b82f6" />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Streams</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Access Domains</Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {stats?.streamCount || 0}
+                  {stats?.accessDomainCount || 0}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

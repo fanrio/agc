@@ -33,18 +33,18 @@ entity RestrictionFields : cuid {
   textColumn    : String(100);
 }
 
-entity Streams : managed {
+entity AccessDomains : managed {
   key ID      : String(36);
   name        : String(10) not null;
   description : String(200);
   type        : Association to RestrictionFields;
-  parent      : Association to Streams;
-  children    : Composition of many Streams on children.parent = $self;
-  attributes  : Composition of many StreamAttributes on attributes.node = $self;
+  parent      : Association to AccessDomains;
+  children    : Composition of many AccessDomains on children.parent = $self;
+  attributes  : Composition of many AccessDomainAttributes on attributes.node = $self;
 }
 
-entity StreamAttributes : cuid {
-  node  : Association to Streams not null;
+entity AccessDomainAttributes : cuid {
+  node  : Association to AccessDomains not null;
   field : String(100) not null;
   value : String(200) not null;
 }
@@ -61,7 +61,7 @@ entity Roles : managed {
   critical        : Boolean @default : false;
   environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
-  stream          : Association to Streams not null @default : 'app-global';
+  accessDomain    : Association to AccessDomains not null @default : 'app-global';
   parentRoles     : Association to many RoleInheritance on parentRoles.role = $self;
   childRoles      : Association to many RoleInheritance on childRoles.parent = $self;
   ownRestrictions : Composition of many Restrictions on ownRestrictions.role = $self;
@@ -145,7 +145,7 @@ entity AppAuthorizations : cuid, managed {
   canViewAuditLogs     : Boolean @default: false;
   canManageSettings    : Boolean @default: false;
   allowedEnvironments  : String(50) @default: 'ALL';
-  allowedStreams        : String(1000) @default: 'ALL';  // JSON array of stream IDs or 'ALL'
+  allowedAccessDomains : String(1000) @default: 'ALL';  // JSON array of access domain IDs or 'ALL'
   lastLogin            : DateTime;
   isActive             : Boolean @default: true;
 }
@@ -191,7 +191,7 @@ entity DynamicGenerationRules : managed {
   generationMode          : String(30) not null;                 // 'USER_CONSOLIDATED_ROLE' | 'TEMPLATE_ASSIGNMENT'
   templateRole            : Association to Roles;
   bdcConnection           : Association to BdcSettings;
-  stream                  : Association to Streams not null;     // Mapped Stream definition
+  accessDomain            : Association to AccessDomains not null;     // Mapped Access Domain definition
   environment             : Association to Environments not null; // Mapped Environment definition
   mappings                : Composition of many DynamicRuleFieldMappings on mappings.rule = $self;
   filterType              : String(20) @default : 'MULTI_VALUE';

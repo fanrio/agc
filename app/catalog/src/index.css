@@ -14,7 +14,7 @@
   --border-active:  #76777d; /* outline */
   --border-glow:    rgba(15, 23, 42, 0.08);
 
-  --accent-primary: #0F172A; /* Deep Navy */
+  --accent-primary: #000035; /* Deep Navy */
   --accent-bright:  #3a485c;
   --accent-glow:    #bec6e0;
   --accent-success: #10b981;
@@ -24,7 +24,7 @@
   --text-primary:   #191c1e;
   --text-secondary: #45464d;
   --text-muted:     #76777d;
-  --text-accent:    #0F172A;
+  --text-accent:    #000035;
 
   --radius-sm:   2px;
   --radius-md:   4px;

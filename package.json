@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "SAP BDC Authorization Wizard — CAP backend + React frontend",
   "scripts": {
-    "dev:cap": "cds serve all --with-mocks",
-    "dev:ui": "npm run dev --prefix app/catalog",
-    "dev": "concurrently --names CAP,UI --prefix-colors cyan,magenta \"npm run dev:cap\" \"npm run dev:ui\"",
+    "dev": "cds watch",
     "build": "npm run build --prefix app/catalog && cds build",
     "test": "cds test --profile test"
   },

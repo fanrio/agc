@@ -8,8 +8,8 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity OrgNodes               as projection on db.OrgNodes;
   entity OrgNodeAttributes      as projection on db.OrgNodeAttributes;
   entity RestrictionFields      as projection on db.RestrictionFields;
-  entity Streams                  as projection on db.Streams;
-  entity StreamAttributes         as projection on db.StreamAttributes;
+  entity AccessDomains            as projection on db.AccessDomains;
+  entity AccessDomainAttributes   as projection on db.AccessDomainAttributes;
 
   // -------------------------------------------------------------------------
   // Roles

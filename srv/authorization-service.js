@@ -49,7 +49,7 @@ const {
 const { registerRoleHandlers }        = require('./handlers/roleHandlers');
 const { registerAssignmentHandlers }  = require('./handlers/assignmentHandlers');
 const { registerRestrictionHandlers } = require('./handlers/restrictionHandlers');
-const { registerStreamHandlers } = require('./handlers/streamHandler');
+const { registerAccessDomainHandlers } = require('./handlers/accessDomainHandlers');
 const { registerAppAuthorizationsHandlers } = require('./handlers/appAuthorizationsHandlers');
 const { registerSystemHandlers } = require('./handlers/systemHandlers');
 
@@ -78,7 +78,7 @@ module.exports = cds.service.impl(async function () {
       const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
       return perms;
     } catch (e) {
-      return req.error(500, `Failed to retrieve session permissions: ${e.message}`);
+      return req.reject(e.status || 403, e.message);
     }
   });
 
@@ -159,7 +159,7 @@ module.exports = cds.service.impl(async function () {
   registerRoleHandlers(this, entities, handlerDeps);
   registerAssignmentHandlers(this, entities, handlerDeps);
   registerRestrictionHandlers(this, entities, handlerDeps);
-  registerStreamHandlers(this);
+  registerAccessDomainHandlers(this);
   registerAppAuthorizationsHandlers(this, entities);
   registerSystemHandlers(this, entities);
 

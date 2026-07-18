@@ -1,27 +1,27 @@
-- [ ] Rename entities and fields in db/schema.cds
-- [ ] Rename projections in srv/authorization-service.cds
-- [ ] Create and rename seed files in db/data/
-- [ ] Update srv/authorization-service.js OData projections wiring
-- [ ] Refactor srv/handlers/
-  - [ ] Rename srv/handlers/streamHandler.js to srv/handlers/accessDomainHandlers.js
-  - [ ] Update roleHandlers.js
-  - [ ] Update assignmentHandlers.js
-  - [ ] Update restrictionHandlers.js
-- [ ] Refactor srv/services/
-  - [ ] Update srv/services/hanaReplicationService.js
-  - [ ] Update srv/services/dynamicSyncService.js
-  - [ ] Update srv/services/orgRoleGeneratorService.js
-- [ ] Update srv/lib/authGuard.js
-- [ ] Refactor app/catalog/src/
-  - [ ] Update app/catalog/src/api.js OData paths
-  - [ ] Update App.jsx and PermissionsContext.jsx
-  - [ ] Rename app/catalog/src/components/StreamsView.jsx to AccessDomainsView.jsx and update its contents
-  - [ ] Update AdministrationView.jsx
-  - [ ] Update Wizard/steps/StepOrigin.jsx and Wizard/useWizardState.js
-  - [ ] Update DynamicRulesView.jsx
-- [ ] Update test files
-  - [ ] Update test/backend_tests.test.js
-  - [ ] Update test/dynamic_generation.test.js
-  - [ ] Update app/catalog/src/components/__tests__/WizardDialogs.test.jsx
-- [ ] Deploy new database schema using npx cds deploy
-- [ ] Run backend tests to verify correctness
+- [x] Rename entities and fields in db/schema.cds
+- [x] Rename projections in srv/authorization-service.cds
+- [x] Create and rename seed files in db/data/
+- [x] Update srv/authorization-service.js OData projections wiring
+- [x] Refactor srv/handlers/
+  - [x] Rename srv/handlers/streamHandler.js to srv/handlers/accessDomainHandlers.js
+  - [x] Update roleHandlers.js
+  - [x] Update assignmentHandlers.js
+  - [x] Update restrictionHandlers.js
+- [x] Refactor srv/services/
+  - [x] Update srv/services/hanaReplicationService.js
+  - [x] Update srv/services/dynamicSyncService.js
+  - [x] Update srv/services/orgRoleGeneratorService.js
+- [x] Update srv/lib/authGuard.js
+- [x] Refactor app/catalog/src/
+  - [x] Update app/catalog/src/api.js OData paths
+  - [x] Update App.jsx and PermissionsContext.jsx
+  - [x] Rename app/catalog/src/components/StreamsView.jsx to AccessDomainsView.jsx and update its contents
+  - [x] Update AdministrationView.jsx
+  - [x] Update Wizard/steps/StepOrigin.jsx and Wizard/useWizardState.js
+  - [x] Update DynamicRulesView.jsx
+- [x] Update test files
+  - [x] Update test/backend_tests.test.js
+  - [x] Update test/dynamic_generation.test.js
+  - [x] Update app/catalog/src/components/__tests__/WizardDialogs.test.jsx
+- [x] Deploy new database schema using npx cds deploy
+- [x] Run backend tests to verify correctness

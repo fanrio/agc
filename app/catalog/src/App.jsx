@@ -15,7 +15,7 @@ import { PermissionsProvider, usePermissions } from './context/PermissionsContex
 const DRAWER_WIDTH = 240;
 
 const NAV = [
-  { id: 'home',        label: 'Home Dashboard',      icon: Home },
+  { id: 'home',        label: 'Dashboard',           icon: Home },
   { id: 'org',         label: 'Organization',        icon: Building2 },
   { id: 'roles',       label: 'Roles',               icon: Shield },
   { id: 'assignments', label: 'Role Assignments',    icon: Users },
@@ -52,6 +52,7 @@ function AppContent({ simulatedUser, onLogout }) {
   // Filter NAV items based on permissions
   const filteredNav = NAV.filter(item => {
     if (permissions?.isSuperAdmin) return true;
+    if (item.id === 'org') return !!permissions?.canManageOrgRoles;
     if (item.id === 'replications') return !!permissions?.canManageReplications;
     if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
     if (item.id === 'admin') return !!permissions?.canManageSettings || !!permissions?.canManageAppUsers;
@@ -64,7 +65,7 @@ function AppContent({ simulatedUser, onLogout }) {
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: 'background.paper', backgroundImage: 'none', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', minHeight: 64 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Network size={20} color="#0F172A" />
+            <Network size={20} color="var(--accent-primary)" />
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', color: 'primary.main' }}>
               cortex <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
             </Typography>
@@ -166,7 +167,7 @@ function AppContent({ simulatedUser, onLogout }) {
       {/* Main Content */}
       <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
         {activeNav === 'home'        && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
-        {activeNav === 'org'         && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
+        {activeNav === 'org'         && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
         {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
         {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
         {activeNav === 'assignments' && <RoleAssignmentsView />}

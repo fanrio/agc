@@ -32,22 +32,9 @@ async function getSessionPermissions(req, db, AppAuthorizations) {
     return userAuth;
   }
 
-  return {
-    userId: userId,
-    userName: userId,
-    isSuperAdmin: false,
-    canManageAppUsers: false,
-    canManageOrgRoles: false,
-    canManageSingleRoles: false,
-    canManageDerivedRoles: false,
-    managedDerivedRolesScope: '[]',
-    canAssignRoles: false,
-    canViewAuditLogs: false,
-    canManageSettings: false,
-    allowedEnvironments: '[]',
-    allowedStreams: '[]',
-    isActive: false
-  };
+  const err = new Error('Access Denied: You must have authorizations to access the system.');
+  err.status = 403;
+  throw err;
 }
 
 function requirePermission(permissions, flag, req) {
@@ -74,21 +61,21 @@ function requireEnvironment(permissions, envId, req) {
   req.reject(403, `Access Denied: You are not authorized to manage resources in environment ${envId || 'unspecified'}.`);
 }
 
-function requireStream(permissions, streamId, req) {
+function requireAccessDomain(permissions, accessDomainId, req) {
   if (permissions.isSuperAdmin) return; // SuperAdmin bypasses all checks
-  const allowed = permissions.allowedStreams || 'ALL';
+  const allowed = permissions.allowedAccessDomains || 'ALL';
   if (allowed === 'ALL' || allowed === '*') return;
 
   try {
-    const streams = JSON.parse(allowed);
-    if (Array.isArray(streams) && streams.includes(streamId)) return;
+    const domains = JSON.parse(allowed);
+    if (Array.isArray(domains) && domains.includes(accessDomainId)) return;
   } catch (e) {
     // Fallback: comma separated list
-    const streams = allowed.split(',').map(s => s.trim());
-    if (streams.includes(String(streamId).trim())) return;
+    const domains = allowed.split(',').map(s => s.trim());
+    if (domains.includes(String(accessDomainId).trim())) return;
   }
 
-  req.reject(403, `Access Denied: You are not authorized to manage roles in stream ${streamId || 'unspecified'}.`);
+  req.reject(403, `Access Denied: You are not authorized to manage roles in access domain ${accessDomainId || 'unspecified'}.`);
 }
 
 module.exports = {
@@ -96,5 +83,5 @@ module.exports = {
   getSessionPermissions,
   requirePermission,
   requireEnvironment,
-  requireStream
+  requireAccessDomain
 };

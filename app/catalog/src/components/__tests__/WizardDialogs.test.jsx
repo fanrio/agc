@@ -25,7 +25,7 @@ vi.mock('../../api', () => ({
   searchScimUsers: vi.fn(),
   simulateAccess: vi.fn(),
   fetchBdcRelationalValues: vi.fn(() => Promise.resolve([])),
-  getStreamsFlat: vi.fn(() => Promise.resolve([])),
+  getAccessDomainsFlat: vi.fn(() => Promise.resolve([])),
 }));
 
 // Mock the PermissionsContext module
@@ -116,7 +116,7 @@ describe('Wizard Component - Expanded Tests', () => {
     api.searchScimUsers.mockResolvedValue([
       { username: 'jdoe', displayName: 'John Doe', email: 'jdoe@comp.com', department: 'IT' }
     ]);
-    api.getStreamsFlat.mockResolvedValue([]);
+    api.getAccessDomainsFlat.mockResolvedValue([]);
     api.resolveEffective.mockResolvedValue([]);
   });
 

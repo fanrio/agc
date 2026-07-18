@@ -55,13 +55,13 @@ export const createRestrictionField = (body)    => request('POST',   '/Restricti
 export const updateRestrictionField = (id, body) => request('PATCH',  `/RestrictionFields('${id}')`, body);
 export const deleteRestrictionField = (id)      => request('DELETE', `/RestrictionFields('${id}')`);
 
-// Streams
-export const getStreamsFlat             = ()          => request('GET',    '/Streams?$expand=attributes,type');
-export const createStreamNode           = (body)      => request('POST',   '/Streams', body);
-export const updateStreamNode           = (id, body)  => request('PATCH',  `/Streams('${id}')`, body);
-export const deleteStreamNode           = (id)        => request('DELETE', `/Streams('${id}')`);
-export const createStreamAttr           = (body)      => request('POST',   '/StreamAttributes', body);
-export const deleteStreamAttr           = (id)        => request('DELETE', `/StreamAttributes(${id})`);
+// Access Domains
+export const getAccessDomainsFlat       = ()          => request('GET',    '/AccessDomains?$expand=attributes,type');
+export const createAccessDomainNode     = (body)      => request('POST',   '/AccessDomains', body);
+export const updateAccessDomainNode     = (id, body)  => request('PATCH',  `/AccessDomains('${id}')`, body);
+export const deleteAccessDomainNode     = (id)        => request('DELETE', `/AccessDomains('${id}')`);
+export const createAccessDomainAttr     = (body)      => request('POST',   '/AccessDomainAttributes', body);
+export const deleteAccessDomainAttr     = (id)        => request('DELETE', `/AccessDomainAttributes(${id})`);
 
 // Assignments
 export const getAssignments    = ()             => request('GET',    '/RoleAssignments?$expand=role');

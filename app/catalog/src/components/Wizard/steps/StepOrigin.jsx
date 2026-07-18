@@ -11,7 +11,7 @@ export default function StepOrigin({
   roleName, setRoleName, handleRoleNameBlur,
   description, setDescription,
   environmentId, setEnvironmentId, filteredEnvironments,
-  streamId, setStreamId, streams,
+  accessDomainId, setAccessDomainId, accessDomains,
   critical, setCritical, setIsCriticalManuallySet,
   isEditMode, permissions, context = {}, isReadOnly
 }) {
@@ -185,18 +185,18 @@ export default function StepOrigin({
           </Select>
         </FormControl>
         <FormControl size="small" fullWidth sx={{ mt: 1 }} required>
-          <InputLabel id="role-stream-label">Stream</InputLabel>
+          <InputLabel id="role-access-domain-label">Access Domain</InputLabel>
           <Select
-            labelId="role-stream-label"
-            label="Stream *"
-            value={streamId}
-            onChange={e => setStreamId(e.target.value)}
+            labelId="role-access-domain-label"
+            label="Access Domain *"
+            value={accessDomainId}
+            onChange={e => setAccessDomainId(e.target.value)}
             disabled={isReadOnly}
           >
-            {streams.length === 0 ? (
-              <MenuItem value={streamId}>{streamId}</MenuItem>
+            {accessDomains.length === 0 ? (
+              <MenuItem value={accessDomainId}>{accessDomainId}</MenuItem>
             ) : (
-              streams.map(ctx => (
+              accessDomains.map(ctx => (
                 <MenuItem key={ctx.ID} value={ctx.ID}>{ctx.name}</MenuItem>
               ))
             )}

@@ -36,7 +36,7 @@ async function generateRoleForNode(cds, entities, node) {
       type:        'ORG_BASED',
       description: `Auto-generated from Org Node: ${node.name}`,
       orgNode_ID:  node.ID,
-      stream_ID: 'app-global'
+      accessDomain_ID: 'app-global'
     }));
   }
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Typography, Tabs, Tab } from '@mui/material';
 import { Settings, Network, Cloud, Terminal, ShieldAlert, GitFork, Database } from 'lucide-react';
 import RestrictionFieldsView from './RestrictionFieldsView';
-import StreamsView from './StreamsView';
+import AccessDomainsView from './AccessDomainsView';
 import BdcSettingsView from './BdcSettingsView';
 import BdcApiTesterView from './BdcApiTesterView';
 import AppAuthorizationsView from './AppAuthorizationsView';
@@ -28,9 +28,9 @@ export default function AdministrationView() {
       visible: permissions?.isSuperAdmin || permissions?.canManageSettings
     },
     {
-      label: 'Streams',
+      label: 'Access Domains',
       icon: <Network size={16} />,
-      component: <StreamsView />,
+      component: <AccessDomainsView />,
       visible: permissions?.isSuperAdmin || permissions?.canManageSettings
     },
     {

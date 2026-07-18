@@ -1,6 +1,6 @@
 'use strict';
 
-const { getSessionPermissions, requirePermission, requireEnvironment, requireStream } = require('../lib/authGuard');
+const { getSessionPermissions, requirePermission, requireEnvironment, requireAccessDomain } = require('../lib/authGuard');
 
 /**
  * Role Handlers
@@ -59,14 +59,14 @@ function registerRoleHandlers(service, entities, deps) {
       requireEnvironment(perms, envId, req);
     }
 
-    // Stream-based role management scoping
-    let streamId = req.data.stream_ID;
-    if (!streamId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
+    // Access Domain-based role management scoping
+    let accessDomainId = req.data.accessDomain_ID;
+    if (!accessDomainId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
       const existingForStream = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-      if (existingForStream) streamId = existingForStream.stream_ID;
+      if (existingForStream) accessDomainId = existingForStream.accessDomain_ID;
     }
-    if (streamId) {
-      requireStream(perms, streamId, req);
+    if (accessDomainId) {
+      requireAccessDomain(perms, accessDomainId, req);
     }
 
     if (roleType === 'ORG_BASED') {
@@ -159,7 +159,7 @@ function registerRoleHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   service.before('CREATE', 'Roles', (req) => {
     if (!req.data.ID) req.data.ID = cds.utils.uuid();
-    if (!req.data.stream_ID) req.data.stream_ID = 'app-global';
+    if (!req.data.accessDomain_ID) req.data.accessDomain_ID = 'app-global';
   });
 
   // -------------------------------------------------------------------------

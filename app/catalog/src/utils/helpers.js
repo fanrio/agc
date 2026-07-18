@@ -92,8 +92,8 @@ export function filterRolesByPermissions(roles, permissions) {
   };
   const allowedEnvs = parseEnvs(permissions.allowedEnvironments);
 
-  // Filter by allowedStreams
-  const parseStreams = (val) => {
+  // Filter by allowedAccessDomains
+  const parseAccessDomains = (val) => {
     if (!val || val === 'ALL' || val === '*') return 'ALL';
     try {
       const parsed = JSON.parse(val);
@@ -103,7 +103,7 @@ export function filterRolesByPermissions(roles, permissions) {
     }
     return [];
   };
-  const allowedStreams = parseStreams(permissions.allowedStreams);
+  const allowedAccessDomains = parseAccessDomains(permissions.allowedAccessDomains);
 
   return roles.filter(role => {
     const isApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase());
@@ -113,9 +113,9 @@ export function filterRolesByPermissions(roles, permissions) {
       const roleEnv = (role.environment_ID || '').toUpperCase();
       if (!allowedEnvs.includes(roleEnv)) return false;
     }
-    if (allowedStreams !== 'ALL') {
-      const roleStream = role.stream_ID;
-      if (!allowedStreams.includes(roleStream)) return false;
+    if (allowedAccessDomains !== 'ALL') {
+      const roleAccessDomain = role.accessDomain_ID;
+      if (!allowedAccessDomains.includes(roleAccessDomain)) return false;
     }
     return true;
   });

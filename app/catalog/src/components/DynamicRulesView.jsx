@@ -17,7 +17,7 @@ export default function DynamicRulesView() {
   const [roles, setRoles] = useState([]);
   const [fields, setFields] = useState([]);
   const [connections, setConnections] = useState([]);
-  const [streams, setStreams] = useState([]);
+  const [accessDomains, setAccessDomains] = useState([]);
   const [environments, setEnvironments] = useState([]);
   const [assets, setAssets] = useState([]);
   const [assetColumns, setAssetColumns] = useState([]);
@@ -41,7 +41,7 @@ export default function DynamicRulesView() {
     generationMode: 'USER_CONSOLIDATED_ROLE',
     templateRole_ID: '',
     bdcConnection_ID: '',
-    stream_ID: '',
+    accessDomain_ID: '',
     environment_ID: '',
     mappings: []
   });
@@ -56,14 +56,14 @@ export default function DynamicRulesView() {
         api.getRoles(),
         api.getRestrictionFields(),
         api.getBdcSettings(),
-        api.getStreamsFlat(),
+        api.getAccessDomainsFlat(),
         api.getEnvironments()
       ]);
       setRules(rData || []);
       setRoles(filterRolesByPermissions(rolesData || [], permissions));
       setFields(fieldsData || []);
       setConnections(connData || []);
-      setStreams(streamsData || []);
+      setAccessDomains(streamsData || []);
       setEnvironments(envsData || []);
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
@@ -151,7 +151,7 @@ export default function DynamicRulesView() {
       generationMode: 'USER_CONSOLIDATED_ROLE',
       templateRole_ID: '',
       bdcConnection_ID: connections[0]?.ID || '',
-      stream_ID: '',
+      accessDomain_ID: '',
       environment_ID: '',
       mappings: []
     });
@@ -173,7 +173,7 @@ export default function DynamicRulesView() {
       generationMode: rule.generationMode,
       templateRole_ID: rule.templateRole_ID || '',
       bdcConnection_ID: rule.bdcConnection_ID || '',
-      stream_ID: rule.stream_ID || '',
+      accessDomain_ID: rule.accessDomain_ID || '',
       environment_ID: rule.environment_ID || '',
       mappings: (rule.mappings || []).map(m => ({
         sourceKeyField: m.sourceKeyField,
@@ -215,8 +215,8 @@ export default function DynamicRulesView() {
       setSnackbar({ open: true, message: 'BDC Connection is required', severity: 'error' });
       return;
     }
-    if (!form.stream_ID) {
-      setSnackbar({ open: true, message: 'Stream is required', severity: 'error' });
+    if (!form.accessDomain_ID) {
+      setSnackbar({ open: true, message: 'Access Domain is required', severity: 'error' });
       return;
     }
     if (!form.environment_ID) {
@@ -377,13 +377,13 @@ export default function DynamicRulesView() {
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Role Settings</Typography>
             
             <FormControl size="small" fullWidth>
-              <InputLabel>Stream</InputLabel>
+              <InputLabel>Access Domain</InputLabel>
               <Select
-                value={form.stream_ID}
-                label="Stream"
-                onChange={(e) => setForm(p => ({ ...p, stream_ID: e.target.value }))}
+                value={form.accessDomain_ID}
+                label="Access Domain"
+                onChange={(e) => setForm(p => ({ ...p, accessDomain_ID: e.target.value }))}
               >
-                {streams.map(s => <MenuItem key={s.ID} value={s.ID}>{s.name} ({s.description})</MenuItem>)}
+                {accessDomains.map(s => <MenuItem key={s.ID} value={s.ID}>{s.name} ({s.description})</MenuItem>)}
               </Select>
             </FormControl>
 
