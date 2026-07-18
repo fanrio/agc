@@ -1,6 +1,7 @@
 import React from 'react';
-import { Card, Typography, Box, Autocomplete, CircularProgress, TextField, IconButton } from '@mui/material';
+import { Card, Typography, Box, IconButton } from '@mui/material';
 import { Shield, X } from 'lucide-react';
+import UserSelection from '../../UserSelection';
 
 export default function StepApprovers({
   approvers, setApprovers,
@@ -12,7 +13,7 @@ export default function StepApprovers({
       <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Approvers List</Typography>
       {!isReadOnly && (
         <Box sx={{ display: 'flex', gap: 2, mb: 3, maxWidth: 600 }}>
-          <Autocomplete
+          <UserSelection
             value={null}
             onChange={(event, newValue) => {
               if (newValue && !approvers.find(a => a.userId === newValue.username)) {
@@ -25,44 +26,9 @@ export default function StepApprovers({
                   }
                 ]);
               }
-              setApproverInput('');
             }}
-            inputValue={approverInput}
-            onInputChange={(event, newInputValue) => {
-              setApproverInput(newInputValue);
-            }}
-            options={scimOptions}
-            loading={scimLoading}
-            getOptionLabel={(option) => `${option.displayName} - ${option.department}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Search Approver (SCIM)"
-                size="small"
-                placeholder="Type name, department, or email..."
-                InputProps={{
-                  ...(params.InputProps || {}),
-                  endAdornment: (
-                    <>
-                      {scimLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps?.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-            renderOption={(props, option) => {
-              const { key, ...optionProps } = props;
-              return (
-                <li key={key || option.username} {...optionProps}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">{option.email} | {option.department}</Typography>
-                  </Box>
-                </li>
-              );
-            }}
-            sx={{ flex: 1 }}
+            label="Search Approver (SCIM)"
+            placeholder="Type name, department, or email..."
           />
         </Box>
       )}

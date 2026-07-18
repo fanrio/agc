@@ -33,6 +33,7 @@ import {
 } from '@mui/material';
 import { Plus, Trash2, Shield, Settings, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
+import UserSelection from './UserSelection';
 
 // ─── Environment helpers ──────────────────────────────────────────────────────
 const parseEnvironments = (val) => {
@@ -90,9 +91,6 @@ export default function AppAuthorizationsView() {
   const [allRoles, setAllRoles]             = useState([]);
   const [restrictionFields, setRestrictionFields] = useState([]);
   const [loading, setLoading]               = useState(true);
-  const [scimOptions, setScimOptions]       = useState([]);
-  const [scimLoading, setScimLoading]       = useState(false);
-  const [scimInput, setScimInput]           = useState('');
   const [openAdd, setOpenAdd]               = useState(false);
   const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [confirmDialog, setConfirmDialog]   = useState({ open: false, title: '', message: '', onConfirm: null });
@@ -140,22 +138,6 @@ export default function AppAuthorizationsView() {
   };
 
   useEffect(() => { loadData(); }, []);
-
-  // SCIM debounced search calling API when input has >= 3 characters
-  useEffect(() => {
-    const trimmed = scimInput.trim();
-    if (trimmed.length < 3) {
-      setScimOptions([]);
-      return;
-    }
-    const t = setTimeout(() => {
-      setScimLoading(true);
-      api.searchScimUsers(trimmed)
-        .then(res => { setScimOptions(res || []); setScimLoading(false); })
-        .catch(() => setScimLoading(false));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [scimInput]);
 
   // ─── Update handlers ────────────────────────────────────────────────────────
   const handleTogglePermission = async (id, field, value) => {
@@ -240,7 +222,6 @@ export default function AppAuthorizationsView() {
       }
       setOpenAdd(false);
       setSelectedScimUser(null);
-      setScimInput('');
       setNewPermissions(defaultPermissions);
       setSnackbar({ open: true, message: 'User authorization added', severity: 'success' });
     } catch (err) {
@@ -603,34 +584,9 @@ export default function AppAuthorizationsView() {
         </DialogTitle>
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* User search */}
-          <Autocomplete
+          <UserSelection
             value={selectedScimUser}
             onChange={(e, v) => setSelectedScimUser(v)}
-            inputValue={scimInput}
-            onInputChange={(e, v) => setScimInput(v)}
-            options={scimOptions}
-            loading={scimLoading}
-            getOptionLabel={(o) => o.displayName}
-            renderInput={(params) => (
-              <TextField {...params} label="Search User (SCIM)" size="small" placeholder="Type username or email..."
-                InputProps={{
-                  ...(params.InputProps || {}),
-                  endAdornment: <>{scimLoading ? <CircularProgress color="inherit" size={20} /> : null}{params.InputProps?.endAdornment}</>
-                }}
-              />
-            )}
-            renderOption={(props, option) => {
-              const { key, ...rest } = props;
-              return (
-                <li key={key || option.username} {...rest}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">{option.department}</Typography>
-                  </Box>
-                </li>
-              );
-            }}
-            fullWidth
           />
 
           {/* Account - only in System Mode */}

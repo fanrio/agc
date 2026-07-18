@@ -369,5 +369,208 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockApprover }));
   });
 
+  await t.test('Derived roles permission-based bypass of canAssignRoles', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations, Roles, RoleAssignments } = db.entities;
+
+    const mockUser = 'mock-derived-assigner';
+
+    // Seed user with canManageDerivedRoles: true but canAssignRoles: false
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockUser }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: mockUser,
+      userName: 'Mock Derived Assigner',
+      canAssignRoles: false,
+      canManageDerivedRoles: true,
+      managedDerivedRolesScope: 'ALL',
+      isActive: true
+    }));
+
+    // Create a derived role
+    const derivedRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_MOCK_DERIVED_ASSIGN',
+      type: 'DERIVED',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const derivedId = derivedRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: derivedId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // Create a single role
+    const singleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_MOCK_SINGLE_ASSIGN_BLOCK',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const singleId = singleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: singleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // 1. Assert that mockUser CAN assign the derived role
+    let assignId;
+    await t2.test('Allow derived role assignment', async () => {
+      const res = await POST('/odata/v4/auth/RoleAssignments', {
+        role_ID: derivedId,
+        userId: 'target-user-derived-flow',
+        userName: 'Target User'
+      }, {
+        headers: { 'x-simulated-user': mockUser }
+      });
+      assert.strictEqual(res.status, 201);
+      assignId = res.data.ID;
+    });
+
+    // 2. Assert that mockUser CANNOT assign the single role
+    await t2.test('Block single role assignment', async () => {
+      try {
+        await POST('/odata/v4/auth/RoleAssignments', {
+          role_ID: singleId,
+          userId: 'target-user-derived-flow',
+          userName: 'Target User'
+        }, {
+          headers: { 'x-simulated-user': mockUser }
+        });
+        assert.fail('Expected assignment of parent/single role to fail with 403');
+      } catch (err) {
+        assert.strictEqual(err.status || err.response?.status, 403);
+      }
+    });
+
+    // Clean up
+    if (assignId) {
+      await db.run(cds.ql.DELETE(RoleAssignments).where({ ID: assignId }));
+    }
+    await db.run(cds.ql.DELETE(Roles).where({ ID: derivedId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: singleId }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockUser }));
+  });
+
+  await t.test('Roles editing type-specific permissions enforcement', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations, Roles } = db.entities;
+
+    const mockRoleUser = 'role-edit-user';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockRoleUser }));
+
+    // User who has canManageDerivedRoles only (cannot manage single roles)
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: mockRoleUser,
+      userName: 'Role Edit User',
+      canManageDerivedRoles: true,
+      canManageSingleRoles: false,
+      managedDerivedRolesScope: 'ALL',
+      isActive: true
+    }));
+
+    // Create a single role first using admin
+    const singleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'TEST_SINGLE_EDIT',
+      type: 'SINGLE',
+      description: 'Single Role for edit test'
+    });
+    const singleId = singleRes.data.ID;
+
+    // Create a derived role under singleRes using admin
+    const derivedRes = await POST('/odata/v4/auth/Roles', {
+      name: 'TEST_DERIVED_EDIT',
+      type: 'DERIVED',
+      description: 'Derived Role for edit test',
+      parentRoles: [{ parent_ID: singleId }]
+    });
+    const derivedId = derivedRes.data.ID;
+
+    // Assert that mockRoleUser CANNOT update the SINGLE role
+    await t2.test('Block updating SINGLE role without single roles permission', async () => {
+      try {
+        await PATCH(`/odata/v4/auth/Roles('${singleId}')`, {
+          description: 'Attempted description update'
+        }, {
+          headers: { 'x-simulated-user': mockRoleUser }
+        });
+        assert.fail('Expected SINGLE role update to fail with 403');
+      } catch (err) {
+        assert.strictEqual(err.status || err.response?.status, 403);
+      }
+    });
+
+    // Assert that mockRoleUser CAN update the DERIVED role
+    await t2.test('Allow updating DERIVED role with derived roles permission', async () => {
+      const patchRes = await PATCH(`/odata/v4/auth/Roles('${derivedId}')`, {
+        description: 'Allowed description update'
+      }, {
+        headers: { 'x-simulated-user': mockRoleUser }
+      });
+      assert.strictEqual(patchRes.status, 200);
+    });
+
+    // Clean up
+    await db.run(cds.ql.DELETE(Roles).where({ ID: derivedId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: singleId }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: mockRoleUser }));
+  });
+
+  await t.test('RoleAssignments unique constraint enforcement', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { Roles, RoleAssignments } = db.entities;
+
+    // Create a role with a restriction first (so it is assignable)
+    const roleRes = await POST('/odata/v4/auth/Roles', {
+      name: 'ROLE_TEST_UNIQUE_CONSTRAINT_FLOW',
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const roleId = roleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: roleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // 1. Assign user first time (should succeed)
+    let assignId1;
+    const res1 = await POST('/odata/v4/auth/RoleAssignments', {
+      role_ID: roleId,
+      userId: 'unique-constraint-user',
+      userName: 'Unique User'
+    });
+    assert.strictEqual(res1.status, 201);
+    assignId1 = res1.data.ID;
+
+    // 2. Assign same user second time (should fail due to unique constraint)
+    try {
+      await POST('/odata/v4/auth/RoleAssignments', {
+        role_ID: roleId,
+        userId: 'unique-constraint-user',
+        userName: 'Unique User'
+      });
+      assert.fail('Expected duplicate assignment to fail');
+    } catch (err) {
+      assert.strictEqual(err.status, 400);
+    }
+
+    // Clean up
+    if (assignId1) {
+      await db.run(cds.ql.DELETE(RoleAssignments).where({ ID: assignId1 }));
+    }
+    await db.run(cds.ql.DELETE(Roles).where({ ID: roleId }));
+  });
+
 });
 

@@ -3,7 +3,8 @@ import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, 
 import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
-import { filterRolesByPermissions } from '../utils/helpers';
+import { filterRolesByPermissions, isRoleInScope } from '../utils/helpers';
+import UserRoleAssignment from './UserRoleAssignment';
 
 // Helper to recursively check if a role or any of its parents has restrictions
 function hasAnyRestrictions(role, allRoles) {
@@ -30,7 +31,7 @@ export default function RoleAssignmentsView() {
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
   const [roles, setRoles]             = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [showAdd, setShowAdd]         = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [error, setError]             = useState(''); // Kept for reference but using snackbar instead
   const [snackbar, setSnackbar]       = useState({ open: false, message: '', severity: 'error' });
 
@@ -88,34 +89,6 @@ export default function RoleAssignmentsView() {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
-  // Form states
-  const [form, setForm] = useState({ roleId: '' });
-
-  // SCIM User Search States
-  const [scimOptions, setScimOptions]       = useState([]);
-  const [scimLoading, setScimLoading]       = useState(false);
-  const [scimInput, setScimInput]           = useState('');
-  const [selectedScimUser, setSelectedScimUser] = useState(null);
-
-  // Debounced SCIM user search calling API when input has >= 3 characters
-  useEffect(() => {
-    const trimmed = scimInput.trim();
-    if (trimmed.length < 3) {
-      setScimOptions([]);
-      return;
-    }
-    const handler = setTimeout(() => {
-      setScimLoading(true);
-      api.searchScimUsers(trimmed)
-        .then(res => {
-          setScimOptions(res || []);
-          setScimLoading(false);
-        })
-        .catch(() => setScimLoading(false));
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [scimInput]);
-
   async function load() {
     setLoading(true);
     try {
@@ -126,12 +99,19 @@ export default function RoleAssignmentsView() {
       const filteredRoles = filterRolesByPermissions(roleData, permissions);
       const allowedRoles = (permissions?.isSuperAdmin || permissions?.canAssignRoles) 
         ? filteredRoles 
-        : filteredRoles.filter(r => Array.isArray(r.approvers) && r.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase()));
+        : filteredRoles.filter(r => {
+            const isApprover = Array.isArray(r.approvers) && r.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
+            if (isApprover) return true;
+            if (permissions?.canManageDerivedRoles && r.type === 'DERIVED') {
+              return isRoleInScope(r.ID, r.name, permissions.managedDerivedRolesScope);
+            }
+            return false;
+          });
       const allowedRoleIds = new Set(allowedRoles.map(r => r.ID));
       setAssignments(assignData.filter(a => allowedRoleIds.has(a.role_ID)));
       setRoles(allowedRoles);
     } catch (e) {
-      setError(`Failed to load data: ${e.message}`);
+      setSnackbar({ open: true, message: `Failed to load data: ${e.message}`, severity: 'error' });
     }
     setLoading(false);
   }
@@ -139,32 +119,6 @@ export default function RoleAssignmentsView() {
   useEffect(() => {
     load();
   }, []);
-
-  async function handleCreate() {
-    if (!selectedScimUser || !form.roleId) {
-      setSnackbar({ open: true, message: 'User selection and Role selection are required.', severity: 'error' });
-      return;
-    }
-
-    const payload = {
-      userId: selectedScimUser.username,
-      userName: selectedScimUser.displayName || selectedScimUser.username,
-      role_ID: form.roleId
-    };
-
-    setLoading(true);
-    try {
-      await api.createAssignment(payload);
-      setForm({ roleId: '' });
-      setSelectedScimUser(null);
-      setScimInput('');
-      setShowAdd(false);
-      await load();
-    } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
-    }
-    setLoading(false);
-  }
 
   function handleDelete(id, user, roleName) {
     setConfirmDialog({
@@ -194,7 +148,7 @@ export default function RoleAssignmentsView() {
         </Box>
         <Button 
           variant="contained" 
-          onClick={() => { setShowAdd(s => !s); setSnackbar(prev => ({ ...prev, open: false })); }} 
+          onClick={() => { setAssignDialogOpen(true); setSnackbar(prev => ({ ...prev, open: false })); }} 
           disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && roles.length === 0)}
           startIcon={<Plus size={15} />}
         >
@@ -213,63 +167,7 @@ export default function RoleAssignmentsView() {
         </Alert>
       </Snackbar>
 
-      <Collapse in={showAdd}>
-        <Card sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1.5fr auto' }, gap: 2, alignItems: 'end' }}>
-            <Autocomplete
-              value={selectedScimUser}
-              onChange={(e, v) => setSelectedScimUser(v)}
-              inputValue={scimInput}
-              onInputChange={(e, v) => setScimInput(v)}
-              options={scimOptions}
-              loading={scimLoading}
-              getOptionLabel={(option) => option.displayName}
-              renderInput={(params) => (
-                <TextField 
-                  {...params} 
-                  label="Search User (SCIM)" 
-                  size="small" 
-                  placeholder="Type username or email..."
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {scimLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-            />
-            <FormControl size="small" fullWidth>
-              <InputLabel id="role-select-label">Role</InputLabel>
-              <Select
-                labelId="role-select-label"
-                label="Role"
-                value={form.roleId}
-                onChange={e => setForm(f => ({ ...f, roleId: e.target.value }))}
-              >
-                <MenuItem value=""><em>Select Role</em></MenuItem>
-                {roles.map(r => {
-                  const allowed = hasAnyRestrictions(r, roles);
-                  return (
-                    <MenuItem key={r.ID} value={r.ID} disabled={!allowed}>
-                      {r.name} ({r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}){!allowed ? ' - No Restrictions' : ''}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </FormControl>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="contained" onClick={handleCreate} disabled={loading} startIcon={<Check size={14} />}>
-                Assign
-              </Button>
-              <IconButton onClick={() => { setShowAdd(false); setSelectedScimUser(null); setScimInput(''); }} size="small"><X size={16} /></IconButton>
-            </Box>
-          </Box>
-        </Card>
-      </Collapse>
+
 
       {/* Filter Toolbar Card */}
       <Card sx={{ p: 2, mb: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', backgroundImage: 'none' }}>
@@ -312,7 +210,7 @@ export default function RoleAssignmentsView() {
             value={filterStartDate}
             onChange={(e) => setFilterStartDate(e.target.value)}
             size="small"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             sx={{ minWidth: 150 }}
           />
 
@@ -322,7 +220,7 @@ export default function RoleAssignmentsView() {
             value={filterEndDate}
             onChange={(e) => setFilterEndDate(e.target.value)}
             size="small"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             sx={{ minWidth: 150 }}
           />
 
@@ -450,6 +348,20 @@ export default function RoleAssignmentsView() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <UserRoleAssignment
+        open={assignDialogOpen}
+        roles={roles}
+        onClose={() => setAssignDialogOpen(false)}
+        onSuccess={async (msg) => {
+          setAssignDialogOpen(false);
+          setSnackbar({ open: true, message: msg, severity: 'success' });
+          await load();
+        }}
+        onError={(msg) => {
+          setSnackbar({ open: true, message: msg, severity: 'error' });
+        }}
+      />
     </Box>
   );
 }

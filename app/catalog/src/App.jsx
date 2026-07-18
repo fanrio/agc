@@ -158,7 +158,13 @@ function AppContent({ simulatedUser, onLogout }) {
                     <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
                       <item.icon size={18} />
                     </ListItemIcon>
-                    <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isActive ? 600 : 500 }} />
+                    <ListItemText 
+                      primary={
+                        <Typography sx={{ fontSize: '0.875rem', fontWeight: isActive ? 600 : 500 }}>
+                          {item.label}
+                        </Typography>
+                      }
+                    />
                   </ListItemButton>
                 </ListItem>
               );

@@ -541,7 +541,7 @@ export default function HierarchicalManager({
             placeholder={addNodePlaceholder || "Node name..."}
             value={newRoot.name}
             onChange={e => setNewRoot(r => ({ ...r, name: e.target.value.slice(0, maxNameLength) }))}
-            inputProps={{ maxLength: maxNameLength }}
+            slotProps={{ input: { maxLength: maxNameLength } }}
             sx={{ flex: 1, minWidth: 120 }}
           />
           {showDescriptionField && (
@@ -550,7 +550,7 @@ export default function HierarchicalManager({
               placeholder="Description (max 200 chars)..."
               value={newRoot.description || ''}
               onChange={e => setNewRoot(r => ({ ...r, description: e.target.value.slice(0, 200) }))}
-              inputProps={{ maxLength: 200 }}
+              slotProps={{ input: { maxLength: 200 } }}
               sx={{ flex: 2, minWidth: 200 }}
             />
           )}

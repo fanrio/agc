@@ -3,14 +3,17 @@ import {
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert 
 } from '@mui/material';
+import PrivateConnectivityIcon from '@mui/icons-material/PrivateConnectivity';
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
+import UserRoleAssignment from './UserRoleAssignment';
 
-export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onAssign, isCompact }) {
-  const { permissions } = usePermissions();
+export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onSuccess, onAssign, isCompact, permissions: propPermissions }) {
+  const { permissions: contextPermissions } = usePermissions();
+  const permissions = propPermissions || contextPermissions;
   if (depth > 10) {
     return (
       <Box sx={{ pl: depth * 2, mb: 1 }}>
@@ -25,6 +28,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   const [effective, setEffective] = useState(null);
   const [loading, setLoading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
 
   const getDescendantsAndUsers = (roleId, rolesList) => {
     const descendantRoles = [];
@@ -68,6 +72,10 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   };
 
   const fetchEffective = async () => {
+    if (showEffective) {
+      setShowEffective(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await api.resolveEffective(role.ID);
@@ -132,10 +140,28 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   };
 
   const isUserApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
-  const disableEdit = permissions?.isSuperAdmin ? false : (isUserApprover ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles))));
-  const disableDelete = permissions?.isSuperAdmin ? false : (isDrageRole ? true : (isOrgRole ? !canManageOrgRoles : (isDerived ? !canManageThisDerivedRole(role) : !canManageSingleRoles)));
+  const disableEdit = (() => {
+    if (permissions?.isSuperAdmin) return false;
+    if (isDrageRole) return true;
+    if (isOrgRole) return !canManageOrgRoles;
+    if (isDerived) return !canManageThisDerivedRole(role);
+    return !canManageSingleRoles;
+  })();
+  const disableDelete = disableEdit;
   const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role);
-  const disableAssign = permissions?.isSuperAdmin ? false : (!canAssignRoles && !isUserApprover);
+  const disableAssign = (() => {
+    if (permissions?.isSuperAdmin) return false;
+    if (isUserApprover) return false;
+    if (canAssignRoles) {
+      if (isOrgRole) return !canManageOrgRoles;
+      if (isDerived) return !canManageThisDerivedRole(role);
+      return !canManageSingleRoles;
+    }
+    if (isDerived && permissions?.canManageDerivedRoles && canManageThisDerivedRole(role)) {
+      return false;
+    }
+    return true;
+  })();
 
   if (isCompact) {
     return (
@@ -157,7 +183,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
           </Box>
         </Card>
         {expanded && childrenRoles.map(child => (
-          <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
+          <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onSuccess={onSuccess} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
         ))}
       </Box>
     );
@@ -167,22 +193,22 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
     <Box sx={{ pl: depth * 4, mb: 2 }}>
       <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: '0 4px 12px 0 rgba(0,0,0,0.03)', overflow: 'visible' }}>
         <Box sx={{ p: 2.5 }}>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             {/* Collapse/Expand toggle */}
-            <Grid item sx={{ display: 'flex', alignItems: 'center' }}>
+            <Grid sx={{ display: 'flex', alignItems: 'center' }}>
               <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary">
                 {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
               </IconButton>
             </Grid>
 
             {/* Shield and basic details */}
-            <Grid item sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Grid sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: isCritical ? 'error.light' : 'primary.light', color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Shield size={22} />
               </Box>
             </Grid>
 
-            <Grid item xs={12} sm={4}>
+            <Grid xs={12} sm={4}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
                 <Chip size="small" label={role.type} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
@@ -192,7 +218,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             </Grid>
 
             {/* Context Details */}
-            <Grid item xs={12} sm={3}>
+            <Grid xs={12} sm={3}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <strong>Env:</strong> {ENV_LABEL[role.environment_ID] || role.environment_ID}
@@ -214,7 +240,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             </Grid>
 
             {/* Metrics Chips */}
-            <Grid item xs={12} sm={2}>
+            <Grid xs={12} sm={2}>
               <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap' }}>
                 <Chip size="small" icon={<Users size={12} />} label={`${assignmentsCount} Direct`} variant="outlined" sx={{ borderRadius: 1.5 }} />
                 {childrenRoles.length > 0 && <Chip size="small" icon={<GitBranch size={12} />} label={`${childrenRoles.length} Children`} variant="outlined" sx={{ borderRadius: 1.5 }} />}
@@ -222,13 +248,13 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             </Grid>
 
             {/* Actions Panel */}
-            <Grid item xs={12} sm={2} align="right">
+            <Grid xs={12} sm={2} align="right">
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                 <IconButton size="small" onClick={fetchEffective} title="View Effective Access" color="info">
-                  {loading ? <CircularProgress size={16} /> : <Eye size={16} />}
+                  {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
                 </IconButton>
-                <IconButton size="small" onClick={() => onEdit(role)} title={isUserApprover ? "View Role Settings" : "Edit Role Settings"} disabled={disableEdit} color="primary">
-                  <Edit3 size={16} />
+                <IconButton size="small" onClick={() => onEdit(role)} title={disableEdit ? "View Role Settings" : "Edit Role Settings"} color="primary">
+                  {disableEdit ? <Eye size={16} /> : <Edit3 size={16} />}
                 </IconButton>
                 <IconButton size="small" onClick={() => setConfirmDeleteOpen(true)} title="Delete Role" disabled={disableDelete} color="error">
                   <Trash2 size={16} />
@@ -238,7 +264,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                 <Button size="small" variant="outlined" startIcon={<GitBranch size={12} />} onClick={() => onDerive(role)} disabled={disableDerive} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
                   Derive
                 </Button>
-                <Button size="small" variant="contained" startIcon={<Users size={12} />} onClick={() => onAssign(role)} disabled={disableAssign} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
+                <Button size="small" variant="contained" startIcon={<Users size={12} />} onClick={() => setAssignDialogOpen(true)} disabled={disableAssign} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
                   Assign
                 </Button>
               </Box>
@@ -251,7 +277,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
           <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover', p: 2, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Child Derived Roles ({childrenRoles.length})</Typography>
             {childrenRoles.map(child => (
-              <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
+              <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onSuccess={onSuccess} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
             ))}
           </Box>
         )}
@@ -260,15 +286,17 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
         {showEffective && (
           <Box sx={{ borderTop: '1px solid', borderColor: 'divider', p: 2.5, bgcolor: 'background.paper', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Resolved Effective Restrictions</Typography>
-              <Button size="small" onClick={() => setShowEffective(false)}>Hide Details</Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PrivateConnectivityIcon sx={{ fontSize: 18, color: 'info.main' }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Resolved Effective Restrictions</Typography>
+              </Box>
             </Box>
             {effective && effective.length === 0 ? (
               <Typography variant="body2" color="text.secondary">No active restriction values found.</Typography>
             ) : (
               <Grid container spacing={2}>
                 {effective && effective.map((eff, index) => (
-                  <Grid item xs={12} sm={4} key={index}>
+                  <Grid xs={12} sm={4} key={index}>
                     <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>Field: {eff.field}</Typography>
                       <Box sx={{ mt: 1 }}>
@@ -318,6 +346,20 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
           </Button>
         </DialogActions>
       </Dialog>
+
+      <UserRoleAssignment
+        open={assignDialogOpen}
+        role={role}
+        onClose={() => setAssignDialogOpen(false)}
+        onSuccess={(msg) => {
+          setAssignDialogOpen(false);
+          if (onSuccess) onSuccess(msg);
+          if (onRefresh) onRefresh();
+        }}
+        onError={(msg) => {
+          if (onError) onError(msg);
+        }}
+      />
     </Box>
   );
 }

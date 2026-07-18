@@ -50,23 +50,35 @@ function registerAssignmentHandlers(service, entities, deps) {
       }
     }
 
-    if (!isApprover) {
-      requirePermission(perms, 'canAssignRoles', req);
+    let role = null;
+    if (roleId) {
+      role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
     }
 
-    if (roleId) {
-      const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+    if (!isApprover && !perms.isSuperAdmin) {
+      const isDerivedRole = role && role.type === 'DERIVED';
+      const allowedByGlobalAssign = perms.canAssignRoles;
+      const allowedByDerivedManage = perms.canManageDerivedRoles && isDerivedRole;
+
+      if (!allowedByGlobalAssign && !allowedByDerivedManage) {
+        requirePermission(perms, 'canAssignRoles', req);
+      }
+
       if (role?.environment_ID) {
         requireEnvironment(perms, role.environment_ID, req);
       }
 
       // If user has authorization to manage derived roles ONLY, they can only assign derived roles, not parent roles
-      if (!perms.isSuperAdmin && perms.canManageDerivedRoles && !perms.canManageSingleRoles) {
+      if (!perms.canManageSingleRoles) {
         if (req.event === 'CREATE' || req.event === 'UPDATE') {
           if (role && role.type !== 'DERIVED') {
             req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');
           }
         }
+      }
+    } else if (role) {
+      if (role.environment_ID) {
+        requireEnvironment(perms, role.environment_ID, req);
       }
     }
   });
@@ -75,7 +87,13 @@ function registerAssignmentHandlers(service, entities, deps) {
   // Validate: role must have at least one restriction before assignment
   // -------------------------------------------------------------------------
   service.before('CREATE', 'RoleAssignments', async (req) => {
-    const { role_ID } = req.data;
+    const { role_ID, userId } = req.data;
+    if (role_ID && userId) {
+      const existing = await cds.db.run(SELECT.one.from(RoleAssignments).where({ role_ID, userId }));
+      if (existing) {
+        return req.error(400, `The user "${userId}" is already assigned to this role.`);
+      }
+    }
     if (role_ID) {
       try {
         const { allRoles, allRestrictions, allInheritances } = await fetchRoleAncestryChain(cds.db, role_ID, { Roles, Restrictions, RoleInheritance });

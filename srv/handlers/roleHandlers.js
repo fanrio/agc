@@ -198,15 +198,18 @@ function registerRoleHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   service.after('CREATE', 'Roles', async (role, req) => {
     try {
+      const recordId = role?.ID || req.data?.ID;
+      const targetName = role?.name || req.data?.name;
+      const environment_ID = role?.environment_ID || req.data?.environment_ID;
       await cds.db.run(INSERT.into(AuditLogs).entries({
         ID:         cds.utils.uuid(),
         entityName: 'Roles',
         action:     'CREATE',
-        recordId:   role.ID,
-        targetName: role.name,
-        details:    JSON.stringify(role)
+        recordId:   recordId,
+        targetName: targetName,
+        details:    JSON.stringify(role || req.data)
       }));
-      await queueReplication(role.name, role.environment_ID, req?.user?.id);
+      await queueReplication(targetName, environment_ID, req?.user?.id);
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles CREATE:', err.message);
     }

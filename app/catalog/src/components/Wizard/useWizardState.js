@@ -3,39 +3,39 @@ import * as api from '../../api';
 import { isCriticalRestriction, isRoleInScope } from '../../utils/helpers';
 
 export function useWizardState({ context = {}, permissions }) {
-  const [step, setStep]                   = useState(0);
-  const [roleType, setRoleType]           = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
-  const [selectedOrgNodeId, setOrgNode]   = useState(context.orgNodeId || '');
+  const [step, setStep] = useState(0);
+  const [roleType, setRoleType] = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
+  const [selectedOrgNodeId, setOrgNode] = useState(context.orgNodeId || '');
   const [selectedParentIds, setSelectedParentIds] = useState(context.parentRoleId ? [context.parentRoleId] : []);
-  const [roleName, setRoleName]           = useState('');
-  const [description, setDescription]     = useState('');
-  const [restrictions, setRestrictions]   = useState([]);
-  const [inherited, setInherited]         = useState([]);
+  const [roleName, setRoleName] = useState('');
+  const [description, setDescription] = useState('');
+  const [restrictions, setRestrictions] = useState([]);
+  const [inherited, setInherited] = useState([]);
   const [approverInput, setApproverInput] = useState('');
-  const [approvers, setApprovers]         = useState([]);
-  const [simRows, setSimRows]             = useState('[{"Country":"Germany","Plant":"DE01"}]');
-  const [simResults, setSimResults]       = useState(null);
-  const [orgNodes, setOrgNodes]           = useState([]);
-  const [allRoles, setAllRoles]           = useState([]);
-  const [restrictionFields, setFields]    = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [done, setDone]                   = useState(false);
-  const [isEditMode, setIsEditMode]       = useState(!!context.roleId);
-  const [snackbar, setSnackbar]           = useState({ open: false, message: '', severity: 'error' });
-  const [scimOptions, setScimOptions]     = useState([]);
-  const [scimLoading, setScimLoading]     = useState(false);
+  const [approvers, setApprovers] = useState([]);
+  const [simRows, setSimRows] = useState('[{"Country":"Germany","Plant":"DE01"}]');
+  const [simResults, setSimResults] = useState(null);
+  const [orgNodes, setOrgNodes] = useState([]);
+  const [allRoles, setAllRoles] = useState([]);
+  const [restrictionFields, setFields] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(!!context.roleId);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [scimOptions, setScimOptions] = useState([]);
+  const [scimLoading, setScimLoading] = useState(false);
 
   // States for optional direct assignment on creation
-  const [critical, setCritical]           = useState(false);
+  const [critical, setCritical] = useState(false);
   const [environmentId, setEnvironmentId] = useState('D');
-  const [environments, setEnvironments]   = useState([]);
-  const [accessDomainId, setAccessDomainId] = useState(context.accessDomainId || 'app-global');
-  const [accessDomains, setAccessDomains]   = useState([]);
-  const [assignUserId, setAssignUserId]   = useState('');
+  const [environments, setEnvironments] = useState([]);
+  const [accessDomainId, setAccessDomainId] = useState(context.accessDomainId || '');
+  const [accessDomains, setAccessDomains] = useState([]);
+  const [assignUserId, setAssignUserId] = useState('');
   const [assignUserName, setAssignUserName] = useState('');
 
   const [showImpactDialog, setShowImpactDialog] = useState(false);
-  const [impactData, setImpactData]             = useState({ derivedRoles: [], affectedUsers: [] });
+  const [impactData, setImpactData] = useState({ derivedRoles: [], affectedUsers: [] });
   const [originalCritical, setOriginalCritical] = useState(false);
   const [originalRestrictions, setOriginalRestrictions] = useState([]);
   const [isCriticalManuallySet, setIsCriticalManuallySet] = useState(!!context.roleId);
@@ -130,7 +130,7 @@ export function useWizardState({ context = {}, permissions }) {
             return isRoleInScope(parentId, parentRole?.name, scope);
           });
         }
-      } catch (e) {}
+      } catch (e) { }
 
       return selectedParentIds.some(parentId => {
         const parentRole = allRoles.find(r => r.ID === parentId);
@@ -203,19 +203,19 @@ export function useWizardState({ context = {}, permissions }) {
             setRoleName(role.name || '');
             setDescription(role.description || '');
             setOrgNode(role.orgNode_ID || '');
-            
-            const parentIds = role.parentRoles 
+
+            const parentIds = role.parentRoles
               ? role.parentRoles.map(pr => pr.parent?.ID || pr.parent_ID).filter(Boolean)
               : [];
             setSelectedParentIds(parentIds);
-            
+
             setRestrictions(role.ownRestrictions || []);
             setOriginalRestrictions(role.ownRestrictions || []);
             setApprovers(role.approvers || []);
             setCritical(!!role.critical);
             setOriginalCritical(!!role.critical);
             setEnvironmentId(role.environment_ID || 'D');
-            setAccessDomainId(role.accessDomain_ID || 'app-global');
+            setAccessDomainId(role.accessDomain_ID || '');
           } catch (err) {
             console.error('Error populating role details in wizard:', err);
           }
@@ -263,7 +263,7 @@ export function useWizardState({ context = {}, permissions }) {
     if (isEditMode) return;
     if (roleType === 'ORG_BASED' && selectedOrgNodeId) {
       const node = orgNodes.find(n => n.ID === selectedOrgNodeId);
-      if (node) setRoleName(`ROLE_ORG_${node.name.replace(/\s+/g,'_').toUpperCase()}`);
+      if (node) setRoleName(`ROLE_ORG_${node.name.replace(/\s+/g, '_').toUpperCase()}`);
     } else if (roleType === 'SINGLE' && selectedParentIds.length > 0) {
       const parent = allRoles.find(r => r.ID === selectedParentIds[0]);
       if (parent) setRoleName(`${parent.name}_CUSTOM`);
@@ -280,19 +280,19 @@ export function useWizardState({ context = {}, permissions }) {
 
   async function runSimulation() {
     let rows;
-    try { 
-      rows = JSON.parse(simRows); 
-    } catch { 
-      setSnackbar({ open: true, message: 'Invalid JSON in sample data', severity: 'error' }); 
-      return; 
+    try {
+      rows = JSON.parse(simRows);
+    } catch {
+      setSnackbar({ open: true, message: 'Invalid JSON in sample data', severity: 'error' });
+      return;
     }
     setLoading(true);
     try {
       const allRestrictions = [...inherited, ...restrictions];
       const results = await api.simulateAccess(null, rows, allRestrictions);
       setSimResults(results);
-    } catch(e) { 
-      setSnackbar({ open: true, message: e.message, severity: 'error' }); 
+    } catch (e) {
+      setSnackbar({ open: true, message: e.message, severity: 'error' });
     }
     setLoading(false);
   }
@@ -305,8 +305,8 @@ export function useWizardState({ context = {}, permissions }) {
       const currentId = queue.shift();
       if (visited.has(currentId)) continue;
       visited.add(currentId);
-      
-      const children = rolesList.filter(r => 
+
+      const children = rolesList.filter(r =>
         r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === currentId)
       );
       for (const child of children) {
@@ -321,9 +321,9 @@ export function useWizardState({ context = {}, permissions }) {
 
   const restrictionsChanged = (current, original) => {
     if (current.length !== original.length) return true;
-    const hasMatch = (r, list) => list.some(o => 
-      o.field === r.field && 
-      o.filterType === r.filterType && 
+    const hasMatch = (r, list) => list.some(o =>
+      o.field === r.field &&
+      o.filterType === r.filterType &&
       o.value === r.value
     );
     for (const r of current) {
@@ -345,15 +345,15 @@ export function useWizardState({ context = {}, permissions }) {
       await handleDeploy();
       return;
     }
-    
+
     setLoading(true);
     try {
       const latestRoles = await api.getRoles();
       setAllRoles(latestRoles);
-      
+
       const currentRole = latestRoles.find(r => r.ID === context.roleId);
       const derived = getDerivedRolesRecursive(context.roleId, latestRoles);
-      
+
       const users = [];
       const rolesToCheck = [currentRole, ...derived].filter(Boolean);
       for (const r of rolesToCheck) {
@@ -369,12 +369,12 @@ export function useWizardState({ context = {}, permissions }) {
           }
         }
       }
-      
+
       if (derived.length === 0 && users.length === 0) {
         await handleDeploy();
         return;
       }
-      
+
       setImpactData({
         derivedRoles: derived,
         affectedUsers: users
@@ -394,8 +394,8 @@ export function useWizardState({ context = {}, permissions }) {
 
       if (isEditMode) {
         roleId = context.roleId;
-        await api.updateRole(roleId, { 
-          description, 
+        await api.updateRole(roleId, {
+          description,
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
@@ -469,7 +469,7 @@ export function useWizardState({ context = {}, permissions }) {
       }
 
       setDone(true);
-    } catch(e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
+    } catch (e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
     setLoading(false);
   }
 
@@ -549,7 +549,15 @@ export function useWizardState({ context = {}, permissions }) {
   })();
 
   const isUserApprover = Array.isArray(approvers) && approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
-  const isReadOnly = isEditMode && isUserApprover;
+  const isReadOnly = (() => {
+    if (!isEditMode) return false;
+    if (permissions?.isSuperAdmin) return false;
+    if (roleType === 'DRAGE') return true;
+    if (roleType === 'ORG_BASED') return !permissions?.canManageOrgRoles;
+    if (roleType === 'SINGLE') return !permissions?.canManageSingleRoles;
+    if (roleType === 'DERIVED') return !canManageThisDerivedWizard();
+    return true;
+  })();
 
   return {
     isReadOnly,

@@ -96,11 +96,6 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   // Toggle representation states ('compact' or 'detailed')
   const [viewMode, setViewMode] = useState('detailed');
 
-  // Assignment dialog states
-  const [assigningRole, setAssigningRole] = useState(null);
-  const [assignForm, setAssignForm] = useState({ userId: '', userName: '' });
-  const [assigningLoading, setAssigningLoading] = useState(false);
-
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
@@ -120,25 +115,6 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   }
 
   useEffect(() => { load(); }, []);
-
-  async function handleAssignSubmit() {
-    if (!assignForm.userId.trim()) return;
-    setAssigningLoading(true);
-    try {
-      await api.createAssignment({
-        userId: assignForm.userId.trim(),
-        userName: assignForm.userName.trim() || assignForm.userId.trim(),
-        role_ID: assigningRole.ID
-      });
-      setSnackbar({ open: true, message: `Successfully assigned role "${assigningRole.name}" to ${assignForm.userId}`, severity: 'success' });
-      setAssigningRole(null);
-      setAssignForm({ userId: '', userName: '' });
-      await load();
-    } catch (e) {
-      setSnackbar({ open: true, message: e.message, severity: 'error' });
-    }
-    setAssigningLoading(false);
-  }
 
   const parseEnvironments = (val) => {
     if (!val || val === 'ALL' || val === '*') return 'ALL';
@@ -287,7 +263,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                   onRefresh={load}
                   isSearchActive={true}
                   onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-                  onAssign={setAssigningRole}
+                  onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
                   isCompact={viewMode === 'compact'}
                   permissions={permissions}
                 />
@@ -305,7 +281,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                 onEdit={onEditRole}
                 onRefresh={load}
                 onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-                onAssign={setAssigningRole}
+                onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
                 isCompact={viewMode === 'compact'}
                 permissions={permissions}
               />
@@ -313,44 +289,6 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           )}
         </Box>
       )}
-
-      {/* Assign User Dialog */}
-      <Dialog open={Boolean(assigningRole)} onClose={() => { if (!assigningLoading) setAssigningRole(null); }} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 700 }}>Assign User to Role</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            Assign role <strong>{assigningRole?.name}</strong> to a user or group.
-          </Typography>
-          <TextField
-            label="User ID / Group ID"
-            fullWidth
-            required
-            size="small"
-            placeholder="e.g. US12345"
-            value={assignForm.userId}
-            onChange={e => setAssignForm(prev => ({ ...prev, userId: e.target.value }))}
-            disabled={assigningLoading}
-            sx={{ mt: 1 }}
-          />
-          <TextField
-            label="User Name"
-            fullWidth
-            size="small"
-            placeholder="e.g. John Doe"
-            value={assignForm.userName}
-            onChange={e => setAssignForm(prev => ({ ...prev, userName: e.target.value }))}
-            disabled={assigningLoading}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
-          <Button onClick={() => setAssigningRole(null)} disabled={assigningLoading} color="inherit">
-            Cancel
-          </Button>
-          <Button onClick={handleAssignSubmit} disabled={assigningLoading || !assignForm.userId.trim()} variant="contained" color="primary">
-            {assigningLoading ? 'Assigning...' : 'Assign'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

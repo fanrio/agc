@@ -95,6 +95,9 @@ entity Restrictions : cuid {
   sourceLabel : String(200);  // display hint — which ancestor introduced this
 }
 
+@assert.unique: {
+  roleUser : [role, userId]
+}
 entity RoleAssignments : cuid, managed {
   role     : Association to Roles not null;
   userId   : String(200) not null;

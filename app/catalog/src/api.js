@@ -1,6 +1,8 @@
 const BASE = '/odata/v4/auth';
 
-let activeSimulatedUser = localStorage.getItem('auth_user') || 'tim.waecken@cimt-ag.de';
+let activeSimulatedUser = (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function') 
+  ? localStorage.getItem('auth_user') || 'tim.waecken@cimt-ag.de'
+  : 'tim.waecken@cimt-ag.de';
 
 export function setSimulatedUser(userId) {
   activeSimulatedUser = userId;

@@ -109,6 +109,7 @@ export function filterRolesByPermissions(roles, permissions) {
     const isApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase());
     if (isApprover) return true;
 
+    // Environment and Access Domain scope restrictions
     if (allowedEnvs !== 'ALL') {
       const roleEnv = (role.environment_ID || '').toUpperCase();
       if (!allowedEnvs.includes(roleEnv)) return false;
@@ -117,7 +118,38 @@ export function filterRolesByPermissions(roles, permissions) {
       const roleAccessDomain = role.accessDomain_ID;
       if (!allowedAccessDomains.includes(roleAccessDomain)) return false;
     }
-    return true;
+
+    // DRAGE roles are only visible to superadmins (who returned early above)
+    if (role.type === 'DRAGE') return false;
+
+    // Check specific role type permissions
+    if (role.type === 'SINGLE') {
+      if (permissions.canManageSingleRoles) return true;
+      if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
+        return true;
+      }
+      return false;
+    }
+
+    if (role.type === 'ORG_BASED') {
+      if (permissions.canManageOrgRoles) return true;
+      if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
+        return true;
+      }
+      return false;
+    }
+
+    if (role.type === 'DERIVED') {
+      if (!permissions.canManageDerivedRoles) return false;
+      const scope = permissions.managedDerivedRolesScope;
+      const hasParentInScope = Array.isArray(role.parentRoles) && role.parentRoles.some(pr => {
+        const parentId = pr.parent_ID || pr.parent?.ID;
+        return isRoleInScope(parentId, pr.parent?.name, scope);
+      });
+      return hasParentInScope;
+    }
+
+    return false;
   });
 }
 
