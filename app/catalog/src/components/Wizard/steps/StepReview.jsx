@@ -3,6 +3,7 @@ import { Box, Card, Typography, Chip, TextField, Button, TableContainer, Table, 
 import { PlayCircle } from 'lucide-react';
 import { RestrictionDisplay } from '../../RestrictionBuilder';
 import { ENV_COLOR } from '../../../utils/helpers';
+import UserSelection from '../../UserSelection';
 
 export default function StepReview({
   roleName, roleType, selectedParentIds,
@@ -69,6 +70,7 @@ export default function StepReview({
       </Card>
 
       {/* Access Simulation */}
+      {/* Access Simulation (Hidden)
       <Card sx={{ p: 3 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Access Simulation</Typography>
         <TextField
@@ -109,6 +111,7 @@ export default function StepReview({
           </TableContainer>
         )}
       </Card>
+      */}
 
       {/* Immediate Assignment (Optional) */}
       {!isEditMode && (
@@ -117,20 +120,21 @@ export default function StepReview({
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Direct Assignment (Optional)</Typography>
             <Typography variant="body2" color="text.secondary">Assign this newly created role to a user or group immediately upon deployment.</Typography>
           </Box>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField
-              label="User ID / Group ID"
-              size="small"
-              placeholder="e.g. US12345"
-              value={assignUserId}
-              onChange={e => setAssignUserId(e.target.value)}
-            />
-            <TextField
-              label="User Name"
-              size="small"
-              placeholder="e.g. John Doe"
-              value={assignUserName}
-              onChange={e => setAssignUserName(e.target.value)}
+          <Box sx={{ maxWidth: 500 }}>
+            <UserSelection
+              value={assignUserId ? { username: assignUserId, displayName: assignUserName } : null}
+              onChange={(event, newValue) => {
+                if (newValue) {
+                  setAssignUserId(newValue.username || '');
+                  setAssignUserName(newValue.displayName || '');
+                } else {
+                  setAssignUserId('');
+                  setAssignUserName('');
+                }
+              }}
+              label="Select User (SCIM)"
+              placeholder="Type username or email to search..."
+              disabled={isReadOnly}
             />
           </Box>
         </Card>
