@@ -35,6 +35,8 @@ export default function AccessDomainsView() {
       createRestrictionField={api.createAccessDomainField}
       deleteRestrictionField={api.deleteAccessDomainField}
       
+      showRoleTemplateName={true}
+      
       canManage={canManage}
     />
   );

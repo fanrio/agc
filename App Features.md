@@ -12,6 +12,9 @@ An **Access Domain** represents a logical boundary, line of business, or data do
 ### Business Purpose & Setup
 - **Access Control Boundaries**: Access Domains ensure that security permissions are organized according to your organizational structure, preventing unrelated roles or users from overlapping.
 - **Mandatory Fields Definition**: Administrators define specific **Mandatory Restriction Fields** for each Access Domain. For instance, the *Finance* domain might require mapping permissions for *Company Code* and *Plant*, whereas the *Logistics* domain might only require *Warehouse ID*.
+- **Role Naming Conventions**: Administrators can define a **Role Template Name** (e.g. `ROLE_{CostCenter}_CUSTOM`) for each Access Domain. This enforces naming consistency for all roles generated or edited within that domain.
+  - **Reference Fields**: The template combines free text with reference placeholders (`{FieldName}`) corresponding to the restriction fields defined in the domain.
+  - **Interactive Selection**: Users can type free text and insert reference placeholders as visual Chips by pressing the **Ctrl+Space** shortcut, ensuring error-free configuration.
 - **Data Governance**: Enforcing mandatory fields ensures that all roles created within a domain are configured consistently and contain all required safety checks.
 
 ---

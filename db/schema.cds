@@ -42,6 +42,7 @@ entity AccessDomains : managed {
   children    : Composition of many AccessDomains on children.parent = $self;
   attributes  : Composition of many AccessDomainAttributes on attributes.node = $self;
   restrictionFields : Composition of many AccessDomainFields on restrictionFields.domain = $self;
+  roleTemplateName  : String(255);
 }
 
 entity AccessDomainAttributes : cuid {

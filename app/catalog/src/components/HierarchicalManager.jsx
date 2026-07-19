@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
 import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
+import TemplateNameEditor from './TemplateNameEditor';
 
 // ─── Move Dialog ──────────────────────────────────────────────────────────────
 function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
@@ -53,6 +54,43 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
   );
 }
 
+// Helper to parse "ROLE_{CostCenter}_CUSTOM" into a readable flex-row with purple chips
+function parseTemplateToChips(templateStr) {
+  if (!templateStr) return null;
+  const regex = /(\{[a-zA-Z0-9_]+\})/g;
+  const parts = templateStr.split(regex);
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+      {parts.map((part, idx) => {
+        if (part.startsWith('{') && part.endsWith('}')) {
+          return (
+            <Chip
+              key={idx}
+              label={part.slice(1, -1)}
+              size="small"
+              color="secondary"
+              sx={{
+                height: 18,
+                fontSize: '9px',
+                fontWeight: 600,
+                bgcolor: 'rgba(147, 51, 234, 0.12)',
+                border: '1px solid rgba(147, 51, 234, 0.25)',
+                color: 'secondary.light',
+                px: 0.5
+              }}
+            />
+          );
+        }
+        return (
+          <Typography key={idx} variant="caption" sx={{ fontSize: '11px', fontFamily: 'monospace', color: 'text.secondary' }}>
+            {part}
+          </Typography>
+        );
+      })}
+    </Box>
+  );
+}
+
 // ─── Node Row Component ───────────────────────────────────────────────────────
 function NodeRow({
   node,
@@ -76,6 +114,7 @@ function NodeRow({
   showRestrictionFields = false,
   createRestrictionField,
   deleteRestrictionField,
+  showRoleTemplateName = false,
 }) {
   const [expanded, setExpanded]       = useState(depth < 2);
   const [showAddChild, setShowAddChild] = useState(false);
@@ -84,7 +123,9 @@ function NodeRow({
   const [editing, setEditing]          = useState(false);
   const [editName, setEditName]        = useState(node.name);
   const [editDesc, setEditDesc]        = useState(node.description || '');
+  const [editTemplate, setEditTemplate] = useState(node.roleTemplateName || '');
   const [newChild, setNewChild]        = useState({ name: '', description: '', type: '' });
+  const [newChildTemplate, setNewChildTemplate] = useState('');
   const [newAttr, setNewAttr]          = useState({ field: '', value: '' });
   const [newChildFields, setNewChildFields] = useState([]);
   const [loading, setLoading]          = useState(false);
@@ -97,6 +138,10 @@ function NodeRow({
 
   async function handleAddChild() {
     if (!newChild.name.trim()) return;
+    if (showRoleTemplateName && !newChildTemplate.trim()) {
+      onError('Role template name is required.');
+      return;
+    }
     setLoading(true);
     try {
       const payload = { name: newChild.name, parent_ID: node.ID };
@@ -106,12 +151,16 @@ function NodeRow({
       if (showDescriptionField) {
         payload.description = newChild.description;
       }
+      if (showRoleTemplateName) {
+        payload.roleTemplateName = newChildTemplate;
+      }
       const created = await createNode(payload);
       // Immediately attach selected restriction fields
       if (showRestrictionFields && newChildFields.length > 0 && createRestrictionField && created?.ID) {
         await Promise.all(newChildFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewChild({ name: '', description: '', type: '' });
+      setNewChildTemplate('');
       setNewChildFields([]);
       setShowAddChild(false);
       await onRefresh();
@@ -140,11 +189,18 @@ function NodeRow({
 
   async function handleRename() {
     if (!editName.trim()) return;
+    if (showRoleTemplateName && !editTemplate.trim()) {
+      onError('Role template name is required.');
+      return;
+    }
     setLoading(true);
     try {
       const payload = { name: editName };
       if (showDescriptionField) {
         payload.description = editDesc;
+      }
+      if (showRoleTemplateName) {
+        payload.roleTemplateName = editTemplate;
       }
       await updateNode(node.ID, payload);
       setEditing(false);
@@ -247,7 +303,7 @@ function NodeRow({
 
           <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
             {editing ? (
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
                 <TextField
                   size="small"
                   value={editName}
@@ -265,6 +321,16 @@ function NodeRow({
                     sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 }, width: 220 }}
                   />
                 )}
+                {showRoleTemplateName && (
+                  <Box sx={{ width: '100%', mt: 1, mb: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>Role template name:</Typography>
+                    <TemplateNameEditor
+                      value={editTemplate}
+                      onChange={setEditTemplate}
+                      availableFields={node.restrictionFields?.map(rf => rf.field?.name || rf.field_ID).filter(Boolean) || []}
+                    />
+                  </Box>
+                )}
                 <IconButton color="primary" onClick={handleRename} disabled={loading} size="small"><Check size={14} /></IconButton>
                 <IconButton onClick={() => setEditing(false)} size="small"><X size={14} /></IconButton>
               </Box>
@@ -279,6 +345,12 @@ function NodeRow({
                   )}
                 </Typography>
                 {showTypeSelector && <Typography variant="caption" color="text.secondary">{node.type?.name || ''}</Typography>}
+                {showRoleTemplateName && node.roleTemplateName && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.85 }}>
+                    <Typography variant="caption" color="text.secondary">Template:</Typography>
+                    {parseTemplateToChips(node.roleTemplateName)}
+                  </Box>
+                )}
               </>
             )}
           </Box>
@@ -334,7 +406,7 @@ function NodeRow({
               </IconButton>
             )}
             <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} title="Add Attribute"><Plus size={13} /></IconButton>
-            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); }} disabled={!canManage} title="Rename / Edit"><Edit3 size={13} /></IconButton>
+            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} title="Rename / Edit"><Edit3 size={13} /></IconButton>
             <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} title="Add Child Node"><Building2 size={13} /></IconButton>
             <IconButton size="small" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || !canManage}>
               <MoveRight size={13} />
@@ -428,8 +500,18 @@ function NodeRow({
                 </Select>
               </FormControl>
             )}
+            {showRoleTemplateName && (
+              <Box sx={{ width: '100%', mt: 1.5, mb: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>Role template name:</Typography>
+                <TemplateNameEditor
+                  value={newChildTemplate}
+                  onChange={setNewChildTemplate}
+                  availableFields={newChildFields.map(id => nodeTypes.find(f => f.ID === id)?.name).filter(Boolean)}
+                />
+              </Box>
+            )}
             <Button variant="contained" size="small" onClick={handleAddChild} disabled={loading}>Add</Button>
-            <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); }}><X size={15} /></IconButton>
+            <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); setNewChildTemplate(''); }}><X size={15} /></IconButton>
           </Card>
         </Collapse>
 
@@ -457,6 +539,7 @@ function NodeRow({
             showRestrictionFields={showRestrictionFields}
             createRestrictionField={createRestrictionField}
             deleteRestrictionField={deleteRestrictionField}
+            showRoleTemplateName={showRoleTemplateName}
           />
         ))}
 
@@ -534,6 +617,7 @@ export default function HierarchicalManager({
   showRestrictionFields = false,
   createRestrictionField,
   deleteRestrictionField,
+  showRoleTemplateName = false,
 }) {
   const [allNodes, setAllNodes]   = useState([]);
   const [roots, setRoots]         = useState([]);
@@ -541,6 +625,7 @@ export default function HierarchicalManager({
   const [loading, setLoading]     = useState(true);
   const [showAdd, setShowAdd]     = useState(false);
   const [newRoot, setNewRoot]     = useState({ name: '', description: '', type: '' });
+  const [newRootTemplate, setNewRootTemplate] = useState('');
   const [newRootFields, setNewRootFields] = useState([]);
   const [snackbar, setSnackbar]   = useState({ open: false, message: '', severity: 'error' });
 
@@ -570,6 +655,10 @@ export default function HierarchicalManager({
 
   async function handleAddRoot() {
     if (!newRoot.name.trim()) return;
+    if (showRoleTemplateName && !newRootTemplate.trim()) {
+      setSnackbar({ open: true, message: 'Role template name is required.', severity: 'error' });
+      return;
+    }
     try {
       const payload = { name: newRoot.name };
       if (showTypeSelector) {
@@ -578,12 +667,16 @@ export default function HierarchicalManager({
       if (showDescriptionField) {
         payload.description = newRoot.description || '';
       }
+      if (showRoleTemplateName) {
+        payload.roleTemplateName = newRootTemplate;
+      }
       const created = await createNode(payload);
       // Immediately attach selected restriction fields
       if (showRestrictionFields && newRootFields.length > 0 && createRestrictionField && created?.ID) {
         await Promise.all(newRootFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewRoot({ name: '', description: '', type: '' });
+      setNewRootTemplate('');
       setNewRootFields([]);
       setShowAdd(false);
       await load();
@@ -692,8 +785,18 @@ export default function HierarchicalManager({
               </Select>
             </FormControl>
           )}
+          {showRoleTemplateName && (
+            <Box sx={{ width: '100%', mt: 1.5, mb: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>Role template name:</Typography>
+              <TemplateNameEditor
+                value={newRootTemplate}
+                onChange={setNewRootTemplate}
+                availableFields={newRootFields.map(id => nodeTypes.find(f => f.ID === id)?.name).filter(Boolean)}
+              />
+            </Box>
+          )}
           <Button variant="contained" onClick={handleAddRoot}>Add</Button>
-          <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); }} size="small"><X size={16} /></IconButton>
+          <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); setNewRootTemplate(''); }} size="small"><X size={16} /></IconButton>
         </Card>
       </Collapse>
 
@@ -732,6 +835,7 @@ export default function HierarchicalManager({
                 showRestrictionFields={showRestrictionFields}
                 createRestrictionField={createRestrictionField}
                 deleteRestrictionField={deleteRestrictionField}
+                showRoleTemplateName={showRoleTemplateName}
               />
             ))}
           </Box>

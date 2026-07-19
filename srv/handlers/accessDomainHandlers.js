@@ -54,9 +54,27 @@ function registerAccessDomainHandlers(service) {
     if (req.event === 'CREATE' && !req.data.ID) {
       req.data.ID = cds.utils.uuid();
     }
-    const { name } = req.data;
+    const { name, roleTemplateName } = req.data;
     if (name && name.length > 10) {
       return req.error(400, `Name "${name}" is too long: must be at most 10 characters.`);
+    }
+
+    if (req.event === 'CREATE' && !roleTemplateName) {
+      return req.error(400, 'Role template name is required.');
+    }
+    if (roleTemplateName !== undefined && !roleTemplateName.trim()) {
+      return req.error(400, 'Role template name cannot be empty.');
+    }
+
+    if (roleTemplateName) {
+      const regex = /\{([^}]+)\}/g;
+      let match;
+      while ((match = regex.exec(roleTemplateName)) !== null) {
+        const fieldName = match[1];
+        if (!/^[a-zA-Z0-9_]+$/.test(fieldName)) {
+          return req.error(400, `Invalid placeholder field name "${fieldName}" in template. Use only alphanumeric characters and underscores.`);
+        }
+      }
     }
   });
 
