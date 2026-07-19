@@ -131,11 +131,11 @@ async function upsertOrgRole(db, Roles, Restrictions, { name, description, orgNo
  * At each level:
  *  1. Adds this node's field to the running context.
  *  2. Generates an ALL role: resolved fields = exact value, remaining = CP *.
- *  3. Recurses into children whose type is in the domain's field set.
+ *  3. Recurses into children whose type is in the domain's field set (if recursive = true).
  */
 async function generateForNodeInDomain(
   db, Roles, Restrictions, OrgNodes,
-  node, domain, fieldSet, rfMap, ancestorCtx, results
+  node, domain, fieldSet, rfMap, ancestorCtx, results, recursive = true
 ) {
   const myFieldName = rfMap.get(node.type_ID);
   if (!myFieldName) return;
@@ -166,14 +166,16 @@ async function generateForNodeInDomain(
   });
   results.push({ roleId, roleName });
 
-  // Recurse into children whose type is in the domain's field set
-  const children = await db.run(SELECT.from(OrgNodes).where({ parent_ID: node.ID }));
-  for (const child of children) {
-    if (!fieldSet.has(child.type_ID)) continue;
-    await generateForNodeInDomain(
-      db, Roles, Restrictions, OrgNodes,
-      child, domain, fieldSet, rfMap, context, results
-    );
+  // Recurse into children whose type is in the domain's field set (only if recursive flag is true)
+  if (recursive) {
+    const children = await db.run(SELECT.from(OrgNodes).where({ parent_ID: node.ID }));
+    for (const child of children) {
+      if (!fieldSet.has(child.type_ID)) continue;
+      await generateForNodeInDomain(
+        db, Roles, Restrictions, OrgNodes,
+        child, domain, fieldSet, rfMap, context, results, recursive
+      );
+    }
   }
 }
 
@@ -188,9 +190,10 @@ async function generateForNodeInDomain(
  * @param {object} cds
  * @param {object} entities
  * @param {object} node  - OrgNode record
+ * @param {boolean} recursive - Whether to recurse down to child org nodes
  * @returns {{ roles: [{roleId, roleName}], count: number }}
  */
-async function generateRoleForNode(cds, entities, node) {
+async function generateRoleForNode(cds, entities, node, recursive = true) {
   const db = cds.db;
   const {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
@@ -224,7 +227,7 @@ async function generateRoleForNode(cds, entities, node) {
     const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap);
     await generateForNodeInDomain(
       db, Roles, Restrictions, OrgNodes,
-      node, domain, fieldSet, rfMap, ancestorCtx, results
+      node, domain, fieldSet, rfMap, ancestorCtx, results, recursive
     );
   }
 
@@ -255,7 +258,7 @@ function makeGenerateOrgRoleHandler(cds, entities) {
     const { OrgNodes } = entities;
     const node = await cds.db.run(SELECT.one.from(OrgNodes).where({ ID: orgNodeId }));
     if (!node) return req.error(404, `OrgNode ${orgNodeId} not found`);
-    const result = await generateRoleForNode(cds, entities, node);
+    const result = await generateRoleForNode(cds, entities, node, true);
     // Backward-compatible: return the first created role
     const first = result.roles[0] || { roleId: null, roleName: null };
     return { roleId: first.roleId, roleName: first.roleName };
@@ -264,7 +267,8 @@ function makeGenerateOrgRoleHandler(cds, entities) {
 
 /**
  * Factory: returns the generateAllOrgRoles OData action handler.
- * Processes all OrgNodes; nodes with no applicable domain produce 0 roles.
+ * Processes all OrgNodes sequentially to prevent race conditions.
+ * Sets recursive = false because every node is visited individually by the loop.
  */
 function makeGenerateAllOrgRolesHandler(cds, entities) {
   return async function generateAllOrgRolesHandler(_req) {
@@ -272,17 +276,14 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
     const nodes = await cds.db.run(SELECT.from(OrgNodes));
 
     let totalRoles = 0;
-    const batchSize = 10;
-    for (let i = 0; i < nodes.length; i += batchSize) {
-      const batch = nodes.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map(node => generateRoleForNode(cds, entities, node))
-      );
-      totalRoles += batchResults.reduce((sum, r) => sum + r.count, 0);
+    // Process sequentially to completely eliminate DB transaction race conditions
+    for (const node of nodes) {
+      const result = await generateRoleForNode(cds, entities, node, false);
+      totalRoles += result.count;
     }
 
     return { count: totalRoles };
   };
 }
-module.exports = { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler };
 
+module.exports = { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler };
