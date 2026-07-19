@@ -4,71 +4,247 @@
  * OrgRoleGeneratorService
  *
  * Creates or updates ORG_BASED roles from OrgNode records.
- * Previously embedded as _generateRoleForNode + two action handlers
- * in authorization-service.js (L136-191, L356-380).
+ *
+ * New logic (access-domain-driven):
+ *  - For each AccessDomain whose restrictionFields include the target node's type,
+ *    generate an "ALL" role (sub-fields = CP *) and one "specific" role per
+ *    descendant node whose type is also in that domain's restrictionFields.
+ *  - Role names are derived from the domain's roleTemplateName.
+ *  - Roles are upserted keyed by (name + type='ORG_BASED' + accessDomain_ID).
+ *  - Default environment: 'P'.
  */
+
+// ---------------------------------------------------------------------------
+// Template name builder
+// ---------------------------------------------------------------------------
 
 /**
- * Generates (or updates) an ORG_BASED role for a given org node.
- *
- * @param {object} cds      - CAP cds instance
- * @param {object} entities - { Roles, Restrictions, RestrictionFields, OrgNodes, OrgNodeAttributes }
- * @param {object} node     - the OrgNode record
- * @returns {{ roleId: string, roleName: string }}
+ * Substitutes {FieldName} placeholders in a template string.
+ * @param {string} template         - e.g. "ZOTC_{Plant}_{Department}"
+ * @param {Object} context          - e.g. { Plant: 'DE01', Department: 'Finance' }
+ * @param {string[]} wildcardFields - field names that should resolve to 'ALL'
+ * @returns {string}
  */
-async function generateRoleForNode(cds, entities, node) {
-  const db = cds.db;
-  const { Roles, Restrictions, RestrictionFields, OrgNodeAttributes } = entities;
+function buildRoleName(template, context, wildcardFields = []) {
+  if (!template) return 'ROLE_ORG_GENERATED';
+  return template.replace(/\{([^}]+)\}/g, (_match, fieldName) => {
+    if (wildcardFields.includes(fieldName)) return 'ALL';
+    const val = context[fieldName];
+    if (val != null) return String(val).replace(/\s+/g, '_').toUpperCase();
+    return 'ALL';
+  });
+}
 
-  const roleName = `ROLE_ORG_${node.name.replace(/\s+/g, '_').toUpperCase()}`;
+// ---------------------------------------------------------------------------
+// DB helpers
+// ---------------------------------------------------------------------------
 
-  // Upsert the role
-  let role = await db.run(SELECT.one.from(Roles).where({ orgNode_ID: node.ID, type: 'ORG_BASED' }));
+/**
+ * Loads all AccessDomains with their restrictionFields expanded (including field names).
+ * Returns: [{ ID, name, roleTemplateName, fields: [{ field_ID, fieldName }] }]
+ */
+async function loadAllDomainsWithFields(db, AccessDomains, AccessDomainFields, RestrictionFields) {
+  const [domains, allDomainFields, allRF] = await Promise.all([
+    db.run(SELECT.from(AccessDomains)),
+    db.run(SELECT.from(AccessDomainFields)),
+    db.run(SELECT.from(RestrictionFields)),
+  ]);
+  const rfMap = Object.fromEntries(allRF.map(rf => [rf.ID, rf.name]));
+  return domains.map(d => ({
+    ...d,
+    fields: allDomainFields
+      .filter(f => f.domain_ID === d.ID)
+      .map(f => ({ field_ID: f.field_ID, fieldName: rfMap[f.field_ID] || f.field_ID })),
+  }));
+}
+
+/**
+ * Walks up the org tree from `node`, collecting { fieldName → value } for
+ * ancestors whose type_ID is in `fieldSet`.
+ */
+async function buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap) {
+  const context = {};
+  let current = node;
+  while (current.parent_ID) {
+    const parent = await db.run(SELECT.one.from(OrgNodes).where({ ID: current.parent_ID }));
+    if (!parent) break;
+    if (fieldSet.has(parent.type_ID)) {
+      const fieldName = rfMap.get(parent.type_ID);
+      if (fieldName) context[fieldName] = parent.name;
+    }
+    current = parent;
+  }
+  return context;
+}
+
+/**
+ * Upserts a single ORG_BASED role with the given restrictions.
+ * Idempotent: keyed by name + accessDomain_ID within ORG_BASED roles.
+ * @returns {string} roleId
+ */
+async function upsertOrgRole(db, Roles, Restrictions, { name, description, orgNodeId, domainId, restrictionEntries }) {
+  let role = await db.run(
+    SELECT.one.from(Roles).where({ name, accessDomain_ID: domainId, type: 'ORG_BASED' })
+  );
+
   let roleId;
   if (role) {
     roleId = role.ID;
-    await db.run(UPDATE(Roles).set({ name: roleName }).where({ ID: roleId }));
+    await db.run(UPDATE(Roles).set({ name, description }).where({ ID: roleId }));
   } else {
     roleId = cds.utils.uuid();
     await db.run(INSERT.into(Roles).entries({
-      ID:          roleId,
-      name:        roleName,
-      type:        'ORG_BASED',
-      description: `Auto-generated from Org Node: ${node.name}`,
-      orgNode_ID:  node.ID,
-      accessDomain_ID: 'app-global'
+      ID:              roleId,
+      name,
+      type:            'ORG_BASED',
+      description,
+      orgNode_ID:      orgNodeId,
+      accessDomain_ID: domainId,
+      environment_ID:  'P',
     }));
   }
 
-  // Resolve the restriction field name from the node type
-  let restrictionFieldName = 'OrgNode';
-  if (node.type_ID) {
-    const rf = await db.run(SELECT.one.from(RestrictionFields).columns('name').where({ ID: node.type_ID }));
-    if (rf) restrictionFieldName = rf.name;
+  await db.run(DELETE.from(Restrictions).where({ role_ID: roleId }));
+  if (restrictionEntries.length > 0) {
+    await db.run(INSERT.into(Restrictions).entries(
+      restrictionEntries.map(r => ({
+        ID:          cds.utils.uuid(),
+        role_ID:     roleId,
+        field:       r.field,
+        filterType:  r.filterType,
+        value:       r.value,
+        sourceLabel: r.sourceLabel || r.value,
+      }))
+    ));
   }
 
-  // Replace the node's restriction with a fresh SINGLE_VALUE for the node name
-  await db.run(DELETE.from(Restrictions).where({ role_ID: roleId }));
-  await db.run(INSERT.into(Restrictions).entries({
-    ID:          cds.utils.uuid(),
-    role_ID:     roleId,
-    field:       restrictionFieldName,
-    filterType:  'SINGLE_VALUE',
-    value:       node.name,
-    sourceLabel: node.name
-  }));
-
-  // Update the org node's 'Role' attribute for visibility in the UI
-  await db.run(DELETE.from(OrgNodeAttributes).where({ node_ID: node.ID, field: 'Role' }));
-  await db.run(INSERT.into(OrgNodeAttributes).entries({
-    ID:      cds.utils.uuid(),
-    node_ID: node.ID,
-    field:   'Role',
-    value:   roleName
-  }));
-
-  return { roleId, roleName };
+  return roleId;
 }
+
+// ---------------------------------------------------------------------------
+// Core recursive generation: one domain x one subtree node
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursively generates roles for `node` and its relevant descendants within `domain`.
+ *
+ * At each level:
+ *  1. Adds this node's field to the running context.
+ *  2. Generates an ALL role: resolved fields = exact value, remaining = CP *.
+ *  3. Recurses into children whose type is in the domain's field set.
+ */
+async function generateForNodeInDomain(
+  db, Roles, Restrictions, OrgNodes,
+  node, domain, fieldSet, rfMap, ancestorCtx, results
+) {
+  const myFieldName = rfMap.get(node.type_ID);
+  if (!myFieldName) return;
+
+  // Build running context for this level
+  const context = { ...ancestorCtx, [myFieldName]: node.name };
+
+  // Determine which domain fields are still unresolved (will be CP * in the ALL role)
+  const assignedFields = new Set(Object.keys(context));
+  const wildcardFields = domain.fields
+    .filter(f => !assignedFields.has(f.fieldName))
+    .map(f => f.fieldName);
+
+  // Build restriction entries: assigned fields = SINGLE_VALUE, unresolved = CP *
+  const allRestrictions = domain.fields.map(f => {
+    const val = context[f.fieldName];
+    if (val != null) return { field: f.fieldName, filterType: 'SINGLE_VALUE', value: val };
+    return { field: f.fieldName, filterType: 'CP', value: '*' };
+  });
+
+  const roleName = buildRoleName(domain.roleTemplateName, context, wildcardFields);
+  const roleId = await upsertOrgRole(db, Roles, Restrictions, {
+    name:               roleName,
+    description:        `Auto-generated from Org Node: ${node.name} | Domain: ${domain.name}`,
+    orgNodeId:          node.ID,
+    domainId:           domain.ID,
+    restrictionEntries: allRestrictions,
+  });
+  results.push({ roleId, roleName });
+
+  // Recurse into children whose type is in the domain's field set
+  const children = await db.run(SELECT.from(OrgNodes).where({ parent_ID: node.ID }));
+  for (const child of children) {
+    if (!fieldSet.has(child.type_ID)) continue;
+    await generateForNodeInDomain(
+      db, Roles, Restrictions, OrgNodes,
+      child, domain, fieldSet, rfMap, context, results
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public: generate for a single node across all applicable domains
+// ---------------------------------------------------------------------------
+
+/**
+ * Entry point. Generates ORG_BASED roles for the given org node across
+ * all applicable AccessDomains.
+ *
+ * @param {object} cds
+ * @param {object} entities
+ * @param {object} node  - OrgNode record
+ * @returns {{ roles: [{roleId, roleName}], count: number }}
+ */
+async function generateRoleForNode(cds, entities, node) {
+  const db = cds.db;
+  const {
+    OrgNodes, OrgNodeAttributes, Roles, Restrictions,
+    RestrictionFields, AccessDomains, AccessDomainFields,
+  } = entities;
+
+  // Ensure node has type_ID
+  if (!node.type_ID) {
+    const fresh = await db.run(SELECT.one.from(OrgNodes).where({ ID: node.ID }));
+    if (!fresh || !fresh.type_ID) return { roles: [], count: 0 };
+    node = fresh;
+  }
+
+  // Build restriction field ID -> name map
+  const allRF = await db.run(SELECT.from(RestrictionFields));
+  const rfMap = new Map(allRF.map(rf => [rf.ID, rf.name]));
+
+  // Load all domains with their field lists
+  const domains = await loadAllDomainsWithFields(db, AccessDomains, AccessDomainFields, RestrictionFields);
+
+  // Only process domains that include this node's type
+  const applicableDomains = domains.filter(d =>
+    d.fields.some(f => f.field_ID === node.type_ID)
+  );
+  if (applicableDomains.length === 0) return { roles: [], count: 0 };
+
+  const results = [];
+
+  for (const domain of applicableDomains) {
+    const fieldSet = new Set(domain.fields.map(f => f.field_ID));
+    const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap);
+    await generateForNodeInDomain(
+      db, Roles, Restrictions, OrgNodes,
+      node, domain, fieldSet, rfMap, ancestorCtx, results
+    );
+  }
+
+  // Update OrgNodeAttributes to show role count in UI
+  await db.run(DELETE.from(OrgNodeAttributes).where({ node_ID: node.ID, field: 'Roles' }));
+  if (results.length > 0) {
+    await db.run(INSERT.into(OrgNodeAttributes).entries({
+      ID:      cds.utils.uuid(),
+      node_ID: node.ID,
+      field:   'Roles',
+      value:   `${results.length} role(s) generated`,
+    }));
+  }
+
+  return { roles: results, count: results.length };
+}
+
+// ---------------------------------------------------------------------------
+// Handler factories
+// ---------------------------------------------------------------------------
 
 /**
  * Factory: returns the generateOrgRole OData action handler.
@@ -79,27 +255,34 @@ function makeGenerateOrgRoleHandler(cds, entities) {
     const { OrgNodes } = entities;
     const node = await cds.db.run(SELECT.one.from(OrgNodes).where({ ID: orgNodeId }));
     if (!node) return req.error(404, `OrgNode ${orgNodeId} not found`);
-    return generateRoleForNode(cds, entities, node);
+    const result = await generateRoleForNode(cds, entities, node);
+    // Backward-compatible: return the first created role
+    const first = result.roles[0] || { roleId: null, roleName: null };
+    return { roleId: first.roleId, roleName: first.roleName };
   };
 }
 
 /**
  * Factory: returns the generateAllOrgRoles OData action handler.
+ * Processes all OrgNodes; nodes with no applicable domain produce 0 roles.
  */
 function makeGenerateAllOrgRolesHandler(cds, entities) {
-  return async function generateAllOrgRolesHandler(req) {
+  return async function generateAllOrgRolesHandler(_req) {
     const { OrgNodes } = entities;
     const nodes = await cds.db.run(SELECT.from(OrgNodes));
-    
+
+    let totalRoles = 0;
     const batchSize = 10;
     for (let i = 0; i < nodes.length; i += batchSize) {
       const batch = nodes.slice(i, i + batchSize);
-      await Promise.all(batch.map(node => generateRoleForNode(cds, entities, node)));
+      const batchResults = await Promise.all(
+        batch.map(node => generateRoleForNode(cds, entities, node))
+      );
+      totalRoles += batchResults.reduce((sum, r) => sum + r.count, 0);
     }
-    
-    return { count: nodes.length };
+
+    return { count: totalRoles };
   };
 }
-
 module.exports = { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler };
 

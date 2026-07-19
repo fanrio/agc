@@ -1,1 +1,2 @@
 ID,name,description,type_ID,parent_ID,createdAt,createdBy,modifiedAt,modifiedBy,roleTemplateName
+domain-otc,OTC,Order-to-Cash access domain,,,2024-01-01T00:00:00Z,seed,2024-01-01T00:00:00Z,seed,ZOTC_{Plant}_{Department}

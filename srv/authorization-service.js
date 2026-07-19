@@ -59,7 +59,7 @@ module.exports = cds.service.impl(async function () {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
     RoleAssignments, RoleInheritance, RestrictionFields,
     BdcSettings, AuditLogs, Replications, DynamicGenerationRules,
-    AppAuthorizations, RoleApprovers
+    AppAuthorizations, RoleApprovers, AccessDomains, AccessDomainFields,
   } = entities;
 
   // Propagate simulated user headers into the CAP request context user

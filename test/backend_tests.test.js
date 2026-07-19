@@ -258,17 +258,22 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
   // 2. generateOrgRole and generateAllOrgRoles
   await t.test('generateOrgRole and generateAllOrgRoles actions', async () => {
-    // Retrieve an OrgNode ID from DB data
+    // Find a Plant-type node (node-de01) — the OTC domain covers Plant + Department
     const nodesRes = await GET('/odata/v4/auth/OrgNodes');
     assert.strictEqual(nodesRes.status, 200);
-    const firstNode = nodesRes.data.value[0];
-    assert.ok(firstNode, 'At least one OrgNode should exist in test seed');
+    // The seed has node-de01 (DE01) which has type_ID = Plant, matched by the OTC domain
+    const plantNode = nodesRes.data.value.find(n => n.name === 'DE01');
+    assert.ok(plantNode, 'Plant node DE01 must exist in test seed');
 
-    // Call generateOrgRole
-    const genRes = await POST('/odata/v4/auth/generateOrgRole', { orgNodeId: firstNode.ID });
+    // Call generateOrgRole — should produce at least the ALL role (ZOTC_DE01_ALL)
+    const genRes = await POST('/odata/v4/auth/generateOrgRole', { orgNodeId: plantNode.ID });
     assert.strictEqual(genRes.status, 200);
-    assert.ok(genRes.data.roleId);
-    assert.ok(genRes.data.roleName);
+    assert.ok(genRes.data.roleId, 'roleId should be set when a matching domain exists');
+    assert.ok(genRes.data.roleName, 'roleName should be set when a matching domain exists');
+    assert.ok(
+      genRes.data.roleName.startsWith('ZOTC_DE01'),
+      `Role name should start with ZOTC_DE01, got: ${genRes.data.roleName}`
+    );
 
     // Call generateOrgRole on non-existent OrgNode (should return 404)
     await assertODataError(
@@ -276,10 +281,10 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       404
     );
 
-    // Call generateAllOrgRoles
+    // Call generateAllOrgRoles — Plant and Department nodes produce roles → count > 0
     const genAllRes = await POST('/odata/v4/auth/generateAllOrgRoles', {});
     assert.strictEqual(genAllRes.status, 200);
-    assert.ok(genAllRes.data.count > 0);
+    assert.ok(genAllRes.data.count > 0, `generateAllOrgRoles count should be > 0, got ${genAllRes.data.count}`);
   });
 
   // 3. resolveEffectiveRestrictions
