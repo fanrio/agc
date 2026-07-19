@@ -1,5 +1,6 @@
 const cds = require('@sap/cds');
 const HanaClient = require('../lib/hanaClient');
+const { getSessionPermissions, requirePermission } = require('../lib/authGuard');
 
 /**
  * Helper to sanitize the node name for a valid SQL table name
@@ -30,18 +31,10 @@ function sanitizeHierTableName(name) {
 function registerAccessDomainHandlers(service) {
   const { AccessDomains, AccessDomainAttributes, BdcSettings, AppAuthorizations } = service.entities;
 
-  // Helper to resolve user permissions
+  // Helper to resolve user permissions using the shared authGuard (respects Demo Mode)
   async function checkSettingsPermission(req) {
-    const userEmail = req.user.id;
-    if (!userEmail) return req.reject(401, 'Unauthorized');
-
-    const auth = await cds.db.run(SELECT.one.from(AppAuthorizations).where({ userId: userEmail, isActive: true }));
-    const isSuperAdmin = auth?.isSuperAdmin || false;
-    const canManageSettings = auth?.canManageSettings || false;
-
-    if (!isSuperAdmin && !canManageSettings) {
-      return req.reject(403, 'Forbidden: You do not have permission to manage settings.');
-    }
+    const permissions = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(permissions, 'canManageSettings', req);
   }
 
   // Before CREATE/UPDATE/DELETE check permissions
@@ -107,6 +100,10 @@ function registerAccessDomainHandlers(service) {
   });
 
   service.before(['CREATE', 'UPDATE', 'DELETE'], 'AccessDomainAttributes', async (req) => {
+    await checkSettingsPermission(req);
+  });
+
+  service.before(['CREATE', 'DELETE'], 'AccessDomainFields', async (req) => {
     await checkSettingsPermission(req);
   });
 
