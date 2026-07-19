@@ -88,7 +88,7 @@ function buildFlatAuthorizationsForHana(restrictions, roleName, userId) {
       // Map legacy filterType names to HANA operators if needed
       if (r.filterType === 'SINGLE_VALUE') {
         op = 'EQ';
-      } else if (r.filterType === 'PATTERN') {
+      } else if (r.filterType === 'PATTERN' || r.filterType === 'CP') {
         op = 'CP';
       } else if (r.filterType === 'RANGE') {
         op = 'BT';

@@ -58,12 +58,14 @@ export const updateRestrictionField = (id, body) => request('PATCH',  `/Restrict
 export const deleteRestrictionField = (id)      => request('DELETE', `/RestrictionFields('${id}')`);
 
 // Access Domains
-export const getAccessDomainsFlat       = ()          => request('GET',    '/AccessDomains?$expand=attributes,type');
+export const getAccessDomainsFlat       = ()          => request('GET',    '/AccessDomains?$expand=attributes,type,restrictionFields($expand=field)');
 export const createAccessDomainNode     = (body)      => request('POST',   '/AccessDomains', body);
 export const updateAccessDomainNode     = (id, body)  => request('PATCH',  `/AccessDomains('${id}')`, body);
 export const deleteAccessDomainNode     = (id)        => request('DELETE', `/AccessDomains('${id}')`);
 export const createAccessDomainAttr     = (body)      => request('POST',   '/AccessDomainAttributes', body);
 export const deleteAccessDomainAttr     = (id)        => request('DELETE', `/AccessDomainAttributes(${id})`);
+export const createAccessDomainField    = (body)      => request('POST',   '/AccessDomainFields', body);
+export const deleteAccessDomainField    = (id)        => request('DELETE', `/AccessDomainFields('${id}')`);
 
 // Assignments
 export const getAssignments    = ()             => request('GET',    '/RoleAssignments?$expand=role');

@@ -94,6 +94,15 @@ export function useWizardState({ context = {}, permissions }) {
   }, [filteredAccessDomains, accessDomainId, isEditMode]);
 
   useEffect(() => {
+    if (selectedParentIds.length > 0 && allRoles.length > 0) {
+      const parent = allRoles.find(r => r.ID === selectedParentIds[0]);
+      if (parent && parent.accessDomain_ID) {
+        setAccessDomainId(parent.accessDomain_ID);
+      }
+    }
+  }, [selectedParentIds, allRoles]);
+
+  useEffect(() => {
     if (step > maxStepReached) {
       setMaxStepReached(step);
     }
@@ -475,8 +484,26 @@ export function useWizardState({ context = {}, permissions }) {
 
   const isDerived = selectedParentIds.length > 0;
   const selectableRestrictionFields = (() => {
-    if (!isDerived) return restrictionFields;
-    if (permissions?.isSuperAdmin) return restrictionFields;
+    // 1. Constrain restriction fields by Access Domain first
+    let domainScopedFields = restrictionFields;
+    if (accessDomains.length > 0) {
+      const selectedDomain = accessDomains.find(s => s.ID === accessDomainId);
+      if (selectedDomain) {
+        const domainFields = selectedDomain.restrictionFields || [];
+        if (domainFields.length > 0) {
+          const allowedIds = new Set(domainFields.map(rf => rf.field_ID || rf.field?.ID).filter(Boolean));
+          domainScopedFields = restrictionFields.filter(f => allowedIds.has(f.ID));
+        } else {
+          domainScopedFields = [];
+        }
+      }
+    }
+
+    // 2. If Single/Org-Based role (not derived), return domain-scoped fields directly
+    if (!isDerived) return domainScopedFields;
+
+    // 3. For Derived role, apply the usedFields and scope checks on the domainScopedFields pool
+    if (permissions?.isSuperAdmin) return domainScopedFields;
     if (!permissions || !permissions.canManageDerivedRoles) return [];
 
     const usedFields = new Set();
@@ -484,7 +511,10 @@ export function useWizardState({ context = {}, permissions }) {
       const roleObj = allRoles.find(r => r.ID === parentId);
       if (roleObj) {
         if (roleObj.ownRestrictions) {
-          roleObj.ownRestrictions.forEach(r => usedFields.add(r.field.toLowerCase()));
+          roleObj.ownRestrictions.forEach(r => {
+            if (r.filterType === 'ALL' || r.value === '*') return;
+            usedFields.add(r.field.toLowerCase());
+          });
         }
         const queue = roleObj.parentRoles ? roleObj.parentRoles.map(pr => pr.parent?.ID || pr.parent_ID).filter(Boolean) : [];
         const visited = new Set(queue);
@@ -493,7 +523,10 @@ export function useWizardState({ context = {}, permissions }) {
           const currRole = allRoles.find(r => r.ID === currId);
           if (currRole) {
             if (currRole.ownRestrictions) {
-              currRole.ownRestrictions.forEach(r => usedFields.add(r.field.toLowerCase()));
+              currRole.ownRestrictions.forEach(r => {
+                if (r.filterType === 'ALL' || r.value === '*') return;
+                usedFields.add(r.field.toLowerCase());
+              });
             }
             if (currRole.parentRoles) {
               currRole.parentRoles.forEach(pr => {
@@ -511,7 +544,7 @@ export function useWizardState({ context = {}, permissions }) {
 
     const scopeStr = permissions.managedDerivedRolesScope;
     if (!scopeStr || scopeStr.trim() === '' || scopeStr.trim().toUpperCase() === 'ALL' || scopeStr.trim() === '*') {
-      return restrictionFields.filter(f => !usedFields.has(f.name.toLowerCase()));
+      return domainScopedFields.filter(f => !usedFields.has(f.name.toLowerCase()));
     }
 
     let scopeList = [];
@@ -524,7 +557,7 @@ export function useWizardState({ context = {}, permissions }) {
         const parent = allRoles.find(r => r.ID === parentId);
         return parent && (terms.includes(parent.name.toLowerCase()) || terms.includes(parent.ID.toLowerCase()));
       });
-      return hasAllowedParent ? restrictionFields.filter(f => !usedFields.has(f.name.toLowerCase())) : [];
+      return hasAllowedParent ? domainScopedFields.filter(f => !usedFields.has(f.name.toLowerCase())) : [];
     }
 
     const allowedFieldsSet = new Set();
@@ -538,14 +571,14 @@ export function useWizardState({ context = {}, permissions }) {
         if (entry.fields && entry.fields.length > 0) {
           entry.fields.forEach(f => allowedFieldsSet.add(f.toLowerCase()));
         } else {
-          restrictionFields.forEach(f => allowedFieldsSet.add(f.name.toLowerCase()));
+          domainScopedFields.forEach(f => allowedFieldsSet.add(f.name.toLowerCase()));
         }
       }
     });
 
     if (!hasParentMatch) return [];
 
-    return restrictionFields.filter(f => allowedFieldsSet.has(f.name.toLowerCase()) && !usedFields.has(f.name.toLowerCase()));
+    return domainScopedFields.filter(f => allowedFieldsSet.has(f.name.toLowerCase()) && !usedFields.has(f.name.toLowerCase()));
   })();
 
   const isUserApprover = Array.isArray(approvers) && approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());

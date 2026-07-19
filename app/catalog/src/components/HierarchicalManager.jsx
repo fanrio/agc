@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
-import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
 
 // ─── Move Dialog ──────────────────────────────────────────────────────────────
@@ -73,6 +73,9 @@ function NodeRow({
   showTypeSelector = true,
   showDescriptionField = false,
   maxNameLength = 100,
+  showRestrictionFields = false,
+  createRestrictionField,
+  deleteRestrictionField,
 }) {
   const [expanded, setExpanded]       = useState(depth < 2);
   const [showAddChild, setShowAddChild] = useState(false);
@@ -83,8 +86,11 @@ function NodeRow({
   const [editDesc, setEditDesc]        = useState(node.description || '');
   const [newChild, setNewChild]        = useState({ name: '', description: '', type: '' });
   const [newAttr, setNewAttr]          = useState({ field: '', value: '' });
+  const [newChildFields, setNewChildFields] = useState([]);
   const [loading, setLoading]          = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [showAddField, setShowAddField] = useState(false);
+  const [selectedFieldId, setSelectedFieldId] = useState('');
 
   const Icon = (node.type && typeIcons[node.type.name]) || DefaultIcon;
   const hasChildren = node.children && node.children.length > 0;
@@ -100,8 +106,13 @@ function NodeRow({
       if (showDescriptionField) {
         payload.description = newChild.description;
       }
-      await createNode(payload);
+      const created = await createNode(payload);
+      // Immediately attach selected restriction fields
+      if (showRestrictionFields && newChildFields.length > 0 && createRestrictionField && created?.ID) {
+        await Promise.all(newChildFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
+      }
       setNewChild({ name: '', description: '', type: '' });
+      setNewChildFields([]);
       setShowAddChild(false);
       await onRefresh();
       setExpanded(true);
@@ -168,6 +179,27 @@ function NodeRow({
     try {
       await updateNode(node.ID, { parent_ID: newParentId });
       setShowMove(false);
+      await onRefresh();
+    } catch (e) { onError(e.message); }
+    setLoading(false);
+  }
+
+  async function handleAddRestrictionField() {
+    if (!selectedFieldId) return;
+    setLoading(true);
+    try {
+      await createRestrictionField({ domain_ID: node.ID, field_ID: selectedFieldId });
+      setSelectedFieldId('');
+      setShowAddField(false);
+      await onRefresh();
+    } catch (e) { onError(e.message); }
+    setLoading(false);
+  }
+
+  async function handleDeleteRestrictionField(mappingId) {
+    setLoading(true);
+    try {
+      await deleteRestrictionField(mappingId);
       await onRefresh();
     } catch (e) { onError(e.message); }
     setLoading(false);
@@ -267,6 +299,22 @@ function NodeRow({
             </Box>
           )}
 
+          {showRestrictionFields && node.restrictionFields && node.restrictionFields.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              {node.restrictionFields.map(rf => (
+                <Chip
+                  key={rf.ID}
+                  label={rf.field?.name || rf.field_ID}
+                  size="small"
+                  onDelete={canManage ? () => handleDeleteRestrictionField(rf.ID) : undefined}
+                  color="secondary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: 9 }}
+                />
+              ))}
+            </Box>
+          )}
+
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             {onGenerate && (
               <Button 
@@ -279,6 +327,11 @@ function NodeRow({
               >
                 Role
               </Button>
+            )}
+            {showRestrictionFields && (
+              <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} title="Define Mandatory Fields">
+                <Sliders size={13} />
+              </IconButton>
             )}
             <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} title="Add Attribute"><Plus size={13} /></IconButton>
             <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); }} disabled={!canManage} title="Rename / Edit"><Edit3 size={13} /></IconButton>
@@ -298,6 +351,32 @@ function NodeRow({
             <IconButton size="small" onClick={() => setShowAddAttr(false)}><X size={15} /></IconButton>
           </Card>
         </Collapse>
+
+        {showRestrictionFields && (
+          <Collapse in={showAddField}>
+            <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center' }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>Assign Mandatory Field:</Typography>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel id={`add-field-select-${node.ID}`}>Select Field</InputLabel>
+                <Select
+                  labelId={`add-field-select-${node.ID}`}
+                  label="Select Field"
+                  value={selectedFieldId}
+                  onChange={e => setSelectedFieldId(e.target.value)}
+                >
+                  <MenuItem value="" disabled><em>— Choose Field —</em></MenuItem>
+                  {nodeTypes.map(f => (
+                    <MenuItem key={f.ID} value={f.ID}>
+                      {f.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button variant="contained" size="small" onClick={handleAddRestrictionField} disabled={loading || !selectedFieldId}>Assign</Button>
+              <IconButton size="small" onClick={() => { setShowAddField(false); setSelectedFieldId(''); }}><X size={15} /></IconButton>
+            </Card>
+          </Collapse>
+        )}
 
         <Collapse in={showAddChild}>
           <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -332,8 +411,25 @@ function NodeRow({
                 </Select>
               </FormControl>
             )}
+            {showRestrictionFields && nodeTypes.length > 0 && (
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel id={`child-fields-label-${node.ID}`}>Restriction Fields</InputLabel>
+                <Select
+                  labelId={`child-fields-label-${node.ID}`}
+                  label="Restriction Fields"
+                  multiple
+                  value={newChildFields}
+                  onChange={e => setNewChildFields(e.target.value)}
+                  renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
+                >
+                  {nodeTypes.map(f => (
+                    <MenuItem key={f.ID} value={f.ID}>{f.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
             <Button variant="contained" size="small" onClick={handleAddChild} disabled={loading}>Add</Button>
-            <IconButton size="small" onClick={() => setShowAddChild(false)}><X size={15} /></IconButton>
+            <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); }}><X size={15} /></IconButton>
           </Card>
         </Collapse>
 
@@ -358,6 +454,9 @@ function NodeRow({
             showTypeSelector={showTypeSelector}
             showDescriptionField={showDescriptionField}
             maxNameLength={maxNameLength}
+            showRestrictionFields={showRestrictionFields}
+            createRestrictionField={createRestrictionField}
+            deleteRestrictionField={deleteRestrictionField}
           />
         ))}
 
@@ -432,6 +531,9 @@ export default function HierarchicalManager({
   showTypeSelector = true,
   showDescriptionField = false,
   maxNameLength = 100,
+  showRestrictionFields = false,
+  createRestrictionField,
+  deleteRestrictionField,
 }) {
   const [allNodes, setAllNodes]   = useState([]);
   const [roots, setRoots]         = useState([]);
@@ -439,6 +541,7 @@ export default function HierarchicalManager({
   const [loading, setLoading]     = useState(true);
   const [showAdd, setShowAdd]     = useState(false);
   const [newRoot, setNewRoot]     = useState({ name: '', description: '', type: '' });
+  const [newRootFields, setNewRootFields] = useState([]);
   const [snackbar, setSnackbar]   = useState({ open: false, message: '', severity: 'error' });
 
   const handleCloseSnackbar = (event, reason) => {
@@ -475,8 +578,13 @@ export default function HierarchicalManager({
       if (showDescriptionField) {
         payload.description = newRoot.description || '';
       }
-      await createNode(payload);
+      const created = await createNode(payload);
+      // Immediately attach selected restriction fields
+      if (showRestrictionFields && newRootFields.length > 0 && createRestrictionField && created?.ID) {
+        await Promise.all(newRootFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
+      }
       setNewRoot({ name: '', description: '', type: '' });
+      setNewRootFields([]);
       setShowAdd(false);
       await load();
     } catch (e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
@@ -567,8 +675,25 @@ export default function HierarchicalManager({
               </Select>
             </FormControl>
           )}
+          {showRestrictionFields && nodeTypes.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="root-fields-label">Restriction Fields</InputLabel>
+              <Select
+                labelId="root-fields-label"
+                label="Restriction Fields"
+                multiple
+                value={newRootFields}
+                onChange={e => setNewRootFields(e.target.value)}
+                renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
+              >
+                {nodeTypes.map(f => (
+                  <MenuItem key={f.ID} value={f.ID}>{f.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
           <Button variant="contained" onClick={handleAddRoot}>Add</Button>
-          <IconButton onClick={() => setShowAdd(false)} size="small"><X size={16} /></IconButton>
+          <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); }} size="small"><X size={16} /></IconButton>
         </Card>
       </Collapse>
 
@@ -604,6 +729,9 @@ export default function HierarchicalManager({
                 showTypeSelector={showTypeSelector}
                 showDescriptionField={showDescriptionField}
                 maxNameLength={maxNameLength}
+                showRestrictionFields={showRestrictionFields}
+                createRestrictionField={createRestrictionField}
+                deleteRestrictionField={deleteRestrictionField}
               />
             ))}
           </Box>

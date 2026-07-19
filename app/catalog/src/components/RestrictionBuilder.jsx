@@ -96,7 +96,7 @@ const TYPE_COLOR = {
   HIERARCHY:    'success',
   SINGLE_VALUE: 'primary',
   RANGE:        'warning',
-  PATTERN:      'info',
+  CP:           'info',
 };
 const TYPE_LABEL = {
   ALL:          'All (*)',
@@ -108,13 +108,12 @@ const TYPE_LABEL = {
   GE:           'Greater Equal (GE)',
   LT:           'Less Than (LT)',
   LE:           'Less Equal (LE)',
-  CP:           'Like (CP)',
+  CP:           'Pattern (CP)',
   BT:           'Between (BT)',
   MULTI_VALUE:  'In List',
   HIERARCHY:    'Hierarchy',
   SINGLE_VALUE: 'Equals',
   RANGE:        'Range',
-  PATTERN:      'Pattern',
 };
 
 function TagInput({ values, onChange }) {
@@ -175,7 +174,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       setBdcValues([]);
       return;
     }
-    if (['PATTERN', 'CP', 'RANGE', 'BT', 'ALL', 'N', 'NN'].includes(filterType)) {
+    if (['CP', 'RANGE', 'BT', 'ALL', 'N', 'NN'].includes(filterType)) {
       setBdcValues([]);
       return;
     }
@@ -226,7 +225,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     );
   }
 
-  if (filterType === 'PATTERN' || filterType === 'CP') {
+  if (filterType === 'CP') {
     return (
       <TextField
         size="small"
@@ -727,7 +726,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       }
     } catch {}
   } else {
-    // SINGLE_VALUE / EQ / NE / GT / GE / LT / LE / CP / PATTERN — may be stored as {id, text}
+    // SINGLE_VALUE / EQ / NE / GT / GE / LT / LE / CP — may be stored as {id, text}
     try {
       const parsed = JSON.parse(restriction.value);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -814,7 +813,11 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
     onChange(restrictions.filter(r => r.ID !== id));
   }
 
-  const inheritedFields = new Set(inheritedRestrictions.map(r => r.field));
+  const inheritedFields = new Set(
+    inheritedRestrictions
+      .filter(r => !(r.filterType === 'ALL' || r.value === '*'))
+      .map(r => r.field)
+  );
   const availableFields = restrictionFields.filter(f => !inheritedFields.has(f.name));
 
   return (

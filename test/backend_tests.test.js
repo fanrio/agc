@@ -324,6 +324,91 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/Roles(ID='${idB}')`);
   });
 
+  await t.test('resolveEffectiveRestrictions overrides parent wildcard restriction if child restricts same field', async () => {
+    const parentRoleName = `ROLE_P_WILD_${uniqueSuffix}`;
+    const childRoleName = `ROLE_C_SPEC_${uniqueSuffix}`;
+
+    // Create Parent Role
+    const resP = await POST('/odata/v4/auth/Roles', { name: parentRoleName, type: 'ORG_BASED', environment_ID: 'D' });
+    const idP = resP.data.ID;
+
+    // Create Child Role
+    const resC = await POST('/odata/v4/auth/Roles', { name: childRoleName, type: 'ORG_BASED', environment_ID: 'D' });
+    const idC = resC.data.ID;
+
+    // Inherit Child from Parent
+    const inh = await POST('/odata/v4/auth/RoleInheritance', { role_ID: idC, parent_ID: idP });
+
+    // Add wildcard restriction to Parent on Country
+    await POST('/odata/v4/auth/Restrictions', { role_ID: idP, field: 'Country', filterType: 'CP', value: '*' });
+
+    // Add specific restriction to Child on Country
+    await POST('/odata/v4/auth/Restrictions', { role_ID: idC, field: 'Country', filterType: 'SINGLE_VALUE', value: 'DE' });
+
+    // Call resolveEffectiveRestrictions for Child
+    const resolveRes = await POST('/odata/v4/auth/resolveEffectiveRestrictions', { roleId: idC });
+    assert.strictEqual(resolveRes.status, 200);
+
+    const restrictions = resolveRes.data.value;
+    // Should ONLY contain the specific 'DE' restriction, the parent's '*' restriction must be overridden/skipped!
+    const countryRestrictions = restrictions.filter(r => r.field === 'Country');
+    assert.strictEqual(countryRestrictions.length, 1);
+    assert.strictEqual(countryRestrictions[0].value, 'DE');
+    assert.strictEqual(countryRestrictions[0].filterType, 'SINGLE_VALUE');
+
+    // Clean up
+    await DELETE(`/odata/v4/auth/RoleInheritance(ID=${inh.data.ID})`);
+    await DELETE(`/odata/v4/auth/Roles(ID='${idC}')`);
+    await DELETE(`/odata/v4/auth/Roles(ID='${idP}')`);
+  });
+
+  await t.test('RoleInheritance and Restrictions CREATE/DELETE triggers HANA re-sync', async () => {
+    const parentRoleName = `ROLE_P_SYNC_${uniqueSuffix}`;
+    const childRoleName = `ROLE_C_SYNC_${uniqueSuffix}`;
+
+    // 1. Create Parent and Child roles
+    const resP = await POST('/odata/v4/auth/Roles', { name: parentRoleName, type: 'SINGLE', environment_ID: 'D' });
+    const idP = resP.data.ID;
+
+    const resC = await POST('/odata/v4/auth/Roles', { name: childRoleName, type: 'SINGLE', environment_ID: 'D' });
+    const idC = resC.data.ID;
+
+    // 2. Add wildcard restriction to Parent Role
+    const restP = await POST('/odata/v4/auth/Restrictions', { role_ID: idP, field: 'CostCenter', filterType: 'CP', value: '*' });
+    assert.strictEqual(restP.status, 201);
+
+    // 3. Create RoleInheritance link (child now inherits parent restrictions)
+    const inh = await POST('/odata/v4/auth/RoleInheritance', { role_ID: idC, parent_ID: idP });
+    assert.strictEqual(inh.status, 201);
+
+    // 4. Assign user to Child Role (passes because child inherits CostCenter: CP * restriction)
+    const assignRes = await POST('/odata/v4/auth/RoleAssignments', {
+      userId: `sync.user_${uniqueSuffix}@test.com`,
+      userName: 'Sync Test User',
+      role_ID: idC
+    });
+    assert.strictEqual(assignRes.status, 201);
+    const assignId = assignRes.data.ID;
+
+    // 5. Add specific override restriction to Child Role (should trigger assignment sync)
+    const restC = await POST('/odata/v4/auth/Restrictions', { role_ID: idC, field: 'CostCenter', filterType: 'EQ', value: 'DE01' });
+    assert.strictEqual(restC.status, 201);
+
+    // 6. Delete the override restriction from Child Role (should trigger assignment sync)
+    const delRestC = await DELETE(`/odata/v4/auth/Restrictions(ID=${restC.data.ID})`);
+    assert.strictEqual(delRestC.status, 204);
+
+    // 7. Delete inheritance link (should trigger assignment sync)
+    const delInh = await DELETE(`/odata/v4/auth/RoleInheritance(ID=${inh.data.ID})`);
+    assert.strictEqual(delInh.status, 204);
+
+    // Clean up
+    await DELETE(`/odata/v4/auth/RoleAssignments(ID=${assignId})`);
+    await DELETE(`/odata/v4/auth/Restrictions(ID=${restP.data.ID})`);
+    await DELETE(`/odata/v4/auth/Roles(ID='${idC}')`);
+    await DELETE(`/odata/v4/auth/Roles(ID='${idP}')`);
+  });
+
   // 4. simulateAccess
   await t.test('simulateAccess function and evaluation logic', async () => {
     // Create a role and add various restriction types
@@ -339,8 +424,8 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     // RANGE restriction
     await POST('/odata/v4/auth/Restrictions', { role_ID: rId, field: 'Amount', filterType: 'RANGE', value: JSON.stringify({ from: 100, to: 500 }) });
 
-    // PATTERN restriction
-    await POST('/odata/v4/auth/Restrictions', { role_ID: rId, field: 'CompanyCode', filterType: 'PATTERN', value: 'CC%' });
+    // CP restriction
+    await POST('/odata/v4/auth/Restrictions', { role_ID: rId, field: 'CompanyCode', filterType: 'CP', value: 'CC%' });
 
     // HIERARCHY restriction
     await POST('/odata/v4/auth/Restrictions', { role_ID: rId, field: 'Dept', filterType: 'HIERARCHY', value: 'ORG01' });
@@ -363,7 +448,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       { Country: 'DE', Plant: 'DE01', Amount: '99', CompanyCode: 'CC100', Dept: 'ORG01' },
       // Row 4: RANGE invalid number failing
       { Country: 'DE', Plant: 'DE01', Amount: 'invalid', CompanyCode: 'CC100', Dept: 'ORG01' },
-      // Row 5: PATTERN failing
+      // Row 5: CP failing
       { Country: 'DE', Plant: 'DE01', Amount: '250', CompanyCode: 'BB100', Dept: 'ORG01' },
       // Row 6: Missing field failing
       { Plant: 'DE01', Amount: '250', CompanyCode: 'CC100', Dept: 'ORG01' }

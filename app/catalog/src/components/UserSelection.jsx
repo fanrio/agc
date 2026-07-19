@@ -83,8 +83,13 @@ export default function UserSelection({
           <li key={key || option.username} {...rest}>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {option.displayName}
+                {option.displayName} {option.username ? `(${option.username})` : ''}
               </Typography>
+              {(option.email || option.department) && (
+                <Typography variant="caption" color="text.secondary">
+                  {option.email}{option.email && option.department ? ' | ' : ''}{option.department}
+                </Typography>
+              )}
             </Box>
           </li>
         );

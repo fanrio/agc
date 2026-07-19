@@ -28,23 +28,25 @@ vi.mock('../../api', () => ({
   getAccessDomainsFlat: vi.fn(() => Promise.resolve([])),
 }));
 
+const mockPermissions = {
+  isSuperAdmin: true,
+  canManageAppUsers: true,
+  canManageOrgRoles: true,
+  canManageSingleRoles: true,
+  canManageDerivedRoles: true,
+  managedDerivedRolesScope: '[]',
+  canAssignRoles: true,
+  canManageReplications: true,
+  canViewAuditLogs: true,
+  canManageSettings: true,
+  allowedEnvironments: '[]',
+  isActive: true
+};
+
 // Mock the PermissionsContext module
 vi.mock('../../context/PermissionsContext', () => ({
   usePermissions: () => ({
-    permissions: {
-      isSuperAdmin: true,
-      canManageAppUsers: true,
-      canManageOrgRoles: true,
-      canManageSingleRoles: true,
-      canManageDerivedRoles: true,
-      managedDerivedRolesScope: '[]',
-      canAssignRoles: true,
-      canManageReplications: true,
-      canViewAuditLogs: true,
-      canManageSettings: true,
-      allowedEnvironments: '[]',
-      isActive: true
-    },
+    permissions: mockPermissions,
     loading: false,
     error: null,
   })
@@ -109,6 +111,8 @@ describe('Wizard Component - Expanded Tests', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockPermissions.isSuperAdmin = true;
+    mockPermissions.managedDerivedRolesScope = '[]';
     api.getRoles.mockResolvedValue(mockRoles);
     api.getEnvironments.mockResolvedValue(mockEnvironments);
     api.getAllOrgNodesFlat.mockResolvedValue(mockOrgNodes);
@@ -369,5 +373,133 @@ describe('Wizard Component - Expanded Tests', () => {
     await waitFor(() => {
       expect(screen.queryByText('Confirm Changes & Analyze Impact')).not.toBeInTheDocument();
     });
+  });
+
+  it('filters derived role restriction fields to only those in the access domain and not used in parent roles', async () => {
+    mockPermissions.isSuperAdmin = false;
+    mockPermissions.managedDerivedRolesScope = '*';
+
+    api.getAccessDomainsFlat.mockResolvedValue([
+      {
+        ID: 'domain-finance',
+        name: 'Finance',
+        restrictionFields: [
+          { ID: 'mapping-1', field_ID: 'f-2', field: { ID: 'f-2', name: 'Plant' } }
+        ]
+      }
+    ]);
+
+    api.getRoles.mockResolvedValue([
+      {
+        ID: 'role-parent-finance',
+        name: 'ROLE_PARENT_FINANCE',
+        type: 'SINGLE',
+        accessDomain_ID: 'domain-finance',
+        ownRestrictions: [
+          { ID: 'rest-parent', field: 'Plant', filterType: 'SINGLE_VALUE', value: '1000' }
+        ]
+      }
+    ]);
+
+    api.getRestrictionFields.mockResolvedValue([
+      { ID: 'f-1', name: 'Country' },
+      { ID: 'f-2', name: 'Plant' }
+    ]);
+
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Single Role')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Single Role'));
+
+    const inheritSelect = screen.getByLabelText(/Inherit from Roles/i);
+    fireEvent.mouseDown(inheritSelect);
+    const parentOption = await screen.findByRole('option', { name: 'ROLE_PARENT_FINANCE' });
+    fireEvent.click(parentOption);
+
+    await waitFor(() => {
+      const accessDomainSelect = screen.getByLabelText(/Access Domain/i);
+      expect(accessDomainSelect).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    fireEvent.change(screen.getByLabelText(/Role Name/i), { target: { value: 'ROLE_CHILD' } });
+
+    fireEvent.click(screen.getByText('Restrictions'));
+    await waitFor(() => {
+      expect(screen.getByText('Data Access Restrictions')).toBeInTheDocument();
+    });
+
+    const fieldSelect = screen.getByLabelText(/Field/i);
+    fireEvent.mouseDown(fieldSelect);
+
+    expect(screen.queryByRole('option', { name: 'Country' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Plant' })).not.toBeInTheDocument();
+  });
+
+  it('allows selecting a restriction field in a derived role if the parent role restricts it to CP * or ALL', async () => {
+    mockPermissions.isSuperAdmin = false;
+    mockPermissions.managedDerivedRolesScope = '*';
+
+    api.getAccessDomainsFlat.mockResolvedValue([
+      {
+        ID: 'domain-finance',
+        name: 'Finance',
+        restrictionFields: [
+          { ID: 'mapping-1', field_ID: 'f-1', field: { ID: 'f-1', name: 'Country' } },
+          { ID: 'mapping-2', field_ID: 'f-2', field: { ID: 'f-2', name: 'Plant' } }
+        ]
+      }
+    ]);
+
+    api.getRoles.mockResolvedValue([
+      {
+        ID: 'role-parent-finance',
+        name: 'ROLE_PARENT_FINANCE',
+        type: 'SINGLE',
+        accessDomain_ID: 'domain-finance',
+        ownRestrictions: [
+          { ID: 'rest-parent-1', field: 'Country', filterType: 'ALL', value: '' },
+          { ID: 'rest-parent-2', field: 'Plant', filterType: 'SINGLE_VALUE', value: '1000' }
+        ]
+      }
+    ]);
+
+    api.getRestrictionFields.mockResolvedValue([
+      { ID: 'f-1', name: 'Country' },
+      { ID: 'f-2', name: 'Plant' }
+    ]);
+
+    render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Single Role')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Single Role'));
+
+    const inheritSelect = screen.getByLabelText(/Inherit from Roles/i);
+    fireEvent.mouseDown(inheritSelect);
+    const parentOption = await screen.findByRole('option', { name: 'ROLE_PARENT_FINANCE' });
+    fireEvent.click(parentOption);
+
+    await waitFor(() => {
+      const accessDomainSelect = screen.getByLabelText(/Access Domain/i);
+      expect(accessDomainSelect).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    fireEvent.change(screen.getByLabelText(/Role Name/i), { target: { value: 'ROLE_CHILD' } });
+
+    fireEvent.click(screen.getByText('Restrictions'));
+    await waitFor(() => {
+      expect(screen.getByText('Data Access Restrictions')).toBeInTheDocument();
+    });
+
+    const fieldSelect = screen.getByLabelText(/Field/i);
+    fireEvent.mouseDown(fieldSelect);
+
+    expect(screen.getByRole('option', { name: 'Country' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Plant' })).not.toBeInTheDocument();
   });
 });

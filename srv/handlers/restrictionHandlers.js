@@ -101,10 +101,11 @@ function registerRestrictionHandlers(service, entities, deps) {
   // Audit log + queue + HANA sync — after CREATE
   // -------------------------------------------------------------------------
   service.after('CREATE', 'Restrictions', async (restriction, req) => {
-    if (!restriction.role_ID) return;
+    const roleId = restriction.role_ID || req.data?.role_ID;
+    if (!roleId) return;
 
     try {
-      const role     = await cds.db.run(SELECT.one.from(Roles).where({ ID: restriction.role_ID }));
+      const role     = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
       const roleName = role ? role.name : 'Unknown Role';
       const details  = {
         'Restriction Added': {
@@ -116,7 +117,7 @@ function registerRestrictionHandlers(service, entities, deps) {
         ID:         cds.utils.uuid(),
         entityName: 'Roles',
         action:     'UPDATE',
-        recordId:   restriction.role_ID,
+        recordId:   roleId,
         targetName: roleName,
         details:    JSON.stringify(details)
       }));
@@ -126,7 +127,7 @@ function registerRestrictionHandlers(service, entities, deps) {
     }
 
     // Run HANA re-sync synchronously (lets errors propagate to frontend)
-    await syncRoleAssignmentsToHana(restriction.role_ID);
+    await syncRoleAssignmentsToHana(roleId);
   });
 
   // -------------------------------------------------------------------------

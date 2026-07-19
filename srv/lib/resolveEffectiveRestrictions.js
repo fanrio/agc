@@ -63,7 +63,30 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
   }
 
   walk(roleId, true);
-  return result;
+
+  // Filter out parent wildcard restrictions if a descendant has a restriction on the same field
+  const finalResult = [];
+  const fieldsRestrictedByDescendants = new Set();
+  
+  for (let i = result.length - 1; i >= 0; i--) {
+    const r = result[i];
+    const fieldLower = r.field.toLowerCase();
+    
+    const isWildcard = r.filterType === 'ALL' || 
+                       (r.filterType === 'CP' && r.value === '*') ||
+                       r.value === '*';
+                       
+    if (isWildcard) {
+      if (fieldsRestrictedByDescendants.has(fieldLower)) {
+        continue; // discard ancestor wildcard restriction
+      }
+    }
+    
+    fieldsRestrictedByDescendants.add(fieldLower);
+    finalResult.unshift(r);
+  }
+
+  return finalResult;
 }
 
 /**
@@ -165,7 +188,6 @@ function evaluateRestriction(restriction, dataRow) {
       break;
     }
 
-    case 'PATTERN':
     case 'CP': {
       const pattern = restriction.value
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')

@@ -16,7 +16,7 @@ const cds = require('@sap/cds');
 
 // Lib
 const HanaClient = require('./lib/hanaClient');
-const BdcClient  = require('./lib/bdcClient');
+const BdcClient = require('./lib/bdcClient');
 const { syncDynamicRule } = require('./services/dynamicSyncService');
 
 const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
@@ -46,8 +46,8 @@ const {
 } = require('./services/bdcActionService');
 
 // Handlers
-const { registerRoleHandlers }        = require('./handlers/roleHandlers');
-const { registerAssignmentHandlers }  = require('./handlers/assignmentHandlers');
+const { registerRoleHandlers } = require('./handlers/roleHandlers');
+const { registerAssignmentHandlers } = require('./handlers/assignmentHandlers');
 const { registerRestrictionHandlers } = require('./handlers/restrictionHandlers');
 const { registerAccessDomainHandlers } = require('./handlers/accessDomainHandlers');
 const { registerAppAuthorizationsHandlers } = require('./handlers/appAuthorizationsHandlers');
@@ -104,7 +104,7 @@ module.exports = cds.service.impl(async function () {
           canViewAuditLogs: true,
           canManageSettings: true,
           allowedEnvironments: 'ALL',
-          allowedStreams: 'ALL',
+          allowedAccessDomains: '',
           isActive: true
         }));
         console.log(`[auth] Successfully bootstrapped super admin user: ${superAdminId}`);
@@ -150,8 +150,8 @@ module.exports = cds.service.impl(async function () {
 
   const handlerDeps = {
     cds,
-    queueReplication:          boundQueueReplication,
-    syncAssignmentToHana:      boundSyncAssignment,
+    queueReplication: boundQueueReplication,
+    syncAssignmentToHana: boundSyncAssignment,
     syncRoleAssignmentsToHana: boundSyncRoleAssignments,
     resolveEffectiveRestrictions
   };
@@ -167,7 +167,7 @@ module.exports = cds.service.impl(async function () {
   // Org Role Generation actions
   // ---------------------------------------------------------------------------
 
-  this.on('generateOrgRole',    makeGenerateOrgRoleHandler(cds, entities));
+  this.on('generateOrgRole', makeGenerateOrgRoleHandler(cds, entities));
   this.on('generateAllOrgRoles', makeGenerateAllOrgRolesHandler(cds, entities));
 
   // ---------------------------------------------------------------------------
@@ -175,28 +175,28 @@ module.exports = cds.service.impl(async function () {
   // ---------------------------------------------------------------------------
 
   this.on('resolveEffectiveRestrictions', makeResolveEffectiveRestrictionsHandler(cds, entities));
-  this.on('simulateAccess',               makeSimulateAccessHandler(cds, entities));
+  this.on('simulateAccess', makeSimulateAccessHandler(cds, entities));
 
   // ---------------------------------------------------------------------------
   // BDC / HANA connection & data actions
   // ---------------------------------------------------------------------------
 
-  this.on('testBdcConnection',              makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient));
-  this.on('fetchBdcSpaces',                 makeFetchBdcSpacesHandler(BdcClient));
-  this.on('fetchBdcAssets',                 makeFetchBdcAssetsHandler(BdcClient));
-  this.on('fetchBdcRelationalValues',       makeFetchBdcRelationalValuesHandler(BdcClient));
-  this.on('fetchBdcAssetColumns',           makeFetchBdcAssetColumnsHandler(BdcClient));
-  this.on('fetchBdcAssetKeyColumns',        makeFetchBdcAssetKeyColumnsHandler(BdcClient));
-  this.on('fetchRawBdcSpaces',              makeFetchRawBdcSpacesHandler(BdcClient));
-  this.on('fetchRawBdcAssets',              makeFetchRawBdcAssetsHandler(BdcClient));
-  this.on('fetchRawBdcRelationalValues',    makeFetchRawBdcRelationalValuesHandler(BdcClient));
-  this.on('fetchRawBdcAssetColumns',        makeFetchRawBdcAssetColumnsHandler(BdcClient));
-  this.on('fetchRawBdcUsers',               makeFetchRawBdcUsersHandler(BdcClient));
-  this.on('fetchBdcAssociations',           makeFetchBdcAssociationsHandler(BdcClient));
-  this.on('fetchRawHanaViews',              makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
-  this.on('runBdcTaskChain',                makeRunBdcTaskChainHandler(BdcClient));
-  this.on('fetchBdcTaskChainLog',           makeFetchBdcTaskChainLogHandler(BdcClient));
-  this.on('searchScimUsers',                makeSearchScimUsersHandler(cds, entities, BdcClient));
+  this.on('testBdcConnection', makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient));
+  this.on('fetchBdcSpaces', makeFetchBdcSpacesHandler(BdcClient));
+  this.on('fetchBdcAssets', makeFetchBdcAssetsHandler(BdcClient));
+  this.on('fetchBdcRelationalValues', makeFetchBdcRelationalValuesHandler(BdcClient));
+  this.on('fetchBdcAssetColumns', makeFetchBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchBdcAssetKeyColumns', makeFetchBdcAssetKeyColumnsHandler(BdcClient));
+  this.on('fetchRawBdcSpaces', makeFetchRawBdcSpacesHandler(BdcClient));
+  this.on('fetchRawBdcAssets', makeFetchRawBdcAssetsHandler(BdcClient));
+  this.on('fetchRawBdcRelationalValues', makeFetchRawBdcRelationalValuesHandler(BdcClient));
+  this.on('fetchRawBdcAssetColumns', makeFetchRawBdcAssetColumnsHandler(BdcClient));
+  this.on('fetchRawBdcUsers', makeFetchRawBdcUsersHandler(BdcClient));
+  this.on('fetchBdcAssociations', makeFetchBdcAssociationsHandler(BdcClient));
+  this.on('fetchRawHanaViews', makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
+  this.on('runBdcTaskChain', makeRunBdcTaskChainHandler(BdcClient));
+  this.on('fetchBdcTaskChainLog', makeFetchBdcTaskChainLogHandler(BdcClient));
+  this.on('searchScimUsers', makeSearchScimUsersHandler(cds, entities, BdcClient));
 
   // ---------------------------------------------------------------------------
   // Replication actions

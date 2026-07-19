@@ -31,6 +31,10 @@ export default function AccessDomainsView() {
       showDescriptionField={true}
       maxNameLength={10}
       
+      showRestrictionFields={true}
+      createRestrictionField={api.createAccessDomainField}
+      deleteRestrictionField={api.deleteAccessDomainField}
+      
       canManage={canManage}
     />
   );

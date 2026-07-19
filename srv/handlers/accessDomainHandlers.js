@@ -5,23 +5,23 @@ const HanaClient = require('../lib/hanaClient');
  * Helper to sanitize the node name for a valid SQL table name
  */
 function sanitizeTableName(name) {
-  const clean = (name || '')
+  if (!name) return '';
+  const clean = name
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/^_+|_+$/g, ''); // Trim leading/trailing underscores
   
-  const baseName = clean || 'access_domain';
-  return `${baseName}_flat_authorizations`;
+  return `${clean}_flat_authorizations`;
 }
 
 function sanitizeHierTableName(name) {
-  const clean = (name || '')
+  if (!name) return '';
+  const clean = name
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/^_+|_+$/g, ''); // Trim leading/trailing underscores
   
-  const baseName = clean || 'access_domain';
-  return `${baseName}_hier_authorizations`;
+  return `${clean}_hier_authorizations`;
 }
 
 /**
@@ -106,8 +106,14 @@ function registerAccessDomainHandlers(service) {
       return;
     }
 
-    const tableName = sanitizeTableName(node.name);
-    const hierTableName = sanitizeHierTableName(node.name);
+    const name = node?.name || req.data?.name;
+    if (!name) {
+      console.warn('[AccessDomainHandler] Skipping table creation: name is empty or undefined.');
+      return;
+    }
+
+    const tableName = sanitizeTableName(name);
+    const hierTableName = sanitizeHierTableName(name);
     console.log(`[AccessDomainHandler] Creating custom tables "${tableName}" and "${hierTableName}" on ${hanaConnections.length} active HANA connections...`);
 
     for (const conn of hanaConnections) {

@@ -10,6 +10,7 @@ service AuthorizationService @(path: '/odata/v4/auth') {
   entity RestrictionFields      as projection on db.RestrictionFields;
   entity AccessDomains            as projection on db.AccessDomains;
   entity AccessDomainAttributes   as projection on db.AccessDomainAttributes;
+  entity AccessDomainFields       as projection on db.AccessDomainFields;
 
   // -------------------------------------------------------------------------
   // Roles

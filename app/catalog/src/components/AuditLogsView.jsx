@@ -297,7 +297,7 @@ export default function AuditLogsView() {
           return parsed.join(', ');
         }
       } catch {}
-    } else if (type === 'PATTERN') {
+    } else if (type === 'PATTERN' || type === 'CP') {
       return `Pattern: ${val}`;
     }
     return val;

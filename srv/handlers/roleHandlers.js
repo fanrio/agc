@@ -55,6 +55,32 @@ function registerRoleHandlers(service, entities, deps) {
       }
     }
 
+    if (roleType === 'DERIVED') {
+      let parentIds = [];
+      if (req.data.parentRoles && Array.isArray(req.data.parentRoles)) {
+        req.data.parentRoles.forEach(pr => {
+          if (pr.parent_ID) parentIds.push(pr.parent_ID);
+        });
+      }
+      if (parentIds.length === 0 && roleId) {
+        const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
+        parentIds = inherits.map(i => i.parent_ID);
+      }
+
+      if (parentIds.length > 0) {
+        const parents = await cds.db.run(SELECT.from(Roles).where({ ID: { in: parentIds } }));
+        if (parents.length > 0) {
+          const firstParentDomain = parents[0].accessDomain_ID;
+          const differentDomain = parents.some(p => p.accessDomain_ID !== firstParentDomain);
+          if (differentDomain) {
+            return req.reject(400, 'Derived role cannot inherit from parent roles belonging to different access domains.');
+          }
+          // Set/override the access domain of the derived role to match the parent
+          req.data.accessDomain_ID = firstParentDomain;
+        }
+      }
+    }
+
     if (envId) {
       requireEnvironment(perms, envId, req);
     }
@@ -355,6 +381,50 @@ function registerRoleHandlers(service, entities, deps) {
       }
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles DELETE:', err.message);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // RoleInheritance event handlers to trigger HANA replication sync
+  // -------------------------------------------------------------------------
+  service.after('CREATE', 'RoleInheritance', async (inheritance, req) => {
+    const roleId = inheritance.role_ID || req.data?.role_ID;
+    if (roleId) {
+      cds.spawn({ user: req?.user }, async () => {
+        try {
+          await syncRoleAssignmentsToHana(roleId);
+        } catch (err) {
+          console.error('[RoleHandlers] Background HANA sync failed for RoleInheritance CREATE:', err.message);
+        }
+      });
+    }
+  });
+
+  service.before('DELETE', 'RoleInheritance', async (req) => {
+    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
+    if (id) {
+      try {
+        const beforeState = await cds.db.run(SELECT.one.from(RoleInheritance).where({ ID: id }));
+        if (beforeState?.role_ID) {
+          req.context = req.context || {};
+          req.context.roleIdToSync = beforeState.role_ID;
+        }
+      } catch (err) {
+        console.error('[RoleHandlers] Before-state capture for RoleInheritance DELETE failed:', err.message);
+      }
+    }
+  });
+
+  service.after('DELETE', 'RoleInheritance', async (res, req) => {
+    const roleId = req.context?.roleIdToSync;
+    if (roleId) {
+      cds.spawn({ user: req?.user }, async () => {
+        try {
+          await syncRoleAssignmentsToHana(roleId);
+        } catch (err) {
+          console.error('[RoleHandlers] Background HANA sync failed for RoleInheritance DELETE:', err.message);
+        }
+      });
     }
   });
 }

@@ -26,14 +26,14 @@ class HanaClient {
 
   static getParams(setting) {
     return {
-      serverNode:              `${setting.host}:${setting.port || 443}`,
-      uid:                     setting.username,
-      pwd:                     setting.password,
-      encrypt:                 'true',
-      sslValidateCertificate:  'true',
+      serverNode: `${setting.host}:${setting.port || 443}`,
+      uid: setting.username,
+      pwd: setting.password,
+      encrypt: 'true',
+      sslValidateCertificate: 'true',
       sslHostNameInCertificate: setting.host,
-      pooling:                 'true',
-      maxPoolSize:             10
+      pooling: 'true',
+      maxPoolSize: 10
     };
   }
 
@@ -55,7 +55,7 @@ class HanaClient {
   static async execute(setting, sql, params = []) {
     // Guard only — throws on invalid username before connecting (prevents SQL injection via username)
     this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve, reject) => {
@@ -82,7 +82,7 @@ class HanaClient {
    */
   static async testConnectionAndCreateTable(setting) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve) => {
@@ -107,7 +107,7 @@ class HanaClient {
    */
   static async createCustomHierTable(setting, tableName) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve) => {
@@ -162,7 +162,7 @@ class HanaClient {
       return { success: true };
     } catch (execErr) {
       const isNotExists = execErr.message.toLowerCase().includes('invalid table name') ||
-                          execErr.message.toLowerCase().includes('does not exist');
+        execErr.message.toLowerCase().includes('does not exist');
       if (!isNotExists) {
         console.error(`[HanaClient] Failed to drop custom table ${tableName}:`, execErr.message);
       }
@@ -175,7 +175,7 @@ class HanaClient {
    */
   static async createCustomFlatTable(setting, tableName) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
 
     return new Promise((resolve) => {
@@ -228,7 +228,7 @@ class HanaClient {
    */
   static async syncAssignment(setting, assignmentId, isDelete, restrictions) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
     connParams.autoCommit = false; // Disable autocommit for transactional safety
 
@@ -274,7 +274,7 @@ class HanaClient {
                 }
 
                 let insertCount = 0;
-                let failed      = false;
+                let failed = false;
 
                 const checkAndResolve = () => {
                   if (failed) return;
@@ -320,7 +320,7 @@ class HanaClient {
    */
   static async syncCustomAssignment(setting, tableName, assignmentId, isDelete, restrictions, originalRoleName) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
     connParams.autoCommit = false; // Disable autocommit for transactional safety
 
@@ -369,7 +369,7 @@ class HanaClient {
                 }
 
                 let insertCount = 0;
-                let failed      = false;
+                let failed = false;
 
                 const checkAndResolve = () => {
                   if (failed) return;
@@ -427,7 +427,7 @@ class HanaClient {
    */
   static async syncCustomHierAssignment(setting, tableName, assignmentId, isDelete, hierEntries) {
     const schemaName = this.validateUsername(setting.username);
-    const conn       = hanaDriver.createConnection();
+    const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
     connParams.autoCommit = false;
 
@@ -461,7 +461,7 @@ class HanaClient {
 
               const executeInserts = (insertStmt) => {
                 let insertCount = 0;
-                let failed      = false;
+                let failed = false;
 
                 const checkAndResolve = () => {
                   if (failed) return;
@@ -480,7 +480,7 @@ class HanaClient {
                     r.identifier,
                     r.restriction,
                     r.targetNodeType || '',
-                    r.rootNodeType   || '',
+                    r.rootNodeType || '',
                     r.rootValues,
                     r.hierIdentifier
                   ], (insertExecErr) => {

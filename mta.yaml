@@ -1,0 +1,85 @@
+_schema-version: 3.3.0
+ID: fanrio-cortex
+version: 1.0.0
+description: "SAP BDC Authorization Wizard — CAP backend + React frontend"
+parameters:
+  enable-parallel-deployments: true
+  deploy_mode: html5-repo
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npx cds build --production
+modules:
+  - name: fanrio-cortex-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      instances: 1
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+    provides:
+      - name: srv-api # required by consumers of CAP services (e.g. approuter)
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: fanrio-cortex-auth
+      - name: fanrio-cortex-db
+
+  - name: fanrio-cortex-app-deployer
+    type: com.sap.application.content
+    path: gen
+    build-parameters:
+      build-result: app/
+      requires:
+        - name: fanriocortexcatalog
+          artifacts:
+            - catalog.zip
+          target-path: app/
+    requires:
+      - name: srv-api
+      - name: fanrio-cortex-html5-repo-host
+        parameters:
+          content-target: true
+          config:
+            HTML5Runtime_enabled: true
+      - name: fanrio-cortex-auth
+
+  - name: fanriocortexcatalog
+    type: html5
+    path: app/catalog
+    build-parameters:
+      build-result: dist
+      builder: custom
+      commands:
+        - npm ci
+        - npm run build
+      supported-platforms:
+        []
+
+resources:
+  - name: fanrio-cortex-html5-repo-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host
+  - name: fanrio-cortex-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: fanrio-cortex-${org}-${space}
+        tenant-mode: dedicated
+        oauth2-configuration:
+          credential-types:
+            - "binding-secret"
+            - "x509"
+  - name: fanrio-cortex-db
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: hana-cloud
+      service-plan: hana-free

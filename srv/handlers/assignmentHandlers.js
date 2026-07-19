@@ -110,11 +110,17 @@ function registerAssignmentHandlers(service, entities, deps) {
   // HANA sync + replication queue — after CREATE (first handler registered)
   // -------------------------------------------------------------------------
   service.after('CREATE', 'RoleAssignments', async (assignment, req) => {
+    // Read role_ID from req.data — the `assignment` result object may not carry association
+    // FK fields (role_ID) depending on CAP version / OData projection behaviour.
+    const roleId = req.data?.role_ID || assignment.role_ID;
+    const assignmentId = assignment.ID || req.data?.ID;
+    const userId = assignment.userId || req.data?.userId;
+
     // Run HANA sync and queue replication in background to prevent blocking HTTP thread
     cds.spawn({ user: req?.user }, async () => {
       try {
-        await syncAssignmentToHana(assignment.ID, assignment.userId, assignment.role_ID, false);
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+        await syncAssignmentToHana(assignmentId, userId, roleId, false);
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
         if (role) await queueReplication(role.name, role.environment_ID, req?.user?.id);
       } catch (err) {
         console.error('[AssignmentHandlers] Background sync/replication failed for RoleAssignments CREATE:', err.message);

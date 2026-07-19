@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
-  Box, Card, Typography, Button, IconButton, TextField, Collapse, Grid, Chip, 
-  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert 
+  Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid
 } from '@mui/material';
 import PrivateConnectivityIcon from '@mui/icons-material/PrivateConnectivity';
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
@@ -193,63 +193,58 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
     <Box sx={{ pl: depth * 4, mb: 2 }}>
       <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: '0 4px 12px 0 rgba(0,0,0,0.03)', overflow: 'visible' }}>
         <Box sx={{ p: 2.5 }}>
-          <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-            {/* Collapse/Expand toggle */}
-            <Grid sx={{ display: 'flex', alignItems: 'center' }}>
-              <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary">
-                {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-              </IconButton>
-            </Grid>
+          {/* Card header row — full-width flex */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
 
-            {/* Shield and basic details */}
-            <Grid sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: isCritical ? 'error.light' : 'primary.light', color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Shield size={22} />
-              </Box>
-            </Grid>
+            {/* Collapse toggle */}
+            <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary" sx={{ flexShrink: 0 }}>
+              {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+            </IconButton>
 
-            <Grid xs={12} sm={4}>
+            {/* Shield icon */}
+            <Box sx={{ flexShrink: 0, p: 1.2, borderRadius: 2, bgcolor: isCritical ? 'error.light' : 'primary.light', color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Shield size={22} />
+            </Box>
+
+            {/* Name + description — grows to fill space */}
+            <Box sx={{ flex: '1 1 0', minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
                 <Chip size="small" label={role.type} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
                 {role.critical && <Chip size="small" label="Critical (Manual)" color="error" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />}
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{role.description || 'No description provided.'}</Typography>
-            </Grid>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>{role.description || 'No description provided.'}</Typography>
+            </Box>
 
-            {/* Context Details */}
-            <Grid xs={12} sm={3}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {/* Context details — fixed width */}
+            <Box sx={{ flexShrink: 0, width: 200, display: { xs: 'none', md: 'flex' }, flexDirection: 'column', gap: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <strong>Env:</strong> {ENV_LABEL[role.environment_ID] || role.environment_ID}
+              </Typography>
+              {orgNodeName && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <strong>Env:</strong> {ENV_LABEL[role.environment_ID] || role.environment_ID}
+                  <strong>Org Unit:</strong> {orgNodeName}
                 </Typography>
-                {orgNodeName && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <strong>Org Unit:</strong> {orgNodeName}
-                  </Typography>
-                )}
-                {role.type === 'DERIVED' && role.parentRoles?.[0]?.parent && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <strong>Derived from:</strong> {role.parentRoles[0].parent.name}
-                  </Typography>
-                )}
-                <Typography variant="caption" color="text.secondary">
-                  <strong>Modified:</strong> {formatDateTime(role.modifiedAt)}
+              )}
+              {role.type === 'DERIVED' && role.parentRoles?.[0]?.parent && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <strong>Derived from:</strong> {role.parentRoles[0].parent.name}
                 </Typography>
-              </Box>
-            </Grid>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                <strong>Modified:</strong> {formatDateTime(role.modifiedAt)}
+              </Typography>
+            </Box>
 
-            {/* Metrics Chips */}
-            <Grid xs={12} sm={2}>
-              <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap' }}>
-                <Chip size="small" icon={<Users size={12} />} label={`${assignmentsCount} Direct`} variant="outlined" sx={{ borderRadius: 1.5 }} />
-                {childrenRoles.length > 0 && <Chip size="small" icon={<GitBranch size={12} />} label={`${childrenRoles.length} Children`} variant="outlined" sx={{ borderRadius: 1.5 }} />}
-              </Box>
-            </Grid>
+            {/* Metrics chips — fixed width */}
+            <Box sx={{ flexShrink: 0, display: { xs: 'none', sm: 'flex' }, gap: 0.8, flexWrap: 'wrap', width: 140, justifyContent: 'flex-start' }}>
+              <Chip size="small" icon={<Users size={12} />} label={`${assignmentsCount} Direct`} variant="outlined" sx={{ borderRadius: 1.5 }} />
+              {childrenRoles.length > 0 && <Chip size="small" icon={<GitBranch size={12} />} label={`${childrenRoles.length} Children`} variant="outlined" sx={{ borderRadius: 1.5 }} />}
+            </Box>
 
-            {/* Actions Panel */}
-            <Grid xs={12} sm={2} align="right">
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+            {/* Actions — fixed width, right-aligned */}
+            <Box sx={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <IconButton size="small" onClick={fetchEffective} title="View Effective Access" color="info">
                   {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
                 </IconButton>
@@ -260,7 +255,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                   <Trash2 size={16} />
                 </IconButton>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 1 }}>
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Button size="small" variant="outlined" startIcon={<GitBranch size={12} />} onClick={() => onDerive(role)} disabled={disableDerive} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
                   Derive
                 </Button>
@@ -268,8 +263,10 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                   Assign
                 </Button>
               </Box>
-            </Grid>
-          </Grid>
+            </Box>
+
+          </Box>
+
         </Box>
 
         {/* Expandable Children Roles Section */}

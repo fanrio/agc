@@ -22,6 +22,14 @@
 
 ## 2. Critical Rules
 
+> [!IMPORTANT]
+> **CRITICAL REPLICATION RULE — DO NOT CHANGE THIS LOGIC:**
+> When syncing assignments to HANA, the general rule is:
+> 1. Determine Effective role authorization (recursively walking parent chains, and overriding parent wildcard restrictions if a descendant role redefines the same field).
+> 2. Create HANA records based on the result of step 1 (Cartesian Product of all restriction values).
+> 3. Save the Cartesian product result rows into the HANA flat tables (delete old rows first, then insert new ones).
+> Any change to this core resolution or flattening logic is strictly forbidden.
+
 > [!CAUTION]
 > **NEVER delete or overwrite any file without reading its current contents first.** Files frequently contain non-obvious wiring and side effects.
 

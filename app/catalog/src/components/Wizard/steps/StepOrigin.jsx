@@ -191,7 +191,7 @@ export default function StepOrigin({
             label="Access Domain *"
             value={accessDomainId}
             onChange={e => setAccessDomainId(e.target.value)}
-            disabled={isReadOnly}
+            disabled={isReadOnly || (selectedParentIds && selectedParentIds.length > 0)}
           >
             {accessDomains.length === 0 ? (
               <MenuItem value={accessDomainId}>{accessDomainId}</MenuItem>

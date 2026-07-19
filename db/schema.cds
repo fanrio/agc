@@ -41,12 +41,18 @@ entity AccessDomains : managed {
   parent      : Association to AccessDomains;
   children    : Composition of many AccessDomains on children.parent = $self;
   attributes  : Composition of many AccessDomainAttributes on attributes.node = $self;
+  restrictionFields : Composition of many AccessDomainFields on restrictionFields.domain = $self;
 }
 
 entity AccessDomainAttributes : cuid {
   node  : Association to AccessDomains not null;
   field : String(100) not null;
   value : String(200) not null;
+}
+
+entity AccessDomainFields : cuid {
+  domain : Association to AccessDomains not null;
+  field  : Association to RestrictionFields not null;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +67,7 @@ entity Roles : managed {
   critical        : Boolean @default : false;
   environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
-  accessDomain    : Association to AccessDomains not null @default : 'app-global';
+  accessDomain    : Association to AccessDomains;
   parentRoles     : Association to many RoleInheritance on parentRoles.role = $self;
   childRoles      : Association to many RoleInheritance on childRoles.parent = $self;
   ownRestrictions : Composition of many Restrictions on ownRestrictions.role = $self;
@@ -83,14 +89,14 @@ entity RoleApprovers : cuid {
 entity Restrictions : cuid {
   role        : Association to Roles not null;
   field       : String(100) not null;
-  //  SINGLE_VALUE | MULTI_VALUE | RANGE | HIERARCHY | PATTERN
+  //  SINGLE_VALUE | MULTI_VALUE | RANGE | HIERARCHY | CP
   filterType  : String(20) not null;
   // Serialized value — see notes below per type:
   //   SINGLE_VALUE  → plain string  e.g. "Germany"
   //   MULTI_VALUE   → JSON array    e.g. ["DE01","DE02"]
   //   RANGE         → JSON object   e.g. {"from":1000,"to":50000}
   //   HIERARCHY     → orgNode ID    e.g. "a1b2c3..."
-  //   PATTERN       → plain string  e.g. "CC1%"
+  //   CP            → plain string  e.g. "CC1%"
   value       : String(1000) not null;
   sourceLabel : String(200);  // display hint — which ancestor introduced this
 }

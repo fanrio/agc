@@ -37,7 +37,7 @@ export function isCriticalRestriction(r, orgNodes = []) {
       if (val.toUpperCase() === 'ALL') return true;
     }
   }
-  if (type === 'PATTERN') {
+  if (type === 'CP') {
     return val.includes('*');
   }
   if (type === 'HIERARCHY') {
