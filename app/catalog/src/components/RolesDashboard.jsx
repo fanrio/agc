@@ -134,14 +134,6 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           <Typography variant="body2" color="text.secondary">Manage authorizations across Tree Hierarchy, Card Grid, and Data Table views</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField
-            size="small"
-            placeholder="Search roles or restrictions…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            sx={{ width: { xs: '100%', sm: 240 } }}
-          />
-
           {/* View mode switcher */}
           <ToggleButtonGroup
             value={viewMode}
@@ -175,6 +167,14 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
       {/* Filter Toolbar */}
       <Card variant="outlined" sx={{ p: 1.5, mb: 3, borderRadius: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', bgcolor: 'background.paper' }}>
+        <TextField
+          size="small"
+          placeholder="Search roles or restrictions…"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          sx={{ width: { xs: '100%', sm: 260 } }}
+        />
+
         <FormControl size="small" sx={{ minWidth: 130 }}>
           <InputLabel>Environment</InputLabel>
           <Select value={envFilter} label="Environment" onChange={e => setEnvFilter(e.target.value)}>
