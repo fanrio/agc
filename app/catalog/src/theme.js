@@ -194,6 +194,46 @@ const theme = createTheme({
         },
       },
     },
+    MuiCssBaseline: {
+      styleOverrides: {
+        '*': {
+          boxSizing: 'border-box',
+          margin: 0,
+          padding: 0,
+        },
+        'html, body, #root': {
+          height: '100%',
+          backgroundColor: '#f7f9fb',
+          color: '#191c1e',
+          fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+          fontSize: '15px',
+          lineHeight: 1.6,
+          WebkitFontSmoothing: 'antialiased',
+        },
+        '::-webkit-scrollbar': {
+          width: '6px',
+          height: '6px',
+        },
+        '::-webkit-scrollbar-track': {
+          background: '#f7f9fb',
+        },
+        '::-webkit-scrollbar-thumb': {
+          background: '#cbd5e1',
+          borderRadius: '3px',
+        },
+        '::-webkit-scrollbar-thumb:hover': {
+          background: '#94a3b8',
+        },
+        '@keyframes fadeIn': {
+          from: { opacity: 0, transform: 'translateY(4px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
+        '@keyframes pulse': {
+          '0%, 100%': { opacity: 1 },
+          '50%': { opacity: 0.4 },
+        },
+      },
+    },
   },
 });
 
