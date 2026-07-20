@@ -432,11 +432,11 @@ export default function AppAuthorizationsView() {
 
       {/* Open Demo Mode banner */}
       {authorizations.length === 0 && !loading && (
-        <Card sx={{ bgcolor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+        <Card sx={{ bgcolor: 'rgba(217, 119, 6, 0.05)', border: '1px solid rgba(217, 119, 6, 0.2)' }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <AlertTriangle size={24} color="#f59e0b" />
+            <AlertTriangle size={24} color="#d97706" />
             <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f59e0b' }}>Open Demo Mode Active</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main' }}>Open Demo Mode Active</Typography>
               <Typography variant="caption" color="text.secondary">
                 No authorizations defined. All simulated users have full access. Add a user to enable strict access control.
               </Typography>
@@ -475,12 +475,12 @@ export default function AppAuthorizationsView() {
                       : authorizations.map(auth => !auth ? null : (
                         <TableRow key={auth.ID} hover>
                           <IdentityCell auth={auth} />
-                          <BoolCell auth={auth} field="isActive" color="#ef4444" />
-                          <BoolCell auth={auth} field="isSuperAdmin" color="#f43f5e" />
+                          <BoolCell auth={auth} field="isActive" color="error.main" />
+                          <BoolCell auth={auth} field="isSuperAdmin" color="error.dark" />
                           <BoolCell auth={auth} field="canManageAppUsers" />
                           <BoolCell auth={auth} field="canManageSettings" />
                           <BoolCell auth={auth} field="canViewAuditLogs" />
-                          <BoolCell auth={auth} field="canManageReplications" color="#0ea5e9" />
+                          <BoolCell auth={auth} field="canManageReplications" color="info.main" />
                           <TableCell align="right">
                             <Tooltip title="Delete user authorization">
                               <IconButton color="error" size="small"
@@ -502,7 +502,7 @@ export default function AppAuthorizationsView() {
           {activeTab === 1 && (
             <Card>
               <SectionHeading icon={Shield} title="Manage Roles"
-                subtitle="Role creation, assignment, and stream-based scoping" color="#2563eb" />
+                subtitle="Role creation, assignment, and stream-based scoping" color="info.main" />
               <TableContainer>
                 <Table size="small">
                   <TableHead>
@@ -523,8 +523,8 @@ export default function AppAuthorizationsView() {
                       : authorizations.map(auth => !auth ? null : (
                         <TableRow key={auth.ID} hover>
                           <IdentityCell auth={auth} />
-                          <BoolCell auth={auth} field="canManageOrgRoles" color="#3b82f6" />
-                          <BoolCell auth={auth} field="canManageSingleRoles" color="#a78bfa" />
+                          <BoolCell auth={auth} field="canManageOrgRoles" color="info.main" />
+                          <BoolCell auth={auth} field="canManageSingleRoles" color="secondary.main" />
                           {/* Derived roles + scope selector */}
                           <TableCell align="center">
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
@@ -533,7 +533,7 @@ export default function AppAuthorizationsView() {
                                 checked={!!auth.canManageDerivedRoles}
                                 onChange={(e) => handleTogglePermission(auth.ID, 'canManageDerivedRoles', e.target.checked)}
                                 disabled={!!auth.isSuperAdmin}
-                                sx={{ '&.Mui-checked': { color: '#f59e0b' } }}
+                                sx={{ '&.Mui-checked': { color: 'warning.main' } }}
                               />
                               {!auth.isSuperAdmin && auth.canManageDerivedRoles && (
                                 <ScopeSelector
@@ -543,7 +543,7 @@ export default function AppAuthorizationsView() {
                               )}
                             </Box>
                           </TableCell>
-                          <BoolCell auth={auth} field="canAssignRoles" color="#10b981" />
+                          <BoolCell auth={auth} field="canAssignRoles" color="success.main" />
                           {/* Environments */}
                           <TableCell align="center">
                             {auth.isSuperAdmin ? (

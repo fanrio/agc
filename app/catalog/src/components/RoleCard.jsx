@@ -3,6 +3,7 @@ import {
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid, Tooltip
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import PrivateConnectivityIcon from '@mui/icons-material/PrivateConnectivity';
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
@@ -173,7 +174,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
                 {childrenRoles.length > 0 ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <Box sx={{ width: 28 }} />}
               </IconButton>
             </Tooltip>
-            <Shield size={16} color={isCritical ? '#d32f2f' : '#1976d2'} />
+            <Shield size={16} color={isCritical ? 'error.main' : 'primary.main'} />
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isCritical ? 'error.main' : 'text.primary' }}>{role.name}</Typography>
               <Typography variant="caption" color="text.secondary">{role.description || 'No description'}</Typography>
@@ -206,7 +207,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             </Tooltip>
 
             {/* Shield icon */}
-            <Box sx={{ flexShrink: 0, p: 1.2, borderRadius: 2, bgcolor: isCritical ? 'error.light' : 'primary.light', color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Box sx={{ flexShrink: 0, p: 1.2, borderRadius: 2, bgcolor: (t) => isCritical ? 'error.light' : alpha(t.palette.primary.main, 0.08), color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Shield size={22} />
             </Box>
 

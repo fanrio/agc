@@ -29,6 +29,24 @@ const theme = createTheme({
       dark: '#93000a',
       contrastText: '#ffffff',
     },
+    success: {
+      main: '#10b981',
+      light: '#34d399',
+      dark: '#047857',
+      contrastText: '#ffffff',
+    },
+    warning: {
+      main: '#d97706',
+      light: '#fbbf24',
+      dark: '#b45309',
+      contrastText: '#ffffff',
+    },
+    info: {
+      main: '#2563eb',
+      light: '#60a5fa',
+      dark: '#1d4ed8',
+      contrastText: '#ffffff',
+    },
     divider: '#e2e8f0', // outline-variant / Slate-200 border
   },
   typography: {

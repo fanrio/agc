@@ -25,43 +25,43 @@ export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
     {
       label: 'Total Active Roles',
       value: stats.roleCount,
-      color: '#3b82f6',
-      bg: 'rgba(59, 130, 246, 0.04)',
-      border: 'rgba(59, 130, 246, 0.15)',
+      color: 'info.main',
+      bg: 'rgba(37, 99, 235, 0.04)',
+      border: 'rgba(37, 99, 235, 0.15)',
       icon: Shield,
       filter: null
     },
     {
       label: 'Critical Roles',
       value: stats.criticalRoles,
-      color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.05)',
-      border: 'rgba(239, 68, 68, 0.25)',
+      color: 'error.main',
+      bg: 'rgba(186, 26, 26, 0.05)',
+      border: 'rgba(186, 26, 26, 0.25)',
       icon: ShieldAlert,
       filter: 'critical'
     },
     {
       label: 'Unrestricted Roles',
       value: stats.rolesWithoutRestriction,
-      color: '#f59e0b',
-      bg: 'rgba(245, 158, 11, 0.05)',
-      border: 'rgba(245, 158, 11, 0.25)',
+      color: 'warning.main',
+      bg: 'rgba(217, 119, 6, 0.05)',
+      border: 'rgba(217, 119, 6, 0.25)',
       icon: Ban,
       filter: 'unrestricted'
     },
     {
       label: 'No Assigned Users',
       value: stats.statsWithoutAssignment || stats.rolesWithoutAssignment,
-      color: '#3b82f6',
-      bg: 'rgba(59, 130, 246, 0.05)',
-      border: 'rgba(59, 130, 246, 0.25)',
+      color: 'info.main',
+      bg: 'rgba(37, 99, 235, 0.05)',
+      border: 'rgba(37, 99, 235, 0.25)',
       icon: UserX,
       filter: 'no-users'
     },
     {
       label: 'No Approvers Set',
       value: stats.rolesWithoutApprover,
-      color: '#10b981',
+      color: 'success.main',
       bg: 'rgba(16, 185, 129, 0.05)',
       border: 'rgba(16, 185, 129, 0.25)',
       icon: UserCheck,
@@ -85,10 +85,10 @@ export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
           <Box sx={{ 
             p: 1, 
             borderRadius: 2, 
-            bgcolor: 'rgba(59, 130, 246, 0.1)', 
-            border: '1px solid rgba(59, 130, 246, 0.2)' 
+            bgcolor: 'rgba(37, 99, 235, 0.1)', 
+            border: '1px solid rgba(37, 99, 235, 0.2)' 
           }}>
-            <Activity size={18} color="#3b82f6" />
+            <Activity size={18} color="#2563eb" />
           </Box>
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Roles Health Status</Typography>
@@ -104,7 +104,7 @@ export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
               value={100}
               size={36}
               thickness={4}
-              sx={{ color: 'rgba(255,255,255,0.05)' }}
+              sx={{ color: 'action.hover' }}
             />
             <CircularProgress
               variant="determinate"
@@ -112,7 +112,7 @@ export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
               size={36}
               thickness={4}
               sx={{
-                color: healthPercentage > 80 ? '#10b981' : healthPercentage > 50 ? '#f59e0b' : '#ef4444',
+                color: healthPercentage > 80 ? 'success.main' : healthPercentage > 50 ? 'warning.main' : 'error.main',
                 position: 'absolute',
                 left: 0
               }}
