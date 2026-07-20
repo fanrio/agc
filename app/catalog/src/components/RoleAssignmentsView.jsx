@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Autocomplete, InputAdornment } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Autocomplete, InputAdornment, Tooltip, Skeleton } from '@mui/material';
 import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
@@ -257,7 +257,32 @@ export default function RoleAssignmentsView() {
 
       <Card>
         {loading && assignments.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={30} /></Box>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell style={{ fontWeight: 600 }}>User ID</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>User Name</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Assigned Role</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Assigned On</TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>Assigned By</TableCell>
+                  <TableCell align="right" style={{ width: 120, fontWeight: 600 }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {[1, 2, 3, 4, 5].map((idx) => (
+                  <TableRow key={idx}>
+                    <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={140} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={90} /></TableCell>
+                    <TableCell align="right"><Skeleton variant="circular" width={28} height={28} sx={{ ml: 'auto' }} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         ) : assignments.length === 0 ? (
           <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <Box sx={{ opacity: 0.5, mb: 2 }}><Users size={40} /></Box>
@@ -307,14 +332,17 @@ export default function RoleAssignmentsView() {
                       {a.createdBy || 'System'}
                     </TableCell>
                     <TableCell align="right">
-                      <IconButton 
-                        color="error" 
-                        onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
-                        disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
-                        size="small"
-                      >
-                        <Trash2 size={15} />
-                      </IconButton>
+                      <Tooltip title="Remove assignment">
+                        <IconButton 
+                          color="error" 
+                          onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
+                          disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
+                          size="small"
+                          aria-label="Remove assignment"
+                        >
+                          <Trash2 size={15} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}

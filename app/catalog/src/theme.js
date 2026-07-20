@@ -168,6 +168,32 @@ const theme = createTheme({
         },
       },
     },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 6,
+          transition: 'all 0.15s ease-in-out',
+          '&:focus-visible': {
+            outline: '2px solid #000035',
+            outlineOffset: '2px',
+          },
+        },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          backgroundColor: '#000035',
+          fontSize: '0.75rem',
+          fontWeight: 600,
+          borderRadius: 4,
+          padding: '4px 8px',
+        },
+        arrow: {
+          color: '#000035',
+        },
+      },
+    },
   },
 });
 

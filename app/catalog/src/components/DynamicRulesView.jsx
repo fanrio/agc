@@ -4,7 +4,7 @@ import {
   TableHead, TableRow, Typography, Dialog, DialogTitle, DialogContent, 
   DialogActions, TextField, Checkbox, FormControlLabel, Select, MenuItem, 
   InputLabel, FormControl, Autocomplete, IconButton, Snackbar, Alert, 
-  CircularProgress
+  CircularProgress, Tooltip
 } from '@mui/material';
 import { Play, Edit, Trash2, Plus, RefreshCw } from 'lucide-react';
 import * as api from '../api';
@@ -329,16 +329,23 @@ export default function DynamicRulesView() {
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                        <IconButton 
-                          size="small" 
-                          color="primary" 
-                          onClick={() => handleSyncRule(rule.ID)}
-                          disabled={syncingRuleId === rule.ID}
-                        >
-                          {syncingRuleId === rule.ID ? <CircularProgress size={16} /> : <Play size={16} />}
-                        </IconButton>
-                        <IconButton size="small" onClick={() => handleOpenEdit(rule)}><Edit size={16} /></IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDelete(rule.ID)}><Trash2 size={16} /></IconButton>
+                        <Tooltip title="Run DRAGE Sync Rule">
+                          <IconButton 
+                            size="small" 
+                            color="primary" 
+                            onClick={() => handleSyncRule(rule.ID)}
+                            disabled={syncingRuleId === rule.ID}
+                            aria-label="Run DRAGE Sync Rule"
+                          >
+                            {syncingRuleId === rule.ID ? <CircularProgress size={16} /> : <Play size={16} />}
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit Rule">
+                          <IconButton size="small" onClick={() => handleOpenEdit(rule)} aria-label="Edit Rule"><Edit size={16} /></IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Rule">
+                          <IconButton size="small" color="error" onClick={() => handleDelete(rule.ID)} aria-label="Delete Rule"><Trash2 size={16} /></IconButton>
+                        </Tooltip>
                       </Box>
                     </TableCell>
                   </TableRow>

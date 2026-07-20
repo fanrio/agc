@@ -29,7 +29,8 @@ import {
   Chip,
   Divider,
   Tabs,
-  Tab
+  Tab,
+  Tooltip
 } from '@mui/material';
 import { Plus, Trash2, Shield, Settings, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
@@ -317,9 +318,11 @@ export default function AppAuthorizationsView() {
             <Card key={item.roleId} variant="outlined" sx={{ p: 1, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>{roleName}</Typography>
-                <IconButton size="small" color="error" onClick={() => handleRemoveRole(item.roleId)} sx={{ p: 0.5 }}>
-                  <Trash2 size={12} />
-                </IconButton>
+                <Tooltip title="Remove role">
+                  <IconButton size="small" color="error" onClick={() => handleRemoveRole(item.roleId)} sx={{ p: 0.5 }} aria-label="Remove role">
+                    <Trash2 size={12} />
+                  </IconButton>
+                </Tooltip>
               </Box>
               <Autocomplete
                 multiple size="small" options={allowedFields}
@@ -479,10 +482,13 @@ export default function AppAuthorizationsView() {
                           <BoolCell auth={auth} field="canViewAuditLogs" />
                           <BoolCell auth={auth} field="canManageReplications" color="#0ea5e9" />
                           <TableCell align="right">
-                            <IconButton color="error" size="small"
-                              onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}>
-                              <Trash2 size={15} />
-                            </IconButton>
+                            <Tooltip title="Delete user authorization">
+                              <IconButton color="error" size="small"
+                                onClick={() => handleDelete(auth.ID, auth.userName || auth.userId)}
+                                aria-label="Delete user authorization">
+                                <Trash2 size={15} />
+                              </IconButton>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
                       ))}

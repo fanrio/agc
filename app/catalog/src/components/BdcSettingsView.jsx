@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
 import * as api from '../api';
 
@@ -653,12 +653,16 @@ export default function BdcSettingsView() {
                         <Button variant="outlined" color="primary" size="small" onClick={() => handleTestConnection(s.ID)} startIcon={<Wifi size={13} />}>
                           Test Connection
                         </Button>
-                        <IconButton onClick={() => startEdit(s)} size="small" color="inherit">
-                          <Edit3 size={15} />
-                        </IconButton>
-                        <IconButton color="error" onClick={() => handleDelete(s.ID, s.systemName)} disabled={loading} size="small">
-                          <Trash2 size={15} />
-                        </IconButton>
+                        <Tooltip title="Edit Connection">
+                          <IconButton onClick={() => startEdit(s)} size="small" color="inherit" aria-label="Edit Connection">
+                            <Edit3 size={15} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Connection">
+                          <IconButton color="error" onClick={() => handleDelete(s.ID, s.systemName)} disabled={loading} size="small" aria-label="Delete Connection">
+                            <Trash2 size={15} />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     </Box>
 

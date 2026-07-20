@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress, Button } from '@mui/material';
 import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw, LogOut, UserCheck } from 'lucide-react';
 import LoginView from './components/LoginView';
@@ -26,12 +26,36 @@ const NAV = [
   { id: 'system',      label: 'System',              icon: Settings },
 ];
 
+function getNavFromHash() {
+  const hash = window.location.hash.replace('#', '').trim();
+  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'users', 'system', 'wizard', 'replications'];
+  return validNavs.includes(hash) ? hash : 'home';
+}
+
 function AppContent({ simulatedUser, onLogout }) {
-  const [activeNav, setActiveNav]         = useState('home');
+  const [activeNav, setActiveNavState]   = useState(getNavFromHash);
   const [wizardContext, setWizardContext] = useState(null); // { parentRoleId?, orgNodeId? }
   const [rolesFilter, setRolesFilter]     = useState(null);
   
   const { permissions, loading } = usePermissions();
+
+  const setActiveNav = (navId) => {
+    setActiveNavState(navId);
+    window.location.hash = `#${navId}`;
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const nav = getNavFromHash();
+      setActiveNavState(nav);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
 
   function navigateToRoles(filter = null) {
     setRolesFilter(filter);

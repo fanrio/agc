@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Typography, Box, IconButton } from '@mui/material';
+import { Card, Typography, Box, IconButton, Tooltip } from '@mui/material';
 import { Shield, X } from 'lucide-react';
 import UserSelection from '../../UserSelection';
 
@@ -40,9 +40,11 @@ export default function StepApprovers({
               <Shield size={14} color="#7c3aed" />
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{a.userName}</Typography>
               {!isReadOnly && (
-                <IconButton size="small" color="error" onClick={() => setApprovers(as => as.filter(x => x.ID !== a.ID))} sx={{ ml: 'auto' }}>
-                  <X size={14} />
-                </IconButton>
+                <Tooltip title="Remove approver">
+                  <IconButton size="small" color="error" onClick={() => setApprovers(as => as.filter(x => x.ID !== a.ID))} sx={{ ml: 'auto' }} aria-label="Remove approver">
+                    <X size={14} />
+                  </IconButton>
+                </Tooltip>
               )}
             </Card>
           ))}

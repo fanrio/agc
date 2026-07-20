@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
-  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid, Tooltip
 } from '@mui/material';
 import PrivateConnectivityIcon from '@mui/icons-material/PrivateConnectivity';
 import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
@@ -168,9 +168,11 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
       <Box sx={{ pl: depth * 3, mb: 1 }}>
         <Card variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 2, borderColor: isCritical ? 'error.light' : 'divider' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0}>
-              {childrenRoles.length > 0 ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <Box sx={{ width: 28 }} />}
-            </IconButton>
+            <Tooltip title={expanded ? "Collapse child roles" : "Expand child roles"}>
+              <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0} aria-label={expanded ? "Collapse child roles" : "Expand child roles"}>
+                {childrenRoles.length > 0 ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <Box sx={{ width: 28 }} />}
+              </IconButton>
+            </Tooltip>
             <Shield size={16} color={isCritical ? '#d32f2f' : '#1976d2'} />
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isCritical ? 'error.main' : 'text.primary' }}>{role.name}</Typography>
@@ -197,9 +199,11 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
 
             {/* Collapse toggle */}
-            <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary" sx={{ flexShrink: 0 }}>
-              {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-            </IconButton>
+            <Tooltip title={expanded ? "Collapse role" : "Expand role"}>
+              <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary" sx={{ flexShrink: 0 }} aria-label={expanded ? "Collapse role" : "Expand role"}>
+                {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+              </IconButton>
+            </Tooltip>
 
             {/* Shield icon */}
             <Box sx={{ flexShrink: 0, p: 1.2, borderRadius: 2, bgcolor: isCritical ? 'error.light' : 'primary.light', color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -245,15 +249,21 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             {/* Actions — fixed width, right-aligned */}
             <Box sx={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <IconButton size="small" onClick={fetchEffective} title="View Effective Access" color="info">
-                  {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
-                </IconButton>
-                <IconButton size="small" onClick={() => onEdit(role)} title={disableEdit ? "View Role Settings" : "Edit Role Settings"} color="primary">
-                  {disableEdit ? <Eye size={16} /> : <Edit3 size={16} />}
-                </IconButton>
-                <IconButton size="small" onClick={() => setConfirmDeleteOpen(true)} title="Delete Role" disabled={disableDelete} color="error">
-                  <Trash2 size={16} />
-                </IconButton>
+                <Tooltip title="View Effective Access">
+                  <IconButton size="small" onClick={fetchEffective} color="info" aria-label="View Effective Access">
+                    {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={disableEdit ? "View Role Settings" : "Edit Role Settings"}>
+                  <IconButton size="small" onClick={() => onEdit(role)} color="primary" aria-label={disableEdit ? "View Role Settings" : "Edit Role Settings"}>
+                    {disableEdit ? <Eye size={16} /> : <Edit3 size={16} />}
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete Role">
+                  <IconButton size="small" onClick={() => setConfirmDeleteOpen(true)} disabled={disableDelete} color="error" aria-label="Delete Role">
+                    <Trash2 size={16} />
+                  </IconButton>
+                </Tooltip>
               </Box>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Button size="small" variant="outlined" startIcon={<GitBranch size={12} />} onClick={() => onDerive(role)} disabled={disableDerive} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>

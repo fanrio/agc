@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar } from '@mui/material';
+import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip } from '@mui/material';
 import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
 import TemplateNameEditor from './TemplateNameEditor';
@@ -24,7 +24,7 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
             Moving: <Box component="span" color="primary.light" sx={{ fontWeight: 600 }}>{node.name}</Box>
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small"><X size={16} /></IconButton>
+        <IconButton onClick={onClose} size="small" aria-label="Close"><X size={16} /></IconButton>
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         <FormControl size="small" fullWidth sx={{ mt: 1 }}>
@@ -331,8 +331,8 @@ function NodeRow({
                     />
                   </Box>
                 )}
-                <IconButton color="primary" onClick={handleRename} disabled={loading} size="small"><Check size={14} /></IconButton>
-                <IconButton onClick={() => setEditing(false)} size="small"><X size={14} /></IconButton>
+                <IconButton color="primary" onClick={handleRename} disabled={loading} size="small" aria-label="Save rename"><Check size={14} /></IconButton>
+                <IconButton onClick={() => setEditing(false)} size="small" aria-label="Cancel edit"><X size={14} /></IconButton>
               </Box>
             ) : (
               <>
@@ -401,17 +401,29 @@ function NodeRow({
               </Button>
             )}
             {showRestrictionFields && (
-              <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} title="Define Mandatory Fields">
-                <Sliders size={13} />
-              </IconButton>
+              <Tooltip title="Define Mandatory Fields">
+                <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} aria-label="Define Mandatory Fields">
+                  <Sliders size={13} />
+                </IconButton>
+              </Tooltip>
             )}
-            <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} title="Add Attribute"><Plus size={13} /></IconButton>
-            <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} title="Rename / Edit"><Edit3 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} title="Add Child Node"><Building2 size={13} /></IconButton>
-            <IconButton size="small" onClick={() => setShowMove(true)} title="Move Node" disabled={loading || !canManage}>
-              <MoveRight size={13} />
-            </IconButton>
-            <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || !canManage} title={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
+            <Tooltip title="Add Attribute">
+              <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} aria-label="Add Attribute"><Plus size={13} /></IconButton>
+            </Tooltip>
+            <Tooltip title="Rename / Edit">
+              <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} aria-label="Rename / Edit"><Edit3 size={13} /></IconButton>
+            </Tooltip>
+            <Tooltip title="Add Child Node">
+              <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} aria-label="Add Child Node"><Building2 size={13} /></IconButton>
+            </Tooltip>
+            <Tooltip title="Move Node">
+              <IconButton size="small" onClick={() => setShowMove(true)} aria-label="Move Node" disabled={loading || !canManage}>
+                <MoveRight size={13} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={hasChildren ? 'Remove all children first' : 'Delete node'}>
+              <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || !canManage} aria-label={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
+            </Tooltip>
           </Box>
         </Box>
 

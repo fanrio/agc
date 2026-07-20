@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox, Card, CircularProgress, Chip } from '@mui/material';
+import { Box, Typography, Button, TextField, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox, Card, CircularProgress, Chip, Skeleton } from '@mui/material';
 import { Shield, Plus } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
@@ -75,8 +75,6 @@ function canManageThisDerivedRole(role, permissions, allRoles) {
   }
   return false;
 }
-
-
 
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }) {
   const { permissions } = usePermissions();
@@ -236,7 +234,20 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
       </Snackbar>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={40} /></Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[1, 2, 3, 4].map(idx => (
+            <Card key={idx} variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Skeleton variant="circular" width={40} height={40} />
+                <Box sx={{ flex: 1 }}>
+                  <Skeleton variant="text" width="40%" height={24} />
+                  <Skeleton variant="text" width="60%" height={18} />
+                </Box>
+                <Skeleton variant="rectangular" width={100} height={32} sx={{ borderRadius: 1.5 }} />
+              </Box>
+            </Card>
+          ))}
+        </Box>
       ) : rootRoles.length === 0 ? (
         <Card sx={{ py: 8, textAlign: 'center' }}>
           <Box sx={{ opacity: 0.5, mb: 2 }}><Shield size={40} /></Box>
