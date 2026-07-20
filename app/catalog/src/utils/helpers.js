@@ -153,3 +153,12 @@ export function filterRolesByPermissions(roles, permissions) {
   });
 }
 
+export function canDeriveFromRole(role, permissions) {
+  if (permissions?.isSuperAdmin) return true;
+  if (!permissions) return false;
+  if (!permissions.canManageDerivedRoles) return false;
+  if (role.type === 'SINGLE' && !permissions.canManageSingleRoles) return false;
+  if (role.type === 'ORG_BASED' && !permissions.canManageOrgRoles) return false;
+  return isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope);
+}
+

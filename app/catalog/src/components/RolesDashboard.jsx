@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions, ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox, Card, CircularProgress, Chip, Skeleton } from '@mui/material';
-import { Shield, Plus } from 'lucide-react';
+import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Shield, Plus, GitBranch, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
+import RoleTableView from './RoleTableView';
+import RoleTreeView from './RoleTreeView';
 import { isCriticalRestriction, isRoleInScope, filterRolesByPermissions } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
 
@@ -26,56 +28,6 @@ function getEffectiveRestrictionsFlat(role, allRoles) {
   return list;
 }
 
-// Helper recursively checking if a role is critical (all restrictions must be critical)
-function isCriticalRole(role, allRoles, orgNodes) {
-  const allRestrictions = getEffectiveRestrictionsFlat(role, allRoles);
-  if (allRestrictions.length === 0) return false;
-  return allRestrictions.every(r => isCriticalRestriction(r, orgNodes));
-}
-
-// Helper to recursively check if a role or any of its parents has restrictions
-function hasAnyRestrictions(role, allRoles) {
-  if (role.ownRestrictions && role.ownRestrictions.length > 0) return true;
-  if (role.parentRoles && role.parentRoles.length > 0) {
-    for (const pr of role.parentRoles) {
-      const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-      if (parentId) {
-        const parent = allRoles.find(r => r.ID === parentId);
-        if (parent && hasAnyRestrictions(parent, allRoles)) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-function canManageThisDerivedRole(role, permissions, allRoles) {
-  if (!permissions) return false;
-  if (!permissions.canManageDerivedRoles) return false;
-  const scope = permissions.managedDerivedRolesScope;
-  if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
-    return true;
-  }
-
-  // Check if role itself is in scope
-  if (isRoleInScope(role.ID, role.name, scope)) return true;
-
-  // Check if any parent role is in scope
-  if (role.parentRoles && role.parentRoles.length > 0) {
-    for (const pr of role.parentRoles) {
-      const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-      if (parentId) {
-        const parent = allRoles.find(r => r.ID === parentId);
-        if (parent && isRoleInScope(parent.ID, parent.name, scope)) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }) {
   const { permissions } = usePermissions();
   const [roles, setRoles] = useState([]);
@@ -83,6 +35,8 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
+  const [envFilter, setEnvFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL');
 
   useEffect(() => {
     if (initialFilter) {
@@ -91,8 +45,8 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   }, [initialFilter]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
-  // Toggle representation states ('compact' or 'detailed')
-  const [viewMode, setViewMode] = useState('detailed');
+  // Toggle representation states ('tree', 'grid', 'table')
+  const [viewMode, setViewMode] = useState('tree');
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') return;
@@ -131,8 +85,15 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     return parsedAllowedEnvs.includes(role.environment_ID);
   });
 
+  // Apply environment & type filters
+  const envFilteredRoles = visibleRoles.filter(role => {
+    if (envFilter !== 'ALL' && role.environment_ID !== envFilter) return false;
+    if (typeFilter !== 'ALL' && role.type !== typeFilter) return false;
+    return true;
+  });
+
   // Apply health filters
-  const healthFilteredRoles = visibleRoles.filter(role => {
+  const healthFilteredRoles = envFilteredRoles.filter(role => {
     if (!healthFilter) return true;
     if (healthFilter === 'unrestricted') {
       return !role.ownRestrictions || role.ownRestrictions.length === 0;
@@ -162,40 +123,26 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     return nameMatch || descMatch || restMatch;
   });
 
-  const isFilterActive = Boolean(searchQuery.trim() || healthFilter);
-  const rootRoles = visibleRoles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
+  const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter !== 'ALL' || typeFilter !== 'ALL');
 
   return (
     <Box sx={{ animation: 'fadeIn 0.3s' }}>
+      {/* Page Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Roles & Authorizations</Typography>
-          <Typography variant="body2" color="text.secondary">Visual inheritance tree of all Org-Based, Single, and Derived roles</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Roles & Governance Catalog</Typography>
+          <Typography variant="body2" color="text.secondary">Manage authorizations across Tree Hierarchy, Card Grid, and Data Table views</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-          {healthFilter && (
-            <Chip
-              label={
-                healthFilter === 'unrestricted' ? 'Unrestricted Roles' :
-                  healthFilter === 'no-users' ? 'Roles with No Users' :
-                    healthFilter === 'no-approver' ? 'Roles with No Approver' :
-                      healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'
-              }
-              onDelete={() => {
-                setHealthFilter(null);
-                if (setInitialFilter) setInitialFilter(null);
-              }}
-              color="primary"
-              variant="outlined"
-            />
-          )}
           <TextField
             size="small"
             placeholder="Search roles or restrictions…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            sx={{ width: { xs: '100%', sm: 260 } }}
+            sx={{ width: { xs: '100%', sm: 240 } }}
           />
+
+          {/* View mode switcher */}
           <ToggleButtonGroup
             value={viewMode}
             exclusive
@@ -203,13 +150,17 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             size="small"
             sx={{ height: 38 }}
           >
-            <ToggleButton value="compact" sx={{ textTransform: 'none', fontWeight: 600, px: 2 }}>
-              Compact
+            <ToggleButton value="tree" sx={{ textTransform: 'none', fontWeight: 600, px: 1.5, gap: 0.8 }}>
+              <GitBranch size={15} /> Tree
             </ToggleButton>
-            <ToggleButton value="detailed" sx={{ textTransform: 'none', fontWeight: 600, px: 2 }}>
-              Detailed
+            <ToggleButton value="grid" sx={{ textTransform: 'none', fontWeight: 600, px: 1.5, gap: 0.8 }}>
+              <LayoutGrid size={15} /> Grid
+            </ToggleButton>
+            <ToggleButton value="table" sx={{ textTransform: 'none', fontWeight: 600, px: 1.5, gap: 0.8 }}>
+              <TableIcon size={15} /> Table
             </ToggleButton>
           </ToggleButtonGroup>
+
           <Button
             variant="contained"
             color="primary"
@@ -221,6 +172,66 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           </Button>
         </Box>
       </Box>
+
+      {/* Filter Toolbar */}
+      <Card variant="outlined" sx={{ p: 1.5, mb: 3, borderRadius: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', bgcolor: 'background.paper' }}>
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Environment</InputLabel>
+          <Select value={envFilter} label="Environment" onChange={e => setEnvFilter(e.target.value)}>
+            <MenuItem value="ALL">All Envs</MenuItem>
+            <MenuItem value="D">Dev (D)</MenuItem>
+            <MenuItem value="Q">QA (Q)</MenuItem>
+            <MenuItem value="P">Prod (P)</MenuItem>
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel>Role Type</InputLabel>
+          <Select value={typeFilter} label="Role Type" onChange={e => setTypeFilter(e.target.value)}>
+            <MenuItem value="ALL">All Types</MenuItem>
+            <MenuItem value="SINGLE">Single Role</MenuItem>
+            <MenuItem value="DERIVED">Derived Role</MenuItem>
+            <MenuItem value="ORG_BASED">Org-Based Role</MenuItem>
+          </Select>
+        </FormControl>
+
+        {healthFilter && (
+          <Chip
+            label={
+              healthFilter === 'unrestricted' ? 'Unrestricted Roles' :
+                healthFilter === 'no-users' ? 'Roles with No Users' :
+                  healthFilter === 'no-approver' ? 'Roles with No Approver' :
+                    healthFilter === 'critical' ? 'Critical Roles' : 'Filtered'
+            }
+            onDelete={() => {
+              setHealthFilter(null);
+              if (setInitialFilter) setInitialFilter(null);
+            }}
+            color="warning"
+            variant="outlined"
+          />
+        )}
+
+        {isFilterActive && (
+          <Button
+            size="small"
+            color="secondary"
+            onClick={() => {
+              setSearchQuery('');
+              setEnvFilter('ALL');
+              setTypeFilter('ALL');
+              setHealthFilter(null);
+              if (setInitialFilter) setInitialFilter(null);
+            }}
+          >
+            Reset Filters
+          </Button>
+        )}
+
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 600 }}>
+          Showing {filteredRoles.length} of {visibleRoles.length} roles
+        </Typography>
+      </Card>
 
       <Snackbar
         open={snackbar.open}
@@ -248,21 +259,45 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             </Card>
           ))}
         </Box>
-      ) : rootRoles.length === 0 ? (
+      ) : visibleRoles.length === 0 ? (
         <Card sx={{ py: 8, textAlign: 'center' }}>
           <Box sx={{ opacity: 0.5, mb: 2 }}><Shield size={40} /></Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No roles yet</Typography>
           <Typography variant="body2" color="text.secondary">Generate an Org Role from the Org Structure view, or create a new role in the wizard.</Typography>
         </Card>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          {isFilterActive ? (
-            filteredRoles.length === 0 ? (
-              <Card sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary">No matching roles or restrictions found.</Typography>
-              </Card>
-            ) : (
-              filteredRoles.map(r => (
+        <>
+          {viewMode === 'table' && (
+            <RoleTableView
+              roles={filteredRoles}
+              allRoles={roles}
+              orgNodes={orgNodes}
+              onDerive={onDeriveRole}
+              onEdit={onEditRole}
+              onRefresh={load}
+              onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
+              onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
+              permissions={permissions}
+            />
+          )}
+
+          {viewMode === 'tree' && (
+            <RoleTreeView
+              roles={filteredRoles}
+              allRoles={roles}
+              orgNodes={orgNodes}
+              onDeriveRole={onDeriveRole}
+              onEditRole={onEditRole}
+              onRefresh={load}
+              onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
+              onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
+              permissions={permissions}
+            />
+          )}
+
+          {viewMode === 'grid' && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 2 }}>
+              {filteredRoles.map(r => (
                 <RoleCard
                   key={r.ID}
                   role={r}
@@ -272,34 +307,17 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                   onDerive={onDeriveRole}
                   onEdit={onEditRole}
                   onRefresh={load}
-                  isSearchActive={true}
                   onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
                   onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
-                  isCompact={viewMode === 'compact'}
+                  isCompact={true}
                   permissions={permissions}
                 />
-              ))
-            )
-          ) : (
-            rootRoles.map(r => (
-              <RoleCard
-                key={r.ID}
-                role={r}
-                allRoles={roles}
-                orgNodes={orgNodes}
-                depth={0}
-                onDerive={onDeriveRole}
-                onEdit={onEditRole}
-                onRefresh={load}
-                onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-                onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
-                isCompact={viewMode === 'compact'}
-                permissions={permissions}
-              />
-            ))
+              ))}
+            </Box>
           )}
-        </Box>
+        </>
       )}
     </Box>
   );
 }
+
