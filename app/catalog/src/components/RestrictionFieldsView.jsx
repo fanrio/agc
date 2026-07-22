@@ -4,12 +4,12 @@ import { Plus, Trash2, X, Settings, Cloud, Edit3, Check } from 'lucide-react';
 import * as api from '../api';
 
 export default function RestrictionFieldsView() {
-  const [fields, setFields]         = useState([]);
+  const [fields, setFields] = useState([]);
   const [bdcConnections, setBdcConnections] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  
+  const [loading, setLoading] = useState(true);
+
   // Creation States
-  const [showAdd, setShowAdd]       = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [newBdcConnectionId, setNewBdcConnectionId] = useState('');
   const [newAsset, setNewAsset] = useState('');
@@ -169,7 +169,7 @@ export default function RestrictionFieldsView() {
         textColumn: null
       };
       await api.createRestrictionField(payload);
-      
+
       setNewFieldName('');
       setNewBdcConnectionId('');
       setNewAsset('');

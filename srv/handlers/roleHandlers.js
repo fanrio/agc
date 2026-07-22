@@ -329,7 +329,16 @@ function registerRoleHandlers(service, entities, deps) {
         id = typeof p === 'object' ? p.ID : p;
       }
       if (id) {
-        const beforeState = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
+        const beforeState = await cds.db.run(
+          SELECT.one.from(Roles).where({ ID: id })
+            .columns(r => {
+              r('*');
+              r.ownRestrictions(res => res('*'));
+              r.parentRoles(pr => pr('*'));
+              r.approvers(ap => ap('*'));
+              r.assignments(as => as('*'));
+            })
+        );
         if (beforeState) {
           req.context = req.context || {};
           req.context.beforeStateRole = beforeState;
@@ -406,34 +415,54 @@ function registerRoleHandlers(service, entities, deps) {
     if (!id) return;
 
     try {
-      const afterState  = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
+      const afterState = await cds.db.run(
+        SELECT.one.from(Roles).where({ ID: id })
+          .columns(r => {
+            r('*');
+            r.ownRestrictions(res => res('*'));
+            r.parentRoles(pr => pr('*'));
+            r.approvers(ap => ap('*'));
+            r.assignments(as => as('*'));
+          })
+      );
       const beforeState = req.context?.beforeStateRole;
 
       const diff = {};
       if (beforeState && afterState) {
+        // Compare primitive fields
         for (const key of Object.keys(afterState)) {
-          if (['modifiedAt', 'modifiedBy'].includes(key)) continue;
+          if (['modifiedAt', 'modifiedBy', 'ownRestrictions', 'parentRoles', 'approvers', 'assignments'].includes(key)) continue;
           if (JSON.stringify(beforeState[key]) !== JSON.stringify(afterState[key])) {
             diff[key] = { old: beforeState[key], new: afterState[key] };
           }
         }
+
+        // Compare child collections
+        for (const col of ['ownRestrictions', 'parentRoles', 'approvers', 'assignments']) {
+          const oldList = beforeState[col] || [];
+          const newList = afterState[col] || [];
+          if (JSON.stringify(oldList) !== JSON.stringify(newList)) {
+            diff[col] = { old: oldList, new: newList };
+          }
+        }
       }
 
-      if (Object.keys(diff).length > 0) {
-        await cds.db.run(INSERT.into(AuditLogs).entries({
-          ID:         cds.utils.uuid(),
-          entityName: 'Roles',
-          action:     'UPDATE',
-          recordId:   id,
-          targetName: afterState?.name || beforeState?.name || 'Unknown Role',
-          details:    JSON.stringify(diff)
-        }));
-        await queueReplication(
-          afterState?.name || beforeState?.name || 'Unknown Role',
-          afterState?.environment_ID || beforeState?.environment_ID || 'D',
-          req?.user?.id
-        );
-      }
+      const auditDetails = Object.keys(diff).length > 0 ? diff : { update: 'Role updated' };
+
+      await cds.db.run(INSERT.into(AuditLogs).entries({
+        ID:         cds.utils.uuid(),
+        entityName: 'Roles',
+        action:     'UPDATE',
+        recordId:   id,
+        targetName: afterState?.name || beforeState?.name || 'Unknown Role',
+        details:    JSON.stringify(auditDetails)
+      }));
+
+      await queueReplication(
+        afterState?.name || beforeState?.name || 'Unknown Role',
+        afterState?.environment_ID || beforeState?.environment_ID || 'D',
+        req?.user?.id
+      );
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles UPDATE:', err.message);
     }

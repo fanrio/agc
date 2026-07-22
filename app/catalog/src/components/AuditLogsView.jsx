@@ -1,29 +1,29 @@
 import { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Card, 
-  CardContent, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
-  Chip, 
-  IconButton, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  Button, 
-  TextField, 
-  MenuItem, 
-  Select, 
-  FormControl, 
-  InputLabel, 
-  TablePagination, 
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  TablePagination,
   CircularProgress,
   InputAdornment,
   FormControlLabel,
@@ -35,13 +35,14 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import { Eye, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import { getAuditLogs, getRoles } from '../api';
+import AuditDetailsDispatcher from './AuditDetails';
 
 export default function AuditLogsView() {
   const [logs, setLogs] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Filters and Pagination
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
@@ -53,22 +54,22 @@ export default function AuditLogsView() {
   const [criticalFilter, setCriticalFilter] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  
+
   // Dialog State
   const [selectedLog, setSelectedLog] = useState(null);
 
   const consolidateLogs = (rawLogs) => {
     const consolidated = [];
     const sorted = [...rawLogs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
+
     for (const log of sorted) {
-      const match = consolidated.find(c => 
+      const match = consolidated.find(c =>
         c.recordId === log.recordId &&
         c.action === log.action &&
         c.createdBy === log.createdBy &&
         Math.abs(new Date(c.createdAt) - new Date(log.createdAt)) < 5000
       );
-      
+
       if (match) {
         try {
           const matchParsed = JSON.parse(match.details);
@@ -95,7 +96,7 @@ export default function AuditLogsView() {
         consolidated.push({ ...log });
       }
     }
-    
+
     const finalLogs = [];
     for (const log of consolidated) {
       try {
@@ -104,20 +105,20 @@ export default function AuditLogsView() {
         const addedKeys = keys.filter(k => k.startsWith('Restriction Added'));
         const deletedKeys = keys.filter(k => k.startsWith('Restriction Deleted'));
         const removedKeys = new Set();
-        
+
         for (const aKey of addedKeys) {
           const aNew = parsed[aKey].new || '';
           const aField = aNew.match(/Field:\s*([^,]+)/)?.[1];
           const aType = aNew.match(/Type:\s*([^,]+)/)?.[1];
           const aVal = aNew.match(/Value:\s*(.+)$/)?.[1];
-          
+
           for (const dKey of deletedKeys) {
             if (removedKeys.has(dKey)) continue;
             const dOld = parsed[dKey].old || '';
             const dField = dOld.match(/Field:\s*([^,]+)/)?.[1];
             const dType = dOld.match(/Type:\s*([^,]+)/)?.[1];
             const dVal = dOld.match(/Value:\s*(.+)$/)?.[1];
-            
+
             if (aField && dField && aField === dField && aType === dType && aVal === dVal) {
               removedKeys.add(aKey);
               removedKeys.add(dKey);
@@ -125,14 +126,14 @@ export default function AuditLogsView() {
             }
           }
         }
-        
+
         const filteredDetails = {};
         for (const [k, v] of Object.entries(parsed)) {
           if (!removedKeys.has(k)) {
             filteredDetails[k] = v;
           }
         }
-        
+
         if (Object.keys(filteredDetails).length > 0) {
           log.details = JSON.stringify(filteredDetails);
           finalLogs.push(log);
@@ -177,15 +178,15 @@ export default function AuditLogsView() {
 
   // Filter Logic
   const filteredLogs = logs.filter(log => {
-    const matchesSearch = 
+    const matchesSearch =
       log.recordId?.toLowerCase().includes(search.toLowerCase()) ||
       log.targetName?.toLowerCase().includes(search.toLowerCase()) ||
       log.details?.toLowerCase().includes(search.toLowerCase()) ||
       log.createdBy?.toLowerCase().includes(search.toLowerCase());
-      
+
     const matchesAction = actionFilter === 'ALL' || log.action === actionFilter;
     const matchesEntity = entityFilter === 'ALL' || log.entityName === entityFilter;
-    
+
     // Performed By (Actor) filter
     const matchesActor = actorFilter === 'ALL' || log.createdBy === actorFilter;
 
@@ -196,8 +197,8 @@ export default function AuditLogsView() {
       const today = new Date();
       if (dateFilter === 'TODAY') {
         matchesDate = logDate.getDate() === today.getDate() &&
-                      logDate.getMonth() === today.getMonth() &&
-                      logDate.getFullYear() === today.getFullYear();
+          logDate.getMonth() === today.getMonth() &&
+          logDate.getFullYear() === today.getFullYear();
       } else if (dateFilter === 'WEEK') {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
@@ -236,7 +237,7 @@ export default function AuditLogsView() {
           } else if (parsed.role_ID?.old) {
             roleId = parsed.role_ID.old;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       if (roleId) {
         const role = roles.find(r => r.ID === roleId);
@@ -289,14 +290,14 @@ export default function AuditLogsView() {
         if (parsed && typeof parsed === 'object') {
           return `${parsed.from} - ${parsed.to}`;
         }
-      } catch {}
+      } catch { }
     } else if (type === 'MULTI_VALUE') {
       try {
         const parsed = JSON.parse(val);
         if (Array.isArray(parsed)) {
           return parsed.join(', ');
         }
-      } catch {}
+      } catch { }
     } else if (type === 'PATTERN' || type === 'CP') {
       return `Pattern: ${val}`;
     }
@@ -306,22 +307,22 @@ export default function AuditLogsView() {
   const renderDetailsTable = (log) => {
     try {
       const parsed = JSON.parse(log.details);
-      
+
       if (log.action === 'UPDATE') {
         const entries = Object.entries(parsed);
         const generalRows = [];
         const restrictionRows = [];
-        
+        console.log(log.details);
         for (const [key, diff] of entries) {
           const oldValRaw = diff && typeof diff === 'object' && 'old' in diff ? String(diff.old) : String(diff);
           const newValRaw = diff && typeof diff === 'object' && 'new' in diff ? String(diff.new) : '';
-          
+
           if (key.toLowerCase().includes('restriction')) {
             let fieldName = '—';
             let action = 'Changed';
             let oldDisp = oldValRaw;
             let newDisp = newValRaw;
-            
+
             if (key.startsWith('Restriction Added')) {
               action = 'Added';
               const match = newValRaw.match(/Field:\s*([^,]+)/);
@@ -345,7 +346,7 @@ export default function AuditLogsView() {
               oldDisp = oldValRaw;
               newDisp = newValRaw;
             }
-            
+
             restrictionRows.push({
               fieldName,
               action,
@@ -360,7 +361,6 @@ export default function AuditLogsView() {
             });
           }
         }
-        
         const renderSectionTable = (title, rows, emptyMessage, isRestriction = false) => (
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}>
@@ -394,8 +394,8 @@ export default function AuditLogsView() {
                           <>
                             <TableCell sx={{ fontWeight: 500 }}>{row.fieldName}</TableCell>
                             <TableCell>
-                              <Chip 
-                                label={row.action} 
+                              <Chip
+                                label={row.action}
                                 size="small"
                                 sx={{
                                   fontWeight: 600,
@@ -442,7 +442,7 @@ export default function AuditLogsView() {
           field,
           value: typeof val === 'object' ? JSON.stringify(val) : String(val)
         }));
-        
+
         return (
           <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
             <Table size="small">
@@ -489,9 +489,9 @@ export default function AuditLogsView() {
               Review security compliance logs and lifecycle changes for roles and assignments.
             </Typography>
           </Box>
-          <Button 
-            variant="outlined" 
-            onClick={loadLogs} 
+          <Button
+            variant="outlined"
+            onClick={loadLogs}
             startIcon={<RefreshCw size={16} />}
             disabled={loading}
             sx={{ borderColor: 'divider', color: 'text.secondary', '&:hover': { borderColor: '#3b82f6', color: '#60a5fa' } }}
@@ -664,11 +664,11 @@ export default function AuditLogsView() {
                           <TableCell sx={{ color: 'text.primary', fontSize: '0.875rem', fontWeight: 500 }}>
                             {log.entityName}
                           </TableCell>
-                          <TableCell sx={{ 
-                            color: log.targetName ? 'text.primary' : 'text.secondary', 
+                          <TableCell sx={{
+                            color: log.targetName ? 'text.primary' : 'text.secondary',
                             fontSize: log.targetName ? '0.875rem' : '0.8125rem',
                             fontWeight: log.targetName ? 500 : 'inherit'
-                           }}>
+                          }}>
                             {log.targetName || log.recordId}
                           </TableCell>
                           <TableCell>
@@ -681,7 +681,7 @@ export default function AuditLogsView() {
                             {new Date(log.createdAt).toLocaleString()}
                           </TableCell>
                           <TableCell align="right">
-                            <IconButton 
+                            <IconButton
                               onClick={() => setSelectedLog(log)}
                               size="small"
                               sx={{ color: 'primary.main', '&:hover': { bgcolor: 'primary.light', color: 'primary.contrastText' } }}
@@ -711,8 +711,8 @@ export default function AuditLogsView() {
         </Card>
 
         {/* JSON Details Dialog */}
-        <Dialog 
-          open={Boolean(selectedLog)} 
+        <Dialog
+          open={Boolean(selectedLog)}
           onClose={() => setSelectedLog(null)}
           maxWidth="md"
           fullWidth
@@ -741,11 +741,11 @@ export default function AuditLogsView() {
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
                   Audit details for target record ID: <Box component="span" sx={{ color: 'text.primary' }}>{selectedLog.recordId}</Box>
                 </Typography>
-                {renderDetailsTable(selectedLog)}
+                <AuditDetailsDispatcher log={selectedLog} roles={roles} />
               </DialogContent>
               <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
-                <Button 
-                  onClick={() => setSelectedLog(null)} 
+                <Button
+                  onClick={() => setSelectedLog(null)}
                   variant="contained"
                   sx={{ bgcolor: '#3b82f6', '&:hover': { bgcolor: '#2563eb' } }}
                 >

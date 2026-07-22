@@ -133,13 +133,18 @@ function registerAssignmentHandlers(service, entities, deps) {
   // -------------------------------------------------------------------------
   service.after('CREATE', 'RoleAssignments', async (assignment) => {
     try {
+      let roleName = undefined;
+      if (assignment.role_ID) {
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+        if (role) roleName = role.name;
+      }
       await cds.db.run(INSERT.into(AuditLogs).entries({
         ID:         cds.utils.uuid(),
         entityName: 'RoleAssignments',
         action:     'CREATE',
         recordId:   assignment.ID,
         targetName: assignment.userName || assignment.userId,
-        details:    JSON.stringify(assignment)
+        details:    JSON.stringify({ ...assignment, roleName })
       }));
     } catch (err) {
       console.error('[AssignmentHandlers] Audit Log failed for RoleAssignments CREATE:', err.message);
@@ -185,13 +190,19 @@ function registerAssignmentHandlers(service, entities, deps) {
       }
 
       if (Object.keys(diff).length > 0) {
+        let roleName = undefined;
+        const roleId = afterState?.role_ID || beforeState?.role_ID;
+        if (roleId) {
+          const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+          if (role) roleName = role.name;
+        }
         await cds.db.run(INSERT.into(AuditLogs).entries({
           ID:         cds.utils.uuid(),
           entityName: 'RoleAssignments',
           action:     'UPDATE',
           recordId:   id,
           targetName: afterState?.userName || afterState?.userId || beforeState?.userName || beforeState?.userId || 'Unknown User',
-          details:    JSON.stringify(diff)
+          details:    JSON.stringify({ ...diff, roleName })
         }));
       }
 
@@ -235,7 +246,10 @@ function registerAssignmentHandlers(service, entities, deps) {
           action:     'DELETE',
           recordId:   id,
           targetName: assignment.userName || assignment.userId,
-          details:    JSON.stringify(assignment)
+          details:    JSON.stringify({
+            ...assignment,
+            roleName: role ? role.name : undefined
+          })
         }));
       }
     } catch (err) {

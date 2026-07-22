@@ -1262,6 +1262,14 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.strictEqual(roleUpdated.data.approvers.length, 1);
     assert.strictEqual(roleUpdated.data.approvers[0].userId, 'new.approver@test.com');
 
+    // Verify AuditLog written for Role UPDATE
+    const auditLogsRes = await GET(`/odata/v4/auth/AuditLogs?$filter=recordId eq '${roleId}' and action eq 'UPDATE'`);
+    assert.strictEqual(auditLogsRes.status, 200);
+    assert.ok(auditLogsRes.data.value.length >= 1, 'Audit log entry must be created on Role UPDATE');
+    const updateLog = auditLogsRes.data.value[0];
+    assert.strictEqual(updateLog.entityName, 'Roles');
+    assert.ok(updateLog.details.includes('ownRestrictions') || updateLog.details.includes('description'), 'Audit log details must record changes');
+
     // Clean up
     await DELETE(`/odata/v4/auth/Roles('${roleId}')`);
     await DELETE(`/odata/v4/auth/Roles('${parentId}')`);

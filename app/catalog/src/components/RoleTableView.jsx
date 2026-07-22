@@ -89,7 +89,7 @@ export default function RoleTableView({
     const isDerived = role.type === 'DERIVED';
     const isOrg = role.type === 'ORG_BASED';
     const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role, permissions);
-
+    console.log(role);
     return (
       <>
         <TableRow hover key={role.ID} sx={{ bgcolor: depth > 0 ? 'action.hover' : 'inherit' }}>
@@ -261,7 +261,7 @@ export default function RoleTableView({
                   Type
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
+              <TableCell sx={{ fontWeight: 700 }} >
                 <TableSortLabel
                   active={orderBy === 'environment_ID'}
                   direction={orderBy === 'environment_ID' ? order : 'asc'}
@@ -271,8 +271,8 @@ export default function RoleTableView({
                 </TableSortLabel>
               </TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Parent / Org Unit</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">Restrictions</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">Direct Users</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} >Restrictions</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} >Direct Users</TableCell>
               <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
             </TableRow>
           </TableHead>

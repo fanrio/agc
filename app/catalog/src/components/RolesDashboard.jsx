@@ -37,7 +37,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
   const [envFilter, setEnvFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
-
+  console.log(initialFilter);
   useEffect(() => {
     if (initialFilter) {
       setHealthFilter(initialFilter);
@@ -94,6 +94,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
   // Apply health filters
   const healthFilteredRoles = envFilteredRoles.filter(role => {
+    console.log(role);
     if (!healthFilter) return true;
     if (healthFilter === 'unrestricted') {
       return !role.ownRestrictions || role.ownRestrictions.length === 0;
