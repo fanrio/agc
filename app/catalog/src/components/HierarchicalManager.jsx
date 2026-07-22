@@ -146,7 +146,7 @@ function NodeRow({
     try {
       const payload = { name: newChild.name, parent_ID: node.ID };
       if (showTypeSelector) {
-        payload.type_ID = newChild.type || (nodeTypes[0]?.ID || '');
+        payload.type_ID = newChild.type || null;
       }
       if (showDescriptionField) {
         payload.description = newChild.description;
@@ -488,9 +488,10 @@ function NodeRow({
                 <Select
                   labelId="child-type-label"
                   label="Type"
-                  value={newChild.type || (nodeTypes[0]?.ID || '')}
+                  value={newChild.type || ''}
                   onChange={e => setNewChild(c => ({ ...c, type: e.target.value }))}
                 >
+                  <MenuItem value=""><em>None</em></MenuItem>
                   {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
                 </Select>
               </FormControl>
@@ -674,7 +675,7 @@ export default function HierarchicalManager({
     try {
       const payload = { name: newRoot.name };
       if (showTypeSelector) {
-        payload.type_ID = newRoot.type || (nodeTypes[0]?.ID || '');
+        payload.type_ID = newRoot.type || null;
       }
       if (showDescriptionField) {
         payload.description = newRoot.description || '';
@@ -773,9 +774,10 @@ export default function HierarchicalManager({
               <Select
                 labelId="root-type-label"
                 label="Type"
-                value={newRoot.type || (nodeTypes[0]?.ID || '')}
+                value={newRoot.type || ''}
                 onChange={e => setNewRoot(r => ({ ...r, type: e.target.value }))}
               >
+                <MenuItem value=""><em>None</em></MenuItem>
                 {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
               </Select>
             </FormControl>

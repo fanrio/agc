@@ -82,6 +82,18 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
+  const { getDashboardKpis } = require('./services/dashboardKpisService');
+
+  // Function: getDashboardKpis
+  this.on('getDashboardKpis', async (req) => {
+    try {
+      const kpis = await getDashboardKpis(req, cds);
+      return JSON.stringify(kpis);
+    } catch (e) {
+      return req.reject(e.status || 500, e.message);
+    }
+  });
+
   // Seed / Bootstrap Super Admin on startup
   cds.on('served', async () => {
     const superAdminId = process.env.SUPER_ADMIN_USER || 'admin';

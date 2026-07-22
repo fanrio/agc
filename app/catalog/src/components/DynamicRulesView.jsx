@@ -23,7 +23,6 @@ export default function DynamicRulesView() {
   const [assetColumns, setAssetColumns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
-  const [loadingKeys, setLoadingKeys] = useState(false);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [syncingRuleId, setSyncingRuleId] = useState(null);
   
@@ -99,34 +98,37 @@ export default function DynamicRulesView() {
     }
   }, [form.bdcConnection_ID, connections]);
 
-  // Fetch Key Columns & All Columns when the BDC Asset selection changes
+  // Synchronize mappings with the restriction fields of the selected Access Domain
+  useEffect(() => {
+    if (!form.accessDomain_ID) {
+      setForm(p => ({ ...p, mappings: [] }));
+      return;
+    }
+    const selectedDomain = accessDomains.find(d => d.ID === form.accessDomain_ID);
+    const domainFields = selectedDomain 
+      ? (selectedDomain.restrictionFields || []).map(rf => rf.field?.name).filter(Boolean) 
+      : [];
+
+    setForm(p => {
+      // Reconstruct mappings to match domain restriction fields, keeping existing selections
+      const newMappings = domainFields.map(fieldName => {
+        const existing = p.mappings.find(m => m.targetRestrictionField === fieldName);
+        return existing ? existing : { targetRestrictionField: fieldName, sourceKeyField: '' };
+      });
+      return { ...p, mappings: newMappings };
+    });
+  }, [form.accessDomain_ID, accessDomains]);
+
+  // Fetch All Columns when the BDC Asset selection changes
   const handleAssetChange = async (selectedAsset) => {
-    setForm(p => ({ ...p, sourceEntity: selectedAsset, sourceResponsibleField: '', mappings: [] }));
+    setForm(p => ({ ...p, sourceEntity: selectedAsset, sourceResponsibleField: '' }));
     setAssetColumns([]);
     if (!selectedAsset) return;
 
     const conn = connections.find(c => c.ID === form.bdcConnection_ID);
     if (!conn) return;
 
-    // 1. Fetch Key Columns
-    setLoadingKeys(true);
-    try {
-      const keys = await api.fetchBdcAssetKeyColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, selectedAsset);
-      if (keys && keys.length > 0) {
-        setForm(p => ({
-          ...p,
-          mappings: keys.map(k => ({ sourceKeyField: k, targetRestrictionField: '' }))
-        }));
-      } else {
-        setSnackbar({ open: true, message: 'No key columns found in metadata for selected asset.', severity: 'warning' });
-      }
-    } catch (err) {
-      console.error('Failed to fetch asset key columns:', err);
-      setSnackbar({ open: true, message: `Failed to fetch asset key columns: ${err.message}`, severity: 'error' });
-    }
-    setLoadingKeys(false);
-
-    // 2. Fetch All Columns for Responsible User selector
+    // Fetch All Columns for mapping and Responsible User selector
     setLoadingColumns(true);
     try {
       const cols = await api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, selectedAsset);
@@ -197,14 +199,6 @@ export default function DynamicRulesView() {
   };
 
   const handleClose = () => setOpen(false);
-
-  const handleMappingChange = (index, value) => {
-    setForm(p => {
-      const newMappings = [...p.mappings];
-      newMappings[index] = { ...newMappings[index], targetRestrictionField: value };
-      return { ...p, mappings: newMappings };
-    });
-  };
 
   const handleSave = async () => {
     if (!form.code.trim()) {
@@ -465,35 +459,37 @@ export default function DynamicRulesView() {
               fullWidth
             />
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
+             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
               Composite Field Mappings
-              {loadingKeys && <CircularProgress size={12} sx={{ ml: 1 }} />}
+              {loadingColumns && <CircularProgress size={12} sx={{ ml: 1 }} />}
             </Typography>
-            {form.mappings.length === 0 && !loadingKeys && (
+            {form.mappings.length === 0 && (
               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
-                Select a BDC Asset to automatically populate its key columns.
+                Select an Access Domain containing restriction fields to configure mappings.
               </Typography>
             )}
             {form.mappings.map((mapping, idx) => (
               <Box key={idx} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <TextField
-                  label="Source Column (Derived)"
+                  label="Target Restriction Field"
                   size="small"
-                  value={mapping.sourceKeyField}
+                  value={mapping.targetRestrictionField}
                   disabled
                   fullWidth
                 />
                 <Autocomplete
                   size="small"
-                  options={[{ name: 'ignore' }, ...fields]}
-                  getOptionLabel={(option) => option.name === 'ignore' ? 'Ignore (Do not map to restriction)' : (option.name || '')}
-                  value={
-                    mapping.targetRestrictionField === 'ignore'
-                      ? { name: 'ignore' }
-                      : (fields.find(f => f.name === mapping.targetRestrictionField) || null)
-                  }
-                  onChange={(e, val) => handleMappingChange(idx, val ? val.name : '')}
-                  renderInput={(params) => <TextField {...params} label="Target Restriction Field" variant="outlined" />}
+                  options={assetColumns}
+                  value={mapping.sourceKeyField || null}
+                  onChange={(e, val) => {
+                    setForm(p => {
+                      const newMappings = [...p.mappings];
+                      newMappings[idx] = { ...newMappings[idx], sourceKeyField: val || '' };
+                      return { ...p, mappings: newMappings };
+                    });
+                  }}
+                  renderInput={(params) => <TextField {...params} label="Source Asset Column" variant="outlined" />}
+                  disabled={!form.sourceEntity || loadingColumns}
                   fullWidth
                 />
               </Box>

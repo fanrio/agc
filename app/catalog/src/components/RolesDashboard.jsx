@@ -46,7 +46,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
   // Toggle representation states ('tree', 'grid', 'table')
-  const [viewMode, setViewMode] = useState('tree');
+  const [viewMode, setViewMode] = useState('table');
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') return;

@@ -124,3 +124,5 @@ export const createCustomer = (body) => request('POST', '/Customers', body);
 export const updateCustomer = (id, body) => request('PATCH', `/Customers('${id}')`, body);
 export const deleteCustomer = (id) => request('DELETE', `/Customers('${id}')`);
 
+export const getDashboardKpis = () => request('GET', '/getDashboardKpis()');
+export const getRecentRoles = () => request('GET', '/Roles?$orderby=createdAt desc&$top=20&$expand=parentRoles($expand=parent)');

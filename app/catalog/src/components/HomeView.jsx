@@ -25,76 +25,17 @@ export default function HomeView({ setActiveNav, navigateToRoles }) {
     setLoading(true);
     setError('');
     try {
-      const [rawRoles, nodes, assignments, accessDomains, fields, bdcSettings] = await Promise.all([
-        api.getRoles(),
-        api.getAllOrgNodesFlat(),
-        api.getAssignments(),
-        api.getAccessDomainsFlat(),
-        api.getRestrictionFields(),
-        api.getBdcSettings()
+      const [kpisResponse, rawRecentRoles] = await Promise.all([
+        api.getDashboardKpis(),
+        api.getRecentRoles()
       ]);
 
-      const roles = filterRolesByPermissions(rawRoles, permissions);
-
-      // Calculate unique users
-      const uniqueUsers = new Set(assignments.map(a => a.userId));
-
-      // Calculate unique users with critical roles
-      const usersWithCritical = new Set(
-        assignments
-          .filter(a => {
-            const role = roles.find(r => r.ID === a.role_ID);
-            return role && role.critical;
-          })
-          .map(a => a.userId)
-      );
-
-      // Calculate recent roles (sort by createdAt descending, slice 3)
-      const sortedRoles = [...roles]
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-        .slice(0, 3);
-
-      const nodeTypeCounts = {};
-      nodes.forEach(node => {
-        const type = node.type?.name || 'UNKNOWN';
-        nodeTypeCounts[type] = (nodeTypeCounts[type] || 0) + 1;
-      });
-
-      let rolesWithoutRestriction = 0;
-      let rolesWithoutApprover = 0;
-      let rolesWithoutAssignment = 0;
-      let criticalRoles = 0;
-
-      roles.forEach(role => {
-        if (!role.ownRestrictions || role.ownRestrictions.length === 0) {
-          rolesWithoutRestriction++;
-        }
-        if (!role.approvers || role.approvers.length === 0) {
-          rolesWithoutApprover++;
-        }
-        if (!role.assignments || role.assignments.length === 0) {
-          rolesWithoutAssignment++;
-        }
-        if (role.critical) {
-          criticalRoles++;
-        }
-      });
+      const kpis = JSON.parse(kpisResponse);
+      const recentRoles = filterRolesByPermissions(rawRecentRoles, permissions);
 
       setStats({
-        roleCount: roles.length,
-        rolesWithoutRestriction,
-        rolesWithoutApprover,
-        rolesWithoutAssignment,
-        criticalRoles,
-        usersWithCritical: usersWithCritical.size,
-        nodeCount: nodes.length,
-        nodeTypeCounts,
-        assignmentCount: assignments.length,
-        userCount: uniqueUsers.size,
-        accessDomainCount: accessDomains.length,
-        fieldCount: fields.length,
-        bdcCount: bdcSettings.length,
-        recentRoles: sortedRoles
+        ...kpis,
+        recentRoles
       });
     } catch (e) {
       setError(`Failed to load dashboard statistics: ${e.message}`);

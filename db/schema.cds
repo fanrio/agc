@@ -9,7 +9,7 @@ using { cuid, managed } from '@sap/cds/common';
 entity OrgNodes : managed {
   key ID     : String(36) @default : 'uuid()';
   name       : String(100) not null;
-  type       : Association to RestrictionFields not null;
+  type       : Association to RestrictionFields;
   parent     : Association to OrgNodes;
   children   : Composition of many OrgNodes on children.parent = $self;
   attributes : Composition of many OrgNodeAttributes on attributes.node = $self;

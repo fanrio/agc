@@ -1151,5 +1151,21 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/Roles('${parentRoleId}')`);
   });
 
+  await t.test('OData function getDashboardKpis() computes and returns statistics correctly', async () => {
+    const res = await GET('/odata/v4/auth/getDashboardKpis()');
+    assert.strictEqual(res.status, 200);
+    assert.ok(typeof res.data.value === 'string');
+
+    const kpis = JSON.parse(res.data.value);
+    assert.ok(kpis.roleCount !== undefined);
+    assert.ok(kpis.nodeCount !== undefined);
+    assert.ok(kpis.assignmentCount !== undefined);
+    assert.ok(kpis.userCount !== undefined);
+    assert.ok(kpis.accessDomainCount !== undefined);
+    assert.ok(kpis.fieldCount !== undefined);
+    assert.ok(kpis.bdcCount !== undefined);
+    assert.ok(kpis.nodeTypeCounts !== undefined);
+  });
+
 });
 

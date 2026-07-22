@@ -240,8 +240,8 @@ export default function RoleTableView({
       </Box>
 
       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-        <Table size="small">
-          <TableHead sx={{ bgcolor: 'action.hover' }}>
+        <Table>
+          <TableHead>
             <TableRow>
               <TableCell sx={{ fontWeight: 700 }}>
                 <TableSortLabel
