@@ -399,86 +399,95 @@ export function useWizardState({ context = {}, permissions }) {
   async function handleDeploy() {
     setLoading(true);
     try {
+      const computedType = roleType === 'DRAGE' 
+        ? 'DRAGE' 
+        : (roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE'));
+
+      const ownRestrictions = restrictions.map(r => ({
+        ...(r.ID ? { ID: r.ID } : {}),
+        field: r.field,
+        filterType: r.filterType,
+        value: r.value,
+        sourceLabel: 'Own'
+      }));
+
+      const roleObj = isEditMode ? allRoles.find(r => r.ID === context.roleId) : null;
+
+      const parentRoles = selectedParentIds.map(parentId => {
+        const existing = roleObj?.parentRoles?.find(pr => (pr.parent?.ID || pr.parent_ID) === parentId);
+        return {
+          ...(existing?.ID ? { ID: existing.ID } : {}),
+          parent_ID: parentId
+        };
+      });
+
+      const formattedApprovers = approvers.map(a => ({
+        ...(a.ID ? { ID: a.ID } : {}),
+        userId: a.userId,
+        userName: a.userName || a.userId
+      }));
+
       let roleId;
 
       if (isEditMode) {
         roleId = context.roleId;
-        await api.updateRole(roleId, {
+        const deepPayload = {
           description,
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
-          type: roleType === 'DRAGE' ? 'DRAGE' : (roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE'))
-        });
-
-        const allRoles = await api.getRoles();
-        const role = allRoles.find(r => r.ID === roleId);
-        if (role) {
-          if (role.ownRestrictions) {
-            for (const r of role.ownRestrictions) {
-              await api.deleteRestriction(r.ID);
-            }
-          }
-          if (role.approvers) {
-            for (const ap of role.approvers) {
-              await api.deleteRoleApprover(ap.ID);
-            }
-          }
-          if (role.parentRoles) {
-            for (const pr of role.parentRoles) {
-              await api.deleteRoleInheritance(pr.ID);
-            }
-          }
-        }
-
-        for (const r of restrictions) {
-          await api.createRestriction({ role_ID: roleId, field: r.field, filterType: r.filterType, value: r.value, sourceLabel: 'Own' });
-        }
-
-        if (roleType === 'SINGLE' && selectedParentIds.length > 0) {
-          for (const parentId of selectedParentIds) {
-            await api.createRoleInheritance({ role_ID: roleId, parent_ID: parentId });
-          }
-        }
+          type: computedType,
+          ownRestrictions,
+          parentRoles,
+          approvers: formattedApprovers
+        };
+        await api.updateRole(roleId, deepPayload);
       } else if (roleType === 'ORG_BASED') {
         const result = await api.generateOrgRole(selectedOrgNodeId);
         roleId = result.roleId;
-        await api.updateRole(roleId, { name: roleName || result.roleName, description, critical, environment_ID: environmentId, accessDomain_ID: accessDomainId });
-      } else {
-        const role = await api.createRole({
-          name: roleName,
-          type: selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE',
+        const deepPayload = {
+          name: roleName || result.roleName,
           description,
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
-        });
-        roleId = role.ID;
-
-        for (const parentId of selectedParentIds) {
-          await api.createRoleInheritance({ role_ID: roleId, parent_ID: parentId });
+          ownRestrictions,
+          parentRoles,
+          approvers: formattedApprovers
+        };
+        if (assignUserId.trim()) {
+          deepPayload.assignments = [{
+            userId: assignUserId.trim(),
+            userName: assignUserName.trim() || assignUserId.trim()
+          }];
         }
-
-        for (const r of restrictions) {
-          await api.createRestriction({ role_ID: roleId, field: r.field, filterType: r.filterType, value: r.value, sourceLabel: 'Own' });
+        await api.updateRole(roleId, deepPayload);
+      } else {
+        const deepPayload = {
+          name: roleName,
+          type: computedType,
+          description,
+          critical,
+          environment_ID: environmentId,
+          accessDomain_ID: accessDomainId,
+          ownRestrictions,
+          parentRoles,
+          approvers: formattedApprovers
+        };
+        if (assignUserId.trim()) {
+          deepPayload.assignments = [{
+            userId: assignUserId.trim(),
+            userName: assignUserName.trim() || assignUserId.trim()
+          }];
         }
-      }
-
-      for (const a of approvers) {
-        await api.createRoleApprover({ role_ID: roleId, userId: a.userId, userName: a.userName });
-      }
-
-      // Direct assignment on creation
-      if (!isEditMode && assignUserId.trim()) {
-        await api.createAssignment({
-          userId: assignUserId.trim(),
-          userName: assignUserName.trim() || assignUserId.trim(),
-          role_ID: roleId
-        });
+        const created = await api.createRole(deepPayload);
+        roleId = created.ID;
       }
 
       setDone(true);
-    } catch (e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
+    } catch (e) {
+      setSnackbar({ open: true, message: e.message, severity: 'error' });
+    }
     setLoading(false);
   }
 

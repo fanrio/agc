@@ -69,7 +69,7 @@ entity Roles : managed {
   environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
   accessDomain    : Association to AccessDomains;
-  parentRoles     : Association to many RoleInheritance on parentRoles.role = $self;
+  parentRoles     : Composition of many RoleInheritance on parentRoles.role = $self;
   childRoles      : Association to many RoleInheritance on childRoles.parent = $self;
   ownRestrictions : Composition of many Restrictions on ownRestrictions.role = $self;
   assignments     : Composition of many RoleAssignments on assignments.role = $self;

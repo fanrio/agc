@@ -19,6 +19,58 @@ const { getSessionPermissions, requirePermission, requireEnvironment, requireAcc
  * @param {object} entities                 - { Roles, Restrictions, RoleAssignments, RoleInheritance, AuditLogs, Replications }
  * @param {{ cds, queueReplication, syncRoleAssignmentsToHana }} deps
  */
+/**
+ * Fine-grained Delta Sync for child collections on UPDATE.
+ * Compares incoming collection vs existing DB records by ID:
+ *   - DELETE missing items
+ *   - UPDATE changed items
+ *   - INSERT new items
+ */
+async function syncCollectionDelta(db, entity, fkField, fkValue, incomingItems, fieldMapper) {
+  if (!incomingItems) return;
+
+  const existingInDb = await db.run(SELECT.from(entity).where({ [fkField]: fkValue }));
+  const existingMap = new Map(existingInDb.map(item => [item.ID, item]));
+  
+  // Normalize incoming items using fieldMapper
+  const incomingNormalized = incomingItems.map(item => fieldMapper(item, fkValue)).filter(Boolean);
+  const incomingMap = new Map(incomingNormalized.filter(i => i.ID).map(i => [i.ID, i]));
+
+  // 1. DELETE missing items
+  const toDeleteIds = existingInDb.filter(item => !incomingMap.has(item.ID)).map(item => item.ID);
+  if (toDeleteIds.length > 0) {
+    await db.run(DELETE.from(entity).where({ ID: { in: toDeleteIds } }));
+  }
+
+  // 2. UPDATE changed items & INSERT new items
+  const toInsert = [];
+  for (const item of incomingNormalized) {
+    if (item.ID && existingMap.has(item.ID)) {
+      const existing = existingMap.get(item.ID);
+      const updates = {};
+      for (const key of Object.keys(item)) {
+        if (key === 'ID' || key === fkField) continue;
+        if (existing[key] !== item[key]) {
+          updates[key] = item[key];
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await db.run(UPDATE(entity).set(updates).where({ ID: item.ID }));
+      }
+    } else {
+      toInsert.push({
+        ...item,
+        ID: item.ID || cds.utils.uuid(),
+        [fkField]: fkValue
+      });
+    }
+  }
+
+  if (toInsert.length > 0) {
+    await db.run(INSERT.into(entity).entries(toInsert));
+  }
+}
+
 function registerRoleHandlers(service, entities, deps) {
   const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
   const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations } = entities;
@@ -181,11 +233,36 @@ function registerRoleHandlers(service, entities, deps) {
   });
 
   // -------------------------------------------------------------------------
-  // UUID auto-generation
+  // UUID auto-generation & deep CREATE payload formatting
   // -------------------------------------------------------------------------
   service.before('CREATE', 'Roles', (req) => {
     if (!req.data.ID) req.data.ID = cds.utils.uuid();
     if (!req.data.accessDomain_ID) req.data.accessDomain_ID = 'app-global';
+
+    if (Array.isArray(req.data.ownRestrictions)) {
+      req.data.ownRestrictions.forEach(r => {
+        if (!r.ID) r.ID = cds.utils.uuid();
+        if (!r.sourceLabel) r.sourceLabel = 'Own';
+      });
+    }
+    if (Array.isArray(req.data.approvers)) {
+      req.data.approvers.forEach(a => {
+        if (!a.ID) a.ID = cds.utils.uuid();
+        if (!a.userName && a.userId) a.userName = a.userId;
+      });
+    }
+    if (Array.isArray(req.data.assignments)) {
+      req.data.assignments.forEach(a => {
+        if (!a.ID) a.ID = cds.utils.uuid();
+        if (!a.userName && a.userId) a.userName = a.userId;
+      });
+    }
+    if (Array.isArray(req.data.parentRoles)) {
+      req.data.parentRoles.forEach(p => {
+        if (!p.ID) p.ID = cds.utils.uuid();
+        if (!p.parent_ID && p.parent?.ID) p.parent_ID = p.parent.ID;
+      });
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -242,7 +319,7 @@ function registerRoleHandlers(service, entities, deps) {
   });
 
   // -------------------------------------------------------------------------
-  // Capture before-state for diff — UPDATE
+  // Capture before-state & process deep child updates — UPDATE
   // -------------------------------------------------------------------------
   service.before('UPDATE', 'Roles', async (req) => {
     try {
@@ -257,9 +334,63 @@ function registerRoleHandlers(service, entities, deps) {
           req.context = req.context || {};
           req.context.beforeStateRole = beforeState;
         }
+
+        // Process nested child collections in deep UPDATE requests using Delta Sync
+        if (req.data.ownRestrictions !== undefined) {
+          await syncCollectionDelta(
+            cds.db, Restrictions, 'role_ID', id, req.data.ownRestrictions,
+            (r, roleId) => ({
+              ...(r.ID ? { ID: r.ID } : {}),
+              role_ID: roleId,
+              field: r.field,
+              filterType: r.filterType,
+              value: r.value,
+              sourceLabel: r.sourceLabel || 'Own'
+            })
+          );
+          delete req.data.ownRestrictions;
+        }
+
+        if (req.data.parentRoles !== undefined) {
+          await syncCollectionDelta(
+            cds.db, RoleInheritance, 'role_ID', id, req.data.parentRoles,
+            (p, roleId) => ({
+              ...(p.ID ? { ID: p.ID } : {}),
+              role_ID: roleId,
+              parent_ID: p.parent_ID || p.parent?.ID
+            })
+          );
+          delete req.data.parentRoles;
+        }
+
+        if (req.data.approvers !== undefined) {
+          await syncCollectionDelta(
+            cds.db, RoleApprovers, 'role_ID', id, req.data.approvers,
+            (a, roleId) => ({
+              ...(a.ID ? { ID: a.ID } : {}),
+              role_ID: roleId,
+              userId: a.userId,
+              userName: a.userName || a.userId
+            })
+          );
+          delete req.data.approvers;
+        }
+
+        if (req.data.assignments !== undefined) {
+          await syncCollectionDelta(
+            cds.db, RoleAssignments, 'role_ID', id, req.data.assignments,
+            (a, roleId) => ({
+              ...(a.ID ? { ID: a.ID } : {}),
+              role_ID: roleId,
+              userId: a.userId,
+              userName: a.userName || a.userId
+            })
+          );
+          delete req.data.assignments;
+        }
       }
     } catch (err) {
-      console.error('[RoleHandlers] Before-state capture for Roles UPDATE failed:', err.message);
+      console.error('[RoleHandlers] Before-state capture / child collection delta sync for Roles UPDATE failed:', err.message);
     }
   });
 

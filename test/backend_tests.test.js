@@ -1167,5 +1167,104 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.ok(kpis.nodeTypeCounts !== undefined);
   });
 
-});
+  await t.test('Atomic Deep POST and PATCH on Roles saves restrictions, parent inheritances, approvers, and assignments', async () => {
+    const parentRes = await POST('/odata/v4/auth/Roles', {
+      name: `ROLE_DEEP_PARENT_${uniqueSuffix}`,
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    assert.strictEqual(parentRes.status, 201);
+    const parentId = parentRes.data.ID;
 
+    // 1. Deep POST Role creation with nested ownRestrictions, parentRoles, approvers, assignments
+    const createRes = await POST('/odata/v4/auth/Roles', {
+      name: `ROLE_DEEP_CHILD_${uniqueSuffix}`,
+      type: 'DERIVED',
+      description: 'Deep POST Test Role',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global',
+      ownRestrictions: [
+        { field: 'Plant', filterType: 'SINGLE_VALUE', value: '1000', sourceLabel: 'Own' }
+      ],
+      parentRoles: [
+        { parent_ID: parentId }
+      ],
+      approvers: [
+        { userId: 'deep.approver@test.com', userName: 'Deep Approver' }
+      ],
+      assignments: [
+        { userId: 'deep.user@test.com', userName: 'Deep User' }
+      ]
+    });
+
+    assert.strictEqual(createRes.status, 201);
+    const roleId = createRes.data.ID;
+
+    // Verify created role and child entities
+    const roleExpanded = await GET(`/odata/v4/auth/Roles('${roleId}')?$expand=ownRestrictions,parentRoles,approvers,assignments`);
+    assert.strictEqual(roleExpanded.status, 200);
+    assert.strictEqual(roleExpanded.data.ownRestrictions.length, 1);
+    assert.strictEqual(roleExpanded.data.ownRestrictions[0].field, 'Plant');
+    assert.strictEqual(roleExpanded.data.parentRoles.length, 1);
+    assert.strictEqual(roleExpanded.data.parentRoles[0].parent_ID, parentId);
+    assert.strictEqual(roleExpanded.data.approvers.length, 1);
+    assert.strictEqual(roleExpanded.data.approvers[0].userId, 'deep.approver@test.com');
+    assert.strictEqual(roleExpanded.data.assignments.length, 1);
+    assert.strictEqual(roleExpanded.data.assignments[0].userId, 'deep.user@test.com');
+
+    // 2. Fine-grained Delta Sync PATCH test (update existing resId1, delete resId2, insert new resId3)
+    const resId1 = roleExpanded.data.ownRestrictions[0].ID;
+
+    // Create a 2nd restriction first
+    const createRes2 = await PATCH(`/odata/v4/auth/Roles('${roleId}')`, {
+      ownRestrictions: [
+        { ID: resId1, field: 'Plant', filterType: 'SINGLE_VALUE', value: '1000', sourceLabel: 'Own' },
+        { field: 'Department', filterType: 'SINGLE_VALUE', value: 'Sales', sourceLabel: 'Own' }
+      ]
+    });
+    assert.strictEqual(createRes2.status, 200);
+
+    const roleWith2Res = await GET(`/odata/v4/auth/Roles('${roleId}')?$expand=ownRestrictions`);
+    assert.strictEqual(roleWith2Res.data.ownRestrictions.length, 2);
+    const resId2 = roleWith2Res.data.ownRestrictions.find(r => r.field === 'Department').ID;
+
+    // Perform Delta Sync: update resId1 value, remove resId2, insert new CompanyCode
+    const deltaPatchRes = await PATCH(`/odata/v4/auth/Roles('${roleId}')`, {
+      description: 'Updated Deep Role Description',
+      ownRestrictions: [
+        { ID: resId1, field: 'Plant', filterType: 'SINGLE_VALUE', value: '2000', sourceLabel: 'Own' },
+        { field: 'CompanyCode', filterType: 'SINGLE_VALUE', value: 'DE01', sourceLabel: 'Own' }
+      ],
+      approvers: [
+        { userId: 'new.approver@test.com', userName: 'New Approver' }
+      ]
+    });
+    assert.strictEqual(deltaPatchRes.status, 200);
+
+    // Verify updated state
+    const roleUpdated = await GET(`/odata/v4/auth/Roles('${roleId}')?$expand=ownRestrictions,parentRoles,approvers`);
+    assert.strictEqual(roleUpdated.status, 200);
+    assert.strictEqual(roleUpdated.data.description, 'Updated Deep Role Description');
+    assert.strictEqual(roleUpdated.data.ownRestrictions.length, 2);
+
+    const updatedRes1 = roleUpdated.data.ownRestrictions.find(r => r.ID === resId1);
+    assert.ok(updatedRes1, 'Original restriction resId1 must be preserved');
+    assert.strictEqual(updatedRes1.value, '2000', 'Original restriction resId1 value must be updated to 2000');
+
+    const deletedRes2 = roleUpdated.data.ownRestrictions.find(r => r.ID === resId2);
+    assert.strictEqual(deletedRes2, undefined, 'Removed restriction resId2 must be deleted');
+
+    const insertedRes3 = roleUpdated.data.ownRestrictions.find(r => r.field === 'CompanyCode');
+    assert.ok(insertedRes3, 'New restriction CompanyCode must be inserted');
+    assert.strictEqual(insertedRes3.value, 'DE01');
+
+    assert.strictEqual(roleUpdated.data.approvers.length, 1);
+    assert.strictEqual(roleUpdated.data.approvers[0].userId, 'new.approver@test.com');
+
+    // Clean up
+    await DELETE(`/odata/v4/auth/Roles('${roleId}')`);
+    await DELETE(`/odata/v4/auth/Roles('${parentId}')`);
+  });
+
+});
