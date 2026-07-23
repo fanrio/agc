@@ -157,8 +157,14 @@ export function canDeriveFromRole(role, permissions) {
   if (permissions?.isSuperAdmin) return true;
   if (!permissions) return false;
   if (!permissions.canManageDerivedRoles) return false;
-  if (role.type === 'SINGLE' && !permissions.canManageSingleRoles) return false;
-  if (role.type === 'ORG_BASED' && !permissions.canManageOrgRoles) return false;
   return isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope);
 }
 
+export function isPatternRestriction(r) {
+  if (!r) return false;
+  const ft = (r.filterType || '').toUpperCase();
+  const val = String(r.value || '').trim();
+  if (ft === 'ALL' || ft === 'CP' || ft === 'PATTERN') return true;
+  if (val === '*' || val.includes('*') || val.includes('?')) return true;
+  return false;
+}

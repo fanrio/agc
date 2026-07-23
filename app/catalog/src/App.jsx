@@ -1,6 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, FormControl, Select, MenuItem, CircularProgress, Button } from '@mui/material';
-import { Home, Building2, Shield, Settings, Users, Network, History, RefreshCw, LogOut, UserCheck } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  Box, 
+  AppBar, 
+  Toolbar, 
+  Typography, 
+  Drawer, 
+  List, 
+  ListItem, 
+  ListItemButton, 
+  ListItemIcon, 
+  ListItemText, 
+  CircularProgress, 
+  Button
+} from '@mui/material';
+import { 
+  Home, 
+  Building2, 
+  Shield, 
+  Settings, 
+  Users, 
+  Network, 
+  History, 
+  LogOut, 
+  UserCheck, 
+  ShieldCheck 
+} from 'lucide-react';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import OrgStructureView from './components/OrgStructureView';
@@ -8,44 +32,59 @@ import RolesDashboard from './components/RolesDashboard';
 import Wizard from './components/Wizard';
 import RoleAssignmentsView from './components/RoleAssignmentsView';
 import SystemView from './components/SystemView';
+import UsersView from './components/UsersView';
 import AppAuthorizationsView from './components/AppAuthorizationsView';
 import AuditLogsView from './components/AuditLogsView';
 import ReplicationsView from './components/ReplicationsView';
+import UserAuthorizationCardDrawer from './components/UserAuthorizationCard/UserAuthorizationCardDrawer';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
 
 const DRAWER_WIDTH = 240;
 
 const NAV = [
-  { id: 'home',        label: 'Dashboard',           icon: Home },
-  { id: 'org',         label: 'Organization',        icon: Building2 },
-  { id: 'roles',       label: 'Roles',               icon: Shield },
-  { id: 'assignments', label: 'Role Assignments',    icon: Users },
-  // { id: 'replications',label: 'Replications',         icon: RefreshCw },
-  { id: 'audit',       label: 'Audit Logs',          icon: History },
-  { id: 'users',       label: 'Users',               icon: UserCheck },
-  { id: 'system',      label: 'System',              icon: Settings },
+  { id: 'home',            label: 'Dashboard',             icon: Home },
+  { id: 'org',             label: 'Organization',          icon: Building2 },
+  { id: 'roles',           label: 'Roles',                 icon: Shield },
+  { id: 'assignments',     label: 'Role Assignments',      icon: Users },
+  { id: 'audit',           label: 'Audit Logs',            icon: History },
+  { id: 'access-profiles', label: 'Access Profiles',       icon: ShieldCheck },
+  { id: 'users',           label: 'Manage Users',          icon: UserCheck },
+  { id: 'system',          label: 'System',                icon: Settings },
 ];
 
 function getNavFromHash() {
-  const hash = window.location.hash.replace('#', '').trim();
-  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'users', 'system', 'wizard', 'replications'];
+  const hashRaw = (typeof window !== 'undefined' && window.location.hash ? window.location.hash : '').replace(/^#/, '').trim();
+  const hash = hashRaw.split('?')[0].split('/')[0];
+  if (['security-profiles', 'security_profiles', 'profiles', 'securityprofiles', 'access-profiles', 'access_profiles', 'accessprofiles'].includes(hash)) {
+    return 'access-profiles';
+  }
+  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'access-profiles', 'users', 'system', 'wizard', 'replications'];
   return validNavs.includes(hash) ? hash : 'home';
 }
 
 function AppContent({ simulatedUser, onLogout }) {
-  const [activeNav, setActiveNavState]   = useState(getNavFromHash);
-  const [wizardContext, setWizardContext] = useState(null); // { parentRoleId?, orgNodeId? }
-  const [rolesFilter, setRolesFilter]     = useState(null);
+  const [activeNav, setActiveNavState]         = useState(getNavFromHash);
+  const [wizardContext, setWizardContext]       = useState(null);
+  const [rolesFilter, setRolesFilter]           = useState(null);
+  const [inspectingUserId, setInspectingUserId] = useState(null);
+  const isNavigatingRef                         = useRef(false);
   
   const { permissions, loading } = usePermissions();
 
   const setActiveNav = (navId) => {
+    isNavigatingRef.current = true;
     setActiveNavState(navId);
-    window.location.hash = `#${navId}`;
+    if (window.location.hash !== `#${navId}`) {
+      window.location.hash = `#${navId}`;
+    }
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 50);
   };
 
   useEffect(() => {
     const handleHashChange = () => {
+      if (isNavigatingRef.current) return;
       const nav = getNavFromHash();
       setActiveNavState(nav);
     };
@@ -82,6 +121,7 @@ function AppContent({ simulatedUser, onLogout }) {
     if (item.id === 'replications') return !!permissions?.canManageReplications;
     if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
     if (item.id === 'users') return !!permissions?.canManageAppUsers;
+    if (item.id === 'access-profiles') return true;
     if (item.id === 'system') return !!permissions?.canManageSettings;
     return true;
   });
@@ -97,7 +137,19 @@ function AppContent({ simulatedUser, onLogout }) {
               cortex <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              startIcon={<ShieldCheck size={16} />}
+              onClick={() => setInspectingUserId(simulatedUser || 'admin')}
+              sx={{ textTransform: 'none', fontWeight: 600, height: 34, borderRadius: 1.5 }}
+            >
+              Inspect User Card
+            </Button>
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box
                 sx={{
@@ -125,6 +177,7 @@ function AppContent({ simulatedUser, onLogout }) {
                 </Typography>
               </Box>
             </Box>
+
             <Button
               variant="outlined"
               color="error"
@@ -135,10 +188,6 @@ function AppContent({ simulatedUser, onLogout }) {
             >
               Log Out
             </Button>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10b981', display: 'inline-block' }} />
-              <Typography variant="body2" color="text.secondary">CAP Connected · SQLite (mock)</Typography>
-            </Box>
           </Box>
         </Toolbar>
       </AppBar>
@@ -199,16 +248,23 @@ function AppContent({ simulatedUser, onLogout }) {
 
       {/* Main Content */}
       <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
-        {activeNav === 'home'        && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
-        {activeNav === 'org'         && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
-        {activeNav === 'roles'       && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
-        {activeNav === 'wizard'      && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
-        {activeNav === 'assignments' && <RoleAssignmentsView />}
-        {activeNav === 'replications' && <ReplicationsView />}
-        {activeNav === 'audit'       && <AuditLogsView />}
-        {activeNav === 'users'       && <AppAuthorizationsView />}
-        {activeNav === 'system'      && <SystemView />}
+        {activeNav === 'home'              && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
+        {activeNav === 'org'               && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
+        {activeNav === 'roles'             && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
+        {activeNav === 'wizard'            && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
+        {activeNav === 'assignments'       && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+        {activeNav === 'replications'      && <ReplicationsView />}
+        {activeNav === 'audit'             && <AuditLogsView />}
+        {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+        {activeNav === 'users'             && <AppAuthorizationsView />}
+        {activeNav === 'system'            && <SystemView />}
       </Box>
+
+      {/* Global User Authorization Card Drawer */}
+      <UserAuthorizationCardDrawer 
+        userId={inspectingUserId} 
+        onClose={() => setInspectingUserId(null)} 
+      />
     </Box>
   );
 }

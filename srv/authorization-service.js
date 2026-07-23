@@ -223,4 +223,17 @@ module.exports = cds.service.impl(async function () {
   });
 
   this.on('triggerReplication', makeTriggerReplicationHandler(cds, entities, BdcClient));
+
+  const { getUserEffectiveAuthorizations } = require('./services/userAuthorizationService');
+
+  // Function: getUserEffectiveAuthorizations
+  this.on('getUserEffectiveAuthorizations', async (req) => {
+    try {
+      const { userId } = req.data;
+      const res = await getUserEffectiveAuthorizations(userId, cds, entities);
+      return JSON.stringify(res);
+    } catch (e) {
+      return req.reject(400, e.message);
+    }
+  });
 });

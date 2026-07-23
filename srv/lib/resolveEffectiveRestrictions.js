@@ -64,21 +64,26 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
 
   walk(roleId, true);
 
-  // Filter out parent wildcard restrictions if a descendant has a restriction on the same field
+  // Filter out parent pattern/wildcard restrictions if a descendant has a restriction on the same field
   const finalResult = [];
   const fieldsRestrictedByDescendants = new Set();
   
+  const isPatternRestriction = (r) => {
+    if (!r) return false;
+    const ft = (r.filterType || '').toUpperCase();
+    const val = String(r.value || '').trim();
+    if (ft === 'ALL' || ft === 'CP' || ft === 'PATTERN') return true;
+    if (val === '*' || val.includes('*') || val.includes('?')) return true;
+    return false;
+  };
+
   for (let i = result.length - 1; i >= 0; i--) {
     const r = result[i];
     const fieldLower = r.field.toLowerCase();
     
-    const isWildcard = r.filterType === 'ALL' || 
-                       (r.filterType === 'CP' && r.value === '*') ||
-                       r.value === '*';
-                       
-    if (isWildcard) {
+    if (isPatternRestriction(r)) {
       if (fieldsRestrictedByDescendants.has(fieldLower)) {
-        continue; // discard ancestor wildcard restriction
+        continue; // discard ancestor pattern/wildcard restriction
       }
     }
     

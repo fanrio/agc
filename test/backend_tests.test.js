@@ -1275,4 +1275,15 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/Roles('${parentId}')`);
   });
 
+  await t.test('Function: getUserEffectiveAuthorizations returns domain-grouped user permissions', async () => {
+    const res = await GET(`/odata/v4/auth/getUserEffectiveAuthorizations(userId='markus.winkler@cimt.de')`);
+    assert.strictEqual(res.status, 200, 'getUserEffectiveAuthorizations should return 200');
+    assert.ok(res.data.value, 'Response must contain a JSON string payload in value');
+    
+    const parsed = typeof res.data.value === 'string' ? JSON.parse(res.data.value) : res.data.value;
+    assert.strictEqual(parsed.userId, 'markus.winkler@cimt.de');
+    assert.ok(Array.isArray(parsed.domains), 'domains must be an array');
+  });
+
 });
+

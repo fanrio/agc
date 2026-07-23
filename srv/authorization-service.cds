@@ -155,4 +155,5 @@ service AuthorizationService @(path: '/odata/v4/auth') {
 
   function getCurrentUserPermissions()                                         returns AppAuthorizations;
   function getDashboardKpis()                                                   returns LargeString;
+  function getUserEffectiveAuthorizations(userId: String)                      returns LargeString;
 }

@@ -813,12 +813,8 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
     onChange(restrictions.filter(r => r.ID !== id));
   }
 
-  const inheritedFields = new Set(
-    inheritedRestrictions
-      .filter(r => !(r.filterType === 'ALL' || r.value === '*'))
-      .map(r => r.field)
-  );
-  const availableFields = restrictionFields.filter(f => !inheritedFields.has(f.name));
+  // Available fields in builder are all restrictionFields passed to the component
+  const availableFields = restrictionFields;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

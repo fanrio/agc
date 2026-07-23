@@ -69,6 +69,7 @@ export const deleteAccessDomainField    = (id)        => request('DELETE', `/Acc
 
 // Assignments
 export const getAssignments    = ()             => request('GET',    '/RoleAssignments?$expand=role');
+export const getRoleAssignments = getAssignments;
 export const createAssignment  = (body)         => request('POST',   '/RoleAssignments', body);
 export const deleteAssignment  = (id)           => request('DELETE', `/RoleAssignments(${id})`);
 
@@ -126,3 +127,5 @@ export const deleteCustomer = (id) => request('DELETE', `/Customers('${id}')`);
 
 export const getDashboardKpis = () => request('GET', '/getDashboardKpis()');
 export const getRecentRoles = () => request('GET', '/Roles?$orderby=createdAt desc&$top=20&$expand=parentRoles($expand=parent)');
+export const getUserEffectiveAuthorizations = (userId) => request('GET', `/getUserEffectiveAuthorizations(userId='${encodeURIComponent(userId)}')`);
+

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as api from '../../api';
-import { isCriticalRestriction, isRoleInScope } from '../../utils/helpers';
+import { isCriticalRestriction, isRoleInScope, isPatternRestriction } from '../../utils/helpers';
 
 export function useWizardState({ context = {}, permissions }) {
   const [step, setStep] = useState(0);
@@ -208,7 +208,7 @@ export function useWizardState({ context = {}, permissions }) {
         const role = all.find(r => r.ID === context.roleId);
         if (role) {
           try {
-            setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : (role.type === 'DRAGE' ? 'DRAGE' : 'SINGLE'));
+            setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : (role.type === 'DRAGE' ? 'DRAGE' : (role.type === 'DERIVED' ? 'DERIVED' : 'SINGLE')));
             setRoleName(role.name || '');
             setDescription(role.description || '');
             setOrgNode(role.orgNode_ID || '');
@@ -236,7 +236,7 @@ export function useWizardState({ context = {}, permissions }) {
 
   // Load inherited restrictions when selectedParentIds changes
   useEffect(() => {
-    if (roleType === 'SINGLE' && selectedParentIds.length > 0) {
+    if (selectedParentIds.length > 0) {
       Promise.all(selectedParentIds.map(id => api.resolveEffective(id)))
         .then(results => {
           const merged = [];
@@ -491,103 +491,60 @@ export function useWizardState({ context = {}, permissions }) {
     setLoading(false);
   }
 
-  const isDerived = selectedParentIds.length > 0;
+  const isDerived = selectedParentIds.length > 0 || roleType === 'DERIVED';
   const selectableRestrictionFields = (() => {
-    // 1. Constrain restriction fields by Access Domain first
+    // 1. Get domainScopedFields based on accessDomainId (if configured)
     let domainScopedFields = restrictionFields;
-    if (accessDomains.length > 0) {
+    if (accessDomains.length > 0 && accessDomainId) {
       const selectedDomain = accessDomains.find(s => s.ID === accessDomainId);
-      if (selectedDomain) {
-        const domainFields = selectedDomain.restrictionFields || [];
-        if (domainFields.length > 0) {
-          const allowedIds = new Set(domainFields.map(rf => rf.field_ID || rf.field?.ID).filter(Boolean));
-          domainScopedFields = restrictionFields.filter(f => allowedIds.has(f.ID));
-        } else {
-          domainScopedFields = [];
+      if (selectedDomain && Array.isArray(selectedDomain.restrictionFields) && selectedDomain.restrictionFields.length > 0) {
+        const allowedIds = new Set(selectedDomain.restrictionFields.map(rf => rf.field_ID || rf.field?.ID || rf.field).filter(Boolean));
+        if (allowedIds.size > 0) {
+          const filtered = restrictionFields.filter(f => allowedIds.has(f.ID) || allowedIds.has(f.name));
+          if (filtered.length > 0) domainScopedFields = filtered;
         }
       }
     }
 
-    // 2. If Single/Org-Based role (not derived), return domain-scoped fields directly
+    // 2. For Single/Org-Based role (not derived), all domain-scoped fields are selectable
     if (!isDerived) return domainScopedFields;
 
-    // 3. For Derived role, apply the usedFields and scope checks on the domainScopedFields pool
-    if (permissions?.isSuperAdmin) return domainScopedFields;
-    if (!permissions || !permissions.canManageDerivedRoles) return [];
-
-    const usedFields = new Set();
-    selectedParentIds.forEach(parentId => {
-      const roleObj = allRoles.find(r => r.ID === parentId);
-      if (roleObj) {
-        if (roleObj.ownRestrictions) {
-          roleObj.ownRestrictions.forEach(r => {
-            if (r.filterType === 'ALL' || r.value === '*') return;
-            usedFields.add(r.field.toLowerCase());
-          });
-        }
-        const queue = roleObj.parentRoles ? roleObj.parentRoles.map(pr => pr.parent?.ID || pr.parent_ID).filter(Boolean) : [];
-        const visited = new Set(queue);
-        while (queue.length > 0) {
-          const currId = queue.shift();
-          const currRole = allRoles.find(r => r.ID === currId);
-          if (currRole) {
-            if (currRole.ownRestrictions) {
-              currRole.ownRestrictions.forEach(r => {
-                if (r.filterType === 'ALL' || r.value === '*') return;
-                usedFields.add(r.field.toLowerCase());
-              });
-            }
-            if (currRole.parentRoles) {
-              currRole.parentRoles.forEach(pr => {
-                const pid = pr.parent?.ID || pr.parent_ID;
-                if (pid && !visited.has(pid)) {
-                  visited.add(pid);
-                  queue.push(pid);
-                }
-              });
-            }
-          }
-        }
-      }
-    });
-
-    const scopeStr = permissions.managedDerivedRolesScope;
-    if (!scopeStr || scopeStr.trim() === '' || scopeStr.trim().toUpperCase() === 'ALL' || scopeStr.trim() === '*') {
-      return domainScopedFields.filter(f => !usedFields.has(f.name.toLowerCase()));
+    // 3. For Derived role:
+    // Extract ONLY field names that have a WILDCARD / PATTERN restriction in parent roles
+    const parentRestrictions = [];
+    if (inherited && Array.isArray(inherited)) {
+      parentRestrictions.push(...inherited);
     }
-
-    let scopeList = [];
-    try {
-      scopeList = JSON.parse(scopeStr);
-      if (!Array.isArray(scopeList)) scopeList = [];
-    } catch (e) {
-      const terms = scopeStr.split(',').map(s => s.trim().toLowerCase());
-      const hasAllowedParent = selectedParentIds.some(parentId => {
-        const parent = allRoles.find(r => r.ID === parentId);
-        return parent && (terms.includes(parent.name.toLowerCase()) || terms.includes(parent.ID.toLowerCase()));
-      });
-      return hasAllowedParent ? domainScopedFields.filter(f => !usedFields.has(f.name.toLowerCase())) : [];
-    }
-
-    const allowedFieldsSet = new Set();
-    let hasParentMatch = false;
-
     selectedParentIds.forEach(parentId => {
       const parentRole = allRoles.find(r => r.ID === parentId);
-      const entry = scopeList.find(s => s.roleId === parentId || (parentRole && s.roleId === parentRole.name));
-      if (entry) {
-        hasParentMatch = true;
-        if (entry.fields && entry.fields.length > 0) {
-          entry.fields.forEach(f => allowedFieldsSet.add(f.toLowerCase()));
-        } else {
-          domainScopedFields.forEach(f => allowedFieldsSet.add(f.name.toLowerCase()));
-        }
+      if (parentRole && parentRole.ownRestrictions) {
+        parentRestrictions.push(...parentRole.ownRestrictions);
       }
     });
 
-    if (!hasParentMatch) return [];
+    const wildcardFieldNames = new Set();
+    parentRestrictions.forEach(r => {
+      if (r && r.field && isPatternRestriction(r)) {
+        wildcardFieldNames.add(String(r.field).toLowerCase());
+      }
+    });
 
-    return domainScopedFields.filter(f => allowedFieldsSet.has(f.name.toLowerCase()) && !usedFields.has(f.name.toLowerCase()));
+    // ONLY fields with wildcard restrictions in parent roles are selectable!
+    const selectable = [];
+    wildcardFieldNames.forEach(fieldNameLower => {
+      const matching = domainScopedFields.find(f => f.name.toLowerCase() === fieldNameLower)
+        || restrictionFields.find(f => f.name.toLowerCase() === fieldNameLower);
+      if (matching) {
+        if (!selectable.some(f => f.name.toLowerCase() === fieldNameLower)) {
+          selectable.push(matching);
+        }
+      } else {
+        const cap = fieldNameLower.charAt(0).toUpperCase() + fieldNameLower.slice(1);
+        selectable.push({ ID: fieldNameLower, name: cap });
+      }
+    });
+
+    return selectable;
   })();
 
   const isUserApprover = Array.isArray(approvers) && approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());

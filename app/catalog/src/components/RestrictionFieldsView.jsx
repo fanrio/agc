@@ -258,7 +258,8 @@ export default function RestrictionFieldsView() {
         <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New Restriction Field</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={3}>
+            {/* Row 1: Field Name, BDC Connection, Asset ID, Asset Text, Asset Hierarchy, Checkbox */}
+            <Grid size={{ xs: 12, sm: 1.5 }}>
               <TextField
                 label="Field Name"
                 size="small"
@@ -268,7 +269,7 @@ export default function RestrictionFieldsView() {
                 onChange={e => setNewFieldName(e.target.value)}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 2.25 }}>
               <FormControl size="small" fullWidth>
                 <InputLabel id="bdc-connection-select-label">BDC Connection</InputLabel>
                 <Select
@@ -284,7 +285,7 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={2}>
+            <Grid size={{ xs: 12, sm: 2 }}>
               <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
                 <InputLabel id="new-asset-id-label">
                   {loadingAssets ? 'Loading...' : 'Asset ID'}
@@ -304,7 +305,7 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={2}>
+            <Grid size={{ xs: 12, sm: 2 }}>
               <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
                 <InputLabel id="new-asset-text-label">
                   {loadingAssets ? 'Loading...' : 'Asset Text'}
@@ -322,7 +323,7 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={2}>
+            <Grid size={{ xs: 12, sm: 2 }}>
               <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
                 <InputLabel id="new-asset-hierarchy-label">
                   {loadingAssets ? 'Loading...' : 'Asset Hierarchy'}
@@ -340,25 +341,33 @@ export default function RestrictionFieldsView() {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid size={{ xs: 12, sm: 2.25 }} sx={{ display: 'flex', alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newWithHierarchyDirectory}
+                    disabled={true}
+                  />
+                }
+                label="With Hierarchy Directory"
+                sx={{
+                  '& .MuiFormControlLabel-label': {
+                    fontSize: '0.75rem',
+                    lineHeight: 1.1,
+                    whiteSpace: 'normal',
+                  }
+                }}
+              />
+            </Grid>
+
+            {/* Row 2: Buttons (Right) */}
+            <Grid size={12} sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+              <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Button variant="outlined" color="inherit" onClick={() => setShowAdd(false)}>Cancel</Button>
+                <Button variant="contained" onClick={handleAddField} disabled={loading || !newFieldName.trim()}>Save Field</Button>
+              </Box>
+            </Grid>
           </Grid>
-
-          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mt: 1.5, mb: 1 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={newWithHierarchyDirectory}
-                  onChange={e => setNewWithHierarchyDirectory(e.target.checked)}
-                  disabled={!newAssetHierarchy}
-                />
-              }
-              label="With Hierarchy Directory"
-            />
-          </Box>
-
-          <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end', mt: 1 }}>
-            <Button variant="outlined" color="inherit" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleAddField} disabled={loading || !newFieldName.trim()}>Save Field</Button>
-          </Box>
         </Card>
       </Collapse>
 
@@ -393,7 +402,8 @@ export default function RestrictionFieldsView() {
                       <TableRow key={f.ID}>
                         <TableCell colSpan={7} sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)', p: 3 }}>
                           <Grid container spacing={2}>
-                            <Grid item xs={12} sm={3}>
+                            {/* Row 1: Field Name, BDC Connection, Asset ID, Asset Text, Asset Hierarchy, Checkbox */}
+                            <Grid size={{ xs: 12, sm: 1.5 }}>
                               <TextField
                                 label="Field Name"
                                 size="small"
@@ -402,7 +412,7 @@ export default function RestrictionFieldsView() {
                                 onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
                               />
                             </Grid>
-                            <Grid item xs={12} sm={3}>
+                            <Grid size={{ xs: 12, sm: 2.25 }}>
                               <FormControl size="small" fullWidth>
                                 <InputLabel id="edit-bdc-select-label">BDC Connection</InputLabel>
                                 <Select
@@ -418,7 +428,7 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
-                            <Grid item xs={12} sm={2}>
+                            <Grid size={{ xs: 12, sm: 2 }}>
                               <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
                                 <InputLabel id="edit-asset-id-label">
                                   {loadingEditAssets ? 'Loading...' : 'Asset ID'}
@@ -438,7 +448,7 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
-                            <Grid item xs={12} sm={2}>
+                            <Grid size={{ xs: 12, sm: 2 }}>
                               <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
                                 <InputLabel id="edit-asset-text-label">
                                   {loadingEditAssets ? 'Loading...' : 'Asset Text'}
@@ -456,7 +466,7 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
-                            <Grid item xs={12} sm={2}>
+                            <Grid size={{ xs: 12, sm: 2 }}>
                               <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
                                 <InputLabel id="edit-asset-hierarchy-label">
                                   {loadingEditAssets ? 'Loading...' : 'Asset Hierarchy'}
@@ -474,27 +484,35 @@ export default function RestrictionFieldsView() {
                                 </Select>
                               </FormControl>
                             </Grid>
-
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12, sm: 2.25 }} sx={{ display: 'flex', alignItems: 'center' }}>
                               <FormControlLabel
                                 control={
                                   <Checkbox
                                     checked={!!editForm.withHierarchyDirectory}
-                                    onChange={e => setEditForm(prev => ({ ...prev, withHierarchyDirectory: e.target.checked }))}
-                                    disabled={!editForm.assetHierarchy}
+                                    disabled={true}
                                   />
                                 }
                                 label="With Hierarchy Directory"
+                                sx={{
+                                  '& .MuiFormControlLabel-label': {
+                                    fontSize: '0.75rem',
+                                    lineHeight: 1.1,
+                                    whiteSpace: 'normal',
+                                  }
+                                }}
                               />
                             </Grid>
 
-                            <Grid item xs={12} sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', alignItems: 'center', mt: 1 }}>
-                              <Button variant="contained" size="small" onClick={() => handleUpdateField(f.ID)} disabled={loading || !editForm.name.trim()} startIcon={<Check size={14} />}>
-                                Save
-                              </Button>
-                              <Button variant="outlined" size="small" color="inherit" onClick={() => setEditingId(null)} startIcon={<X size={14} />}>
-                                Cancel
-                              </Button>
+                            {/* Row 2: Buttons (Right) */}
+                            <Grid size={12} sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 1.5 }}>
+                                <Button variant="outlined" size="small" color="inherit" onClick={() => setEditingId(null)} startIcon={<X size={14} />}>
+                                  Cancel
+                                </Button>
+                                <Button variant="contained" size="small" onClick={() => handleUpdateField(f.ID)} disabled={loading || !editForm.name.trim()} startIcon={<Check size={14} />}>
+                                  Save
+                                </Button>
+                              </Box>
                             </Grid>
                           </Grid>
                         </TableCell>

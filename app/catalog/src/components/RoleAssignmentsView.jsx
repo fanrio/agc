@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Autocomplete, InputAdornment, Tooltip, Skeleton } from '@mui/material';
-import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw, ShieldCheck } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
 import { filterRolesByPermissions, isRoleInScope } from '../utils/helpers';
@@ -312,10 +312,31 @@ export default function RoleAssignmentsView() {
                 {filteredAssignments.map(a => (
                   <TableRow key={a.ID} hover>
                     <TableCell sx={{ fontWeight: 600 }}>
-                      {a.userId}
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 600,
+                          color: 'primary.main',
+                          cursor: 'pointer',
+                          '&:hover': { textDecoration: 'underline' }
+                        }}
+                        onClick={() => onInspectUser && onInspectUser(a.userId)}
+                      >
+                        {a.userId}
+                      </Typography>
                     </TableCell>
                     <TableCell sx={{ fontWeight: 500 }}>
-                      {a.userName || a.userId}
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          '&:hover': { color: 'primary.main' }
+                        }}
+                        onClick={() => onInspectUser && onInspectUser(a.userId)}
+                      >
+                        {a.userName || a.userId}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -332,17 +353,29 @@ export default function RoleAssignmentsView() {
                       {a.createdBy || 'System'}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Remove assignment">
-                        <IconButton 
-                          color="error" 
-                          onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
-                          disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
-                          size="small"
-                          aria-label="Remove assignment"
-                        >
-                          <Trash2 size={15} />
-                        </IconButton>
-                      </Tooltip>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                        <Tooltip title="View User Authorization Card">
+                          <IconButton 
+                            color="primary" 
+                            onClick={() => onInspectUser && onInspectUser(a.userId)} 
+                            size="small"
+                            aria-label="View User Authorization Card"
+                          >
+                            <ShieldCheck size={16} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Remove assignment">
+                          <IconButton 
+                            color="error" 
+                            onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
+                            disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
+                            size="small"
+                            aria-label="Remove assignment"
+                          >
+                            <Trash2 size={15} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}

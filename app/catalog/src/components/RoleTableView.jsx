@@ -3,8 +3,8 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Chip, IconButton, Tooltip, Typography, Box, TableSortLabel, Button
 } from '@mui/material';
-import { Shield, GitBranch, Edit3, Trash2, Users, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
-import { ENV_LABEL, ENV_COLOR, canDeriveFromRole } from '../utils/helpers';
+import { Shield, GitBranch, Edit3, Trash2, Users, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Eye } from 'lucide-react';
+import { ENV_LABEL, ENV_COLOR, canDeriveFromRole, isRoleInScope } from '../utils/helpers';
 
 export default function RoleTableView({
   roles,
@@ -88,8 +88,32 @@ export default function RoleTableView({
     const parentName = getParentRoleName(role);
     const isDerived = role.type === 'DERIVED';
     const isOrg = role.type === 'ORG_BASED';
+
+    const canManageThisDerivedRole = (r) => {
+      if (permissions?.isSuperAdmin) return true;
+      if (!permissions?.canManageDerivedRoles) return false;
+      if (r.type !== 'DERIVED') return false;
+      if (!r.parentRoles || r.parentRoles.length === 0) return false;
+      return r.parentRoles.every(pr => {
+        const parentId = pr.parent_ID || pr.parent?.ID;
+        if (!parentId) return false;
+        const parent = allRoles.find(item => item.ID === parentId);
+        if (!parent) return false;
+        return isRoleInScope(parent.ID, parent.name, permissions?.managedDerivedRolesScope);
+      });
+    };
+
+    const disableEdit = (() => {
+      if (permissions?.isSuperAdmin) return false;
+      if (role.type === 'DRAGE') return true;
+      if (role.type === 'ORG_BASED') return !permissions?.canManageOrgRoles;
+      if (role.type === 'DERIVED') return !canManageThisDerivedRole(role);
+      return !permissions?.canManageSingleRoles;
+    })();
+
+    const disableDelete = disableEdit;
     const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role, permissions);
-    console.log(role);
+
     return (
       <>
         <TableRow hover key={role.ID} sx={{ bgcolor: depth > 0 ? 'action.hover' : 'inherit' }}>
@@ -180,15 +204,17 @@ export default function RoleTableView({
 
           <TableCell align="right">
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-              <Tooltip title="Edit Role Settings">
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={() => onEdit && onEdit(role)}
-                  aria-label="Edit Role Settings"
-                >
-                  <Edit3 size={15} />
-                </IconButton>
+              <Tooltip title={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => onEdit && onEdit(role)}
+                    aria-label={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
+                  >
+                    {disableEdit ? <Eye size={15} /> : <Edit3 size={15} />}
+                  </IconButton>
+                </span>
               </Tooltip>
               <Tooltip title={disableDerive ? 'Cannot derive role' : 'Derive Child Role'}>
                 <span>
@@ -203,6 +229,21 @@ export default function RoleTableView({
                   </IconButton>
                 </span>
               </Tooltip>
+              {onDelete && (
+                <Tooltip title={disableDelete ? 'Cannot delete role' : 'Delete Role'}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => onDelete && onDelete(role)}
+                      disabled={disableDelete}
+                      aria-label="Delete Role"
+                    >
+                      <Trash2 size={15} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
             </Box>
           </TableCell>
         </TableRow>
