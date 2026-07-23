@@ -66,12 +66,15 @@ async function getDashboardKpis(req, cds) {
   // 4. Apply backend filtering matching frontend filterRolesByPermissions
   const filteredRoles = filterRolesByPermissions(stitchedRoles, permissions, allInheritances);
 
+  // 4b. Filter assignments to only those for roles within the user's scope
+  const filteredAssignments = allAssignments.filter(a => filteredRoles.some(r => r.ID === a.role_ID));
+
   // 5. Calculate unique users
-  const uniqueUsers = new Set(allAssignments.map(a => a.userId));
+  const uniqueUsers = new Set(filteredAssignments.map(a => a.userId));
 
   // 6. Calculate unique users with critical roles
   const usersWithCritical = new Set(
-    allAssignments
+    filteredAssignments
       .filter(a => {
         const role = filteredRoles.find(r => r.ID === a.role_ID);
         return role && role.critical;
@@ -116,7 +119,7 @@ async function getDashboardKpis(req, cds) {
     usersWithCritical: usersWithCritical.size,
     nodeCount: allNodes.length,
     nodeTypeCounts,
-    assignmentCount: allAssignments.length,
+    assignmentCount: filteredAssignments.length,
     userCount: uniqueUsers.size,
     accessDomainCount: allAccessDomains.length,
     fieldCount: allFields.length,

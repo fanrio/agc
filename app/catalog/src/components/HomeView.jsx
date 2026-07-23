@@ -109,26 +109,30 @@ export default function HomeView({ setActiveNav, navigateToRoles }) {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gridTemplateColumns: (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) ? { xs: '1fr', md: '1fr 1fr' } : '1fr',
           gap: 3.5,
           width: '100%'
         }}
       >
         <UserAssignment stats={stats} setActiveNav={setActiveNav} />
-        <OrganizationalNodes stats={stats} setActiveNav={setActiveNav} />
+        {(permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && (
+          <OrganizationalNodes stats={stats} setActiveNav={setActiveNav} />
+        )}
       </Box>
 
       {/* Details sections row: Recent roles & Configuration parameter widgets */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '7fr 5fr' },
+          gridTemplateColumns: (permissions?.isSuperAdmin || permissions?.canManageSettings) ? { xs: '1fr', md: '7fr 5fr' } : '1fr',
           gap: 3.5,
           width: '100%'
         }}
       >
         <RecentlyCreatedRoles stats={stats} setActiveNav={setActiveNav} />
-        <GlobalParameters stats={stats} setActiveNav={setActiveNav} />
+        {(permissions?.isSuperAdmin || permissions?.canManageSettings) && (
+          <GlobalParameters stats={stats} setActiveNav={setActiveNav} />
+        )}
       </Box>
     </Box>
   );

@@ -23,7 +23,7 @@ function hasAnyRestrictions(role, allRoles) {
   return false;
 }
 
-export default function RoleAssignmentsView() {
+export default function RoleAssignmentsView({ onInspectUser }) {
   const { permissions } = usePermissions();
   const [assignments, setAssignments] = useState([]);
   
