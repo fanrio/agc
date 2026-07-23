@@ -79,11 +79,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     return [];
   };
 
-  const parsedAllowedEnvs = permissions?.isSuperAdmin ? 'ALL' : parseEnvironments(permissions?.allowedEnvironments);
-  const visibleRoles = roles.filter(role => {
-    if (permissions?.isSuperAdmin || parsedAllowedEnvs === 'ALL') return true;
-    return parsedAllowedEnvs.includes(role.environment_ID);
-  });
+  const visibleRoles = roles;
 
   // Apply environment & type filters
   const envFilteredRoles = visibleRoles.filter(role => {
