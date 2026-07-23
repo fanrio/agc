@@ -14,7 +14,13 @@ export default function RoleTreeView({
   onSuccess,
   permissions
 }) {
-  const rootRoles = roles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
+  const rootRoles = roles.filter(r => {
+    if (!r.parentRoles || r.parentRoles.length === 0) return true;
+    return !r.parentRoles.some(pr => {
+      const parentId = pr.parent_ID || pr.parent?.ID;
+      return roles.some(vr => vr.ID === parentId);
+    });
+  });
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

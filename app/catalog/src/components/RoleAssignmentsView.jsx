@@ -30,6 +30,7 @@ export default function RoleAssignmentsView() {
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
   const [roles, setRoles]             = useState([]);
+  const [allRoles, setAllRoles]       = useState([]);
   const [loading, setLoading]         = useState(true);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [error, setError]             = useState(''); // Kept for reference but using snackbar instead
@@ -97,19 +98,11 @@ export default function RoleAssignmentsView() {
         api.getRoles()
       ]);
       const filteredRoles = filterRolesByPermissions(roleData, permissions);
-      const allowedRoles = (permissions?.isSuperAdmin || permissions?.canAssignRoles) 
-        ? filteredRoles 
-        : filteredRoles.filter(r => {
-            const isApprover = Array.isArray(r.approvers) && r.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
-            if (isApprover) return true;
-            if (permissions?.canManageDerivedRoles && r.type === 'DERIVED') {
-              return isRoleInScope(r.ID, r.name, permissions.managedDerivedRolesScope);
-            }
-            return false;
-          });
+      const allowedRoles = filteredRoles;
       const allowedRoleIds = new Set(allowedRoles.map(r => r.ID));
       setAssignments(assignData.filter(a => allowedRoleIds.has(a.role_ID)));
       setRoles(allowedRoles);
+      setAllRoles(roleData);
     } catch (e) {
       setSnackbar({ open: true, message: `Failed to load data: ${e.message}`, severity: 'error' });
     }
@@ -413,6 +406,7 @@ export default function RoleAssignmentsView() {
       <UserRoleAssignment
         open={assignDialogOpen}
         roles={roles}
+        allRoles={allRoles}
         onClose={() => setAssignDialogOpen(false)}
         onSuccess={async (msg) => {
           setAssignDialogOpen(false);

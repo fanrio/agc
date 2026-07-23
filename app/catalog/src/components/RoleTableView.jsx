@@ -50,7 +50,11 @@ export default function RoleTableView({
 
   const getParentRoleName = (role) => {
     if (!role.parentRoles || role.parentRoles.length === 0) return null;
-    const parentId = role.parentRoles[0].parent_ID || role.parentRoles[0].parent?.ID;
+    const parentObj = role.parentRoles[0].parent;
+    if (parentObj && parentObj.name) {
+      return parentObj.name;
+    }
+    const parentId = role.parentRoles[0].parent_ID || parentObj?.ID;
     if (!parentId) return null;
     const parent = allRoles.find(r => r.ID === parentId);
     return parent ? parent.name : parentId;
@@ -63,7 +67,13 @@ export default function RoleTableView({
   };
 
   // Top-level root roles (or all roles if a filter/search is active)
-  const rootRoles = roles.filter(r => !r.parentRoles || r.parentRoles.length === 0);
+  const rootRoles = roles.filter(r => {
+    if (!r.parentRoles || r.parentRoles.length === 0) return true;
+    return !r.parentRoles.some(pr => {
+      const parentId = pr.parent_ID || pr.parent?.ID;
+      return roles.some(vr => vr.ID === parentId);
+    });
+  });
 
   const sortRolesList = (list) => {
     return [...list].sort((a, b) => {

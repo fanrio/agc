@@ -20,7 +20,7 @@ function hasAnyRestrictions(role, allRoles) {
   return false;
 }
 
-export default function UserRoleAssignment({ open, role, roles = [], onClose, onSuccess, onError }) {
+export default function UserRoleAssignment({ open, role, roles = [], allRoles = roles, onClose, onSuccess, onError }) {
   const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [assignForm, setAssignForm] = useState({ userId: '', userName: '' });
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
@@ -143,7 +143,7 @@ export default function UserRoleAssignment({ open, role, roles = [], onClose, on
                 )}
               >
                 {roles.map(r => {
-                  const allowed = hasAnyRestrictions(r, roles);
+                  const allowed = hasAnyRestrictions(r, allRoles);
                   return (
                     <MenuItem key={r.ID} value={r.ID} disabled={!allowed}>
                       {r.name} ({r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}){!allowed ? ' - No Restrictions' : ''}

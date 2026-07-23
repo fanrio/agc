@@ -139,17 +139,6 @@ function AppContent({ simulatedUser, onLogout }) {
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button
-              variant="outlined"
-              color="primary"
-              size="small"
-              startIcon={<ShieldCheck size={16} />}
-              onClick={() => setInspectingUserId(simulatedUser || 'admin')}
-              sx={{ textTransform: 'none', fontWeight: 600, height: 34, borderRadius: 1.5 }}
-            >
-              Inspect User Card
-            </Button>
-
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box
                 sx={{

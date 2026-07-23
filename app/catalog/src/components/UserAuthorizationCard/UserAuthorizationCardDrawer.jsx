@@ -10,6 +10,9 @@ export default function UserAuthorizationCardDrawer({ userId, onClose }) {
       anchor="right"
       open={open}
       onClose={onClose}
+      sx={{
+        zIndex: (theme) => theme.zIndex.drawer + 2
+      }}
       PaperProps={{
         sx: {
           width: { xs: '100%', sm: 640, md: 800 },

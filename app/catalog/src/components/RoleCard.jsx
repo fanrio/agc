@@ -358,6 +358,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
       <UserRoleAssignment
         open={assignDialogOpen}
         role={role}
+        allRoles={allRoles}
         onClose={() => setAssignDialogOpen(false)}
         onSuccess={(msg) => {
           setAssignDialogOpen(false);
