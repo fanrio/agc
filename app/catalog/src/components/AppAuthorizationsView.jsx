@@ -35,6 +35,7 @@ import {
 import { Plus, Trash2, Shield, Settings, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import UserSelection from './UserSelection';
+import EnvironmentSelection from './EnvironmentSelection';
 
 // ─── Environment helpers ──────────────────────────────────────────────────────
 const parseEnvironments = (val) => {
@@ -88,17 +89,17 @@ function SectionHeading({ icon: Icon, title, subtitle, color = 'var(--accent-pri
 
 export default function AppAuthorizationsView() {
   const [authorizations, setAuthorizations] = useState([]);
-  const [accessDomains, setAccessDomains]   = useState([]);
-  const [allRoles, setAllRoles]             = useState([]);
+  const [accessDomains, setAccessDomains] = useState([]);
+  const [allRoles, setAllRoles] = useState([]);
   const [restrictionFields, setRestrictionFields] = useState([]);
-  const [loading, setLoading]               = useState(true);
-  const [openAdd, setOpenAdd]               = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [openAdd, setOpenAdd] = useState(false);
   const [selectedScimUser, setSelectedScimUser] = useState(null);
-  const [confirmDialog, setConfirmDialog]   = useState({ open: false, title: '', message: '', onConfirm: null });
-  const [snackbar, setSnackbar]             = useState({ open: false, message: '', severity: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const [activeTab, setActiveTab]           = useState(0); // 0 = System, 1 = Roles
-  const [addMode, setAddMode]               = useState('system'); // 'system' | 'roles'
+  const [activeTab, setActiveTab] = useState(0); // 0 = System, 1 = Roles
+  const [addMode, setAddMode] = useState('system'); // 'system' | 'roles'
 
   const defaultPermissions = {
     isSuperAdmin: false,
@@ -111,7 +112,7 @@ export default function AppAuthorizationsView() {
     canManageReplications: false,
     canViewAuditLogs: true,
     canManageSettings: false,
-    allowedEnvironments: ['D', 'Q', 'P'],
+    allowedEnvironments: [],
     allowedAccessDomains: null, // null = ALL
     isActive: true
   };
@@ -200,21 +201,21 @@ export default function AppAuthorizationsView() {
           ? 'ALL'
           : serializeAccessDomains(newPermissions.allowedAccessDomains, accessDomains));
       const newAuth = await api.createAppAuthorization({
-        userId:                   selectedScimUser.username,
-        userName:                 selectedScimUser.displayName,
-        isSuperAdmin:             addMode === 'system' ? newPermissions.isSuperAdmin : false,
-        canManageAppUsers:        addMode === 'system' ? newPermissions.canManageAppUsers : false,
-        canManageOrgRoles:        addMode === 'roles' ? newPermissions.canManageOrgRoles : false,
-        canManageSingleRoles:     addMode === 'roles' ? newPermissions.canManageSingleRoles : false,
-        canManageDerivedRoles:    addMode === 'roles' ? newPermissions.canManageDerivedRoles : false,
+        userId: selectedScimUser.username,
+        userName: selectedScimUser.displayName,
+        isSuperAdmin: addMode === 'system' ? newPermissions.isSuperAdmin : false,
+        canManageAppUsers: addMode === 'system' ? newPermissions.canManageAppUsers : false,
+        canManageOrgRoles: addMode === 'roles' ? newPermissions.canManageOrgRoles : false,
+        canManageSingleRoles: addMode === 'roles' ? newPermissions.canManageSingleRoles : false,
+        canManageDerivedRoles: addMode === 'roles' ? newPermissions.canManageDerivedRoles : false,
         managedDerivedRolesScope: addMode === 'roles' ? (newPermissions.managedDerivedRolesScope || 'ALL') : '[]',
-        canAssignRoles:           addMode === 'roles' ? newPermissions.canAssignRoles : false,
-        canManageReplications:    addMode === 'system' ? newPermissions.canManageReplications : false,
-        canViewAuditLogs:         addMode === 'system' ? newPermissions.canViewAuditLogs : false,
-        canManageSettings:        addMode === 'system' ? newPermissions.canManageSettings : false,
-        allowedEnvironments:      addMode === 'roles' ? serializeEnvironments(newPermissions.allowedEnvironments) : '[]',
-        allowedAccessDomains:     accessDomainVal,
-        isActive:                 addMode === 'system' ? newPermissions.isActive : true
+        canAssignRoles: addMode === 'roles' ? newPermissions.canAssignRoles : false,
+        canManageReplications: addMode === 'system' ? newPermissions.canManageReplications : false,
+        canViewAuditLogs: addMode === 'system' ? newPermissions.canViewAuditLogs : false,
+        canManageSettings: addMode === 'system' ? newPermissions.canManageSettings : false,
+        allowedEnvironments: addMode === 'roles' ? serializeEnvironments(newPermissions.allowedEnvironments) : '[]',
+        allowedAccessDomains: accessDomainVal,
+        isActive: addMode === 'system' ? newPermissions.isActive : true
       });
       if (newAuth) {
         setAuthorizations(prev => [...prev, newAuth].filter(Boolean));
@@ -417,7 +418,12 @@ export default function AppAuthorizationsView() {
             Manage permission levels for administrators within the Auth Wizard.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => { setAddMode(activeTab === 0 ? 'system' : 'roles'); setOpenAdd(true); }}>
+        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => { 
+          setAddMode(activeTab === 0 ? 'system' : 'roles'); 
+          setNewPermissions(defaultPermissions);
+          setSelectedScimUser(null);
+          setOpenAdd(true); 
+        }}>
           Add User
         </Button>
       </Box>
@@ -549,23 +555,14 @@ export default function AppAuthorizationsView() {
                             {auth.isSuperAdmin ? (
                               <Chip label="ALL" size="small" color="primary" variant="outlined" />
                             ) : (
-                              <Select
-                                multiple
+                              <EnvironmentSelection
+                                multiple={true}
                                 value={parseEnvironments(auth.allowedEnvironments)}
-                                onChange={(e) => handleUpdateEnvironments(auth.ID, e.target.value)}
-                                input={<OutlinedInput size="small" style={{ width: 84, fontSize: '0.75rem' }} />}
-                                renderValue={(selected) => (
-                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.2 }}>
-                                    {selected.map(v => (
-                                      <Typography key={v} style={{ fontSize: '0.75rem', fontWeight: 700 }}>{v}</Typography>
-                                    ))}
-                                  </Box>
-                                )}
-                              >
-                                <MenuItem value="D">D (Dev)</MenuItem>
-                                <MenuItem value="Q">Q (QA)</MenuItem>
-                                <MenuItem value="P">P (Prod)</MenuItem>
-                              </Select>
+                                onChange={(val) => handleUpdateEnvironments(auth.ID, val)}
+                                size="small"
+                                sx={{ minWidth: 120 }}
+                                fullWidth={false}
+                              />
                             )}
                           </TableCell>
                           {/* Access Domains */}
@@ -685,23 +682,14 @@ export default function AppAuthorizationsView() {
 
                 {/* Environments */}
                 <Box sx={{ mt: 1.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Allowed Environments</Typography>
-                  <Select
-                    multiple
-                    value={newPermissions.allowedEnvironments}
-                    onChange={(e) => setNewPermissions(p => ({ ...p, allowedEnvironments: e.target.value }))}
-                    input={<OutlinedInput size="small" />}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map(v => <Chip key={v} label={v} size="small" />)}
-                      </Box>
-                    )}
+                  <EnvironmentSelection
+                    multiple={true}
+                    value={newPermissions.allowedEnvironments || []}
+                    onChange={(val) => setNewPermissions(p => ({ ...p, allowedEnvironments: val }))}
+                    size="small"
+                    label="Allowed Environments"
                     fullWidth
-                  >
-                    <MenuItem value="D">D (Dev)</MenuItem>
-                    <MenuItem value="Q">Q (QA)</MenuItem>
-                    <MenuItem value="P">P (Prod)</MenuItem>
-                  </Select>
+                  />
                 </Box>
 
                 {/* Access Domains */}

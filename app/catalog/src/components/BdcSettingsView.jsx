@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
 import * as api from '../api';
+import EnvironmentSelection from './EnvironmentSelection';
 
 const ENV_LABEL = {
   P: 'Production',
@@ -47,7 +48,6 @@ export default function BdcSettingsView() {
     clientId: '',
     clientSecret: '',
     taskChainFlat: 'df_authorization_flat',
-    taskChainHierarchy: '',
     isActive: true
   });
 
@@ -66,7 +66,6 @@ export default function BdcSettingsView() {
     clientId: '',
     clientSecret: '',
     taskChainFlat: '',
-    taskChainHierarchy: '',
     isActive: true
   });
 
@@ -177,7 +176,6 @@ export default function BdcSettingsView() {
         clientId: form.connectionType === 'SAP Hana' ? '' : form.clientId,
         clientSecret: form.connectionType === 'SAP Hana' ? '' : form.clientSecret,
         taskChainFlat: form.taskChainFlat,
-        taskChainHierarchy: form.taskChainHierarchy,
         isActive: form.isActive
       };
       const created = await api.createBdcSetting(payload);
@@ -197,7 +195,6 @@ export default function BdcSettingsView() {
         clientId: '',
         clientSecret: '',
         taskChainFlat: 'df_authorization_flat',
-        taskChainHierarchy: '',
         isActive: true
       });
       setFetchedSpaces([]);
@@ -244,7 +241,6 @@ export default function BdcSettingsView() {
         clientId: editForm.connectionType === 'SAP Hana' ? '' : editForm.clientId,
         clientSecret: editForm.connectionType === 'SAP Hana' ? '' : editForm.clientSecret,
         taskChainFlat: editForm.taskChainFlat,
-        taskChainHierarchy: editForm.taskChainHierarchy,
         isActive: editForm.isActive
       };
       await api.updateBdcSetting(id, payload);
@@ -319,7 +315,6 @@ export default function BdcSettingsView() {
       clientId: s.clientId || '',
       clientSecret: s.clientSecret || '',
       taskChainFlat: s.taskChainFlat || '',
-      taskChainHierarchy: s.taskChainHierarchy || '',
       isActive: s.isActive !== false
     });
     if (s.space) {
@@ -383,19 +378,10 @@ export default function BdcSettingsView() {
               </FormControl>
             </Grid>
              <Grid item xs={12} sm={4}>
-               <FormControl size="small" fullWidth>
-                 <InputLabel id="add-env-label">Environment</InputLabel>
-                 <Select
-                   labelId="add-env-label"
-                   label="Environment"
-                   value={form.environment_ID}
-                   onChange={e => setForm(f => ({ ...f, environment_ID: e.target.value }))}
-                 >
-                   {environments.map(env => (
-                     <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
-                   ))}
-                 </Select>
-               </FormControl>
+               <EnvironmentSelection
+                 value={form.environment_ID}
+                 onChange={val => setForm(f => ({ ...f, environment_ID: val }))}
+               />
              </Grid>
 
             {form.connectionType === 'SAP Hana' ? (
@@ -463,10 +449,7 @@ export default function BdcSettingsView() {
                   </Button>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField label="Task chain: Flat authorization" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={form.taskChainFlat} onChange={e => setForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Task chain: Hierarchy authorization" size="small" fullWidth placeholder="e.g. TC_HIER_AUTH" value={form.taskChainHierarchy} onChange={e => setForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} />
+                  <TextField label="Task chan" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={form.taskChainFlat} onChange={e => setForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
                 </Grid>
               </>
             )}
@@ -518,19 +501,10 @@ export default function BdcSettingsView() {
                         </FormControl>
                       </Grid>
                       <Grid item xs={12} sm={4}>
-                        <FormControl size="small" fullWidth>
-                          <InputLabel id="edit-env-label">Environment</InputLabel>
-                          <Select
-                            labelId="edit-env-label"
-                            label="Environment"
-                            value={editForm.environment_ID}
-                            onChange={e => setEditForm(f => ({ ...f, environment_ID: e.target.value }))}
-                          >
-                            {environments.map(env => (
-                              <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <EnvironmentSelection
+                          value={editForm.environment_ID}
+                          onChange={val => setEditForm(f => ({ ...f, environment_ID: val }))}
+                        />
                       </Grid>
 
                       {editForm.connectionType === 'SAP Hana' ? (
@@ -598,10 +572,7 @@ export default function BdcSettingsView() {
                             </Button>
                           </Grid>
                           <Grid item xs={12} sm={6}>
-                            <TextField label="Task chain: Flat authorization" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={editForm.taskChainFlat} onChange={e => setEditForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <TextField label="Task chain: Hierarchy authorization" size="small" fullWidth placeholder="e.g. TC_HIER_AUTH" value={editForm.taskChainHierarchy} onChange={e => setEditForm(f => ({ ...f, taskChainHierarchy: e.target.value }))} />
+                            <TextField label="Task chan" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={editForm.taskChainFlat} onChange={e => setEditForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
                           </Grid>
                         </>
                       )}
@@ -721,16 +692,10 @@ export default function BdcSettingsView() {
                             {s.isActive ? '● Active' : '○ Inactive'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Flat authorization</Typography>
+                        <Grid item xs={12} sm={12} sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chan</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.taskChainFlat || '—'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6} sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chain: Hierarchy authorization</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {s.taskChainHierarchy || '—'}
                           </Typography>
                         </Grid>
                       </Grid>

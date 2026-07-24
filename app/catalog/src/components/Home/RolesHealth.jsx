@@ -9,11 +9,13 @@ import { Activity, Shield, ShieldAlert, Ban, UserX, UserCheck } from 'lucide-rea
 export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
   if (!stats) return null;
 
-  // Calculate health score: percentage of roles that have both restrictions and approvers
+  // Calculate health score: start at 100%, apply penalties of 40 (no restriction), 40 (no approvers), and 20 (no assignments)
   const total = stats.roleCount || 0;
-  const missingBoth = stats.rolesWithoutRestriction + stats.rolesWithoutApprover;
+  const penalty = (stats.rolesWithoutRestriction || 0) * 40 +
+                  (stats.rolesWithoutApprover || 0) * 40 +
+                  (stats.rolesWithoutAssignment || 0) * 20;
   const healthPercentage = total 
-    ? Math.max(0, Math.round(((total - (missingBoth / 2)) / total) * 100))
+    ? Math.max(0, Math.round(100 - (penalty / total)))
     : 100;
 
   const handleNav = (filter) => {

@@ -402,27 +402,39 @@ function NodeRow({
             )}
             {showRestrictionFields && (
               <Tooltip title="Define Mandatory Fields">
-                <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} aria-label="Define Mandatory Fields">
-                  <Sliders size={13} />
-                </IconButton>
+                <span>
+                  <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} aria-label="Define Mandatory Fields">
+                    <Sliders size={13} />
+                  </IconButton>
+                </span>
               </Tooltip>
             )}
             <Tooltip title="Add Attribute">
-              <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} aria-label="Add Attribute"><Plus size={13} /></IconButton>
+              <span>
+                <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} aria-label="Add Attribute"><Plus size={13} /></IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Rename / Edit">
-              <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} aria-label="Rename / Edit"><Edit3 size={13} /></IconButton>
+              <span>
+                <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} aria-label="Rename / Edit"><Edit3 size={13} /></IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Add Child Node">
-              <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} aria-label="Add Child Node"><Building2 size={13} /></IconButton>
+              <span>
+                <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} aria-label="Add Child Node"><Building2 size={13} /></IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Move Node">
-              <IconButton size="small" onClick={() => setShowMove(true)} aria-label="Move Node" disabled={loading || !canManage}>
-                <MoveRight size={13} />
-              </IconButton>
+              <span>
+                <IconButton size="small" onClick={() => setShowMove(true)} aria-label="Move Node" disabled={loading || !canManage}>
+                  <MoveRight size={13} />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title={hasChildren ? 'Remove all children first' : 'Delete node'}>
-              <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || !canManage} aria-label={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
+              <span>
+                <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || !canManage} aria-label={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
+              </span>
             </Tooltip>
           </Box>
         </Box>

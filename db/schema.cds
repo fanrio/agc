@@ -128,7 +128,6 @@ entity BdcSettings {
   clientSecret : String(100);
   apiToken     : String(255);
   taskChainFlat : String(255) @default : 'df_authorization_flat';      // Task chain: Flat authorization
-  taskChainHierarchy : String(255); // Task chain: Hierarchy authorization
   isActive     : Boolean @default: true;
 }
 

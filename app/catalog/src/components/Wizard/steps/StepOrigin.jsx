@@ -3,6 +3,7 @@ import { Box, Card, Typography, TextField, FormControl, InputLabel, Select, Menu
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import { Check, Shield, Zap, GitFork } from 'lucide-react';
+import EnvironmentSelection from '../../EnvironmentSelection';
 
 export default function StepOrigin({
   roleType, setRoleType,
@@ -166,24 +167,12 @@ export default function StepOrigin({
           onChange={e => setDescription(e.target.value)}
           disabled={isReadOnly}
         />
-        <FormControl size="small" fullWidth sx={{ mt: 1 }}>
-          <InputLabel id="role-env-label">Environment</InputLabel>
-          <Select
-            labelId="role-env-label"
-            label="Environment"
-            value={environmentId}
-            onChange={e => setEnvironmentId(e.target.value)}
-            disabled={isReadOnly}
-          >
-            {filteredEnvironments.length === 0 ? (
-              <MenuItem value={environmentId}>{environmentId}</MenuItem>
-            ) : (
-              filteredEnvironments.map(env => (
-                <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
+        <EnvironmentSelection
+          value={environmentId}
+          onChange={setEnvironmentId}
+          disabled={isReadOnly}
+          sx={{ mt: 1 }}
+        />
         <FormControl size="small" fullWidth sx={{ mt: 1 }} required>
           <InputLabel id="role-access-domain-label">Access Domain</InputLabel>
           <Select

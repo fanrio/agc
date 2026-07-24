@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Shield, Plus, GitBranch, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
@@ -7,6 +7,7 @@ import RoleTableView from './RoleTableView';
 import RoleTreeView from './RoleTreeView';
 import { isCriticalRestriction, isRoleInScope, filterRolesByPermissions } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
+import EnvironmentSelection from './EnvironmentSelection';
 
 // Helper recursively collecting all restrictions for a role
 function getEffectiveRestrictionsFlat(role, allRoles) {
@@ -35,7 +36,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
-  const [envFilter, setEnvFilter] = useState('ALL');
+  const [envFilter, setEnvFilter] = useState([]);
   const [typeFilter, setTypeFilter] = useState('ALL');
   console.log(initialFilter);
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
   // Apply environment & type filters
   const envFilteredRoles = visibleRoles.filter(role => {
-    if (envFilter !== 'ALL' && role.environment_ID !== envFilter) return false;
+    if (envFilter.length > 0 && !envFilter.includes(role.environment_ID)) return false;
     if (typeFilter !== 'ALL' && role.type !== typeFilter) return false;
     return true;
   });
@@ -120,7 +121,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     return nameMatch || descMatch || restMatch;
   });
 
-  const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter !== 'ALL' || typeFilter !== 'ALL');
+  const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL');
 
   return (
     <Box sx={{ animation: 'fadeIn 0.3s' }}>
@@ -172,15 +173,13 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           sx={{ width: { xs: '100%', sm: 260 } }}
         />
 
-        <FormControl size="small" sx={{ minWidth: 130 }}>
-          <InputLabel>Environment</InputLabel>
-          <Select value={envFilter} label="Environment" onChange={e => setEnvFilter(e.target.value)}>
-            <MenuItem value="ALL">All Envs</MenuItem>
-            <MenuItem value="D">Dev (D)</MenuItem>
-            <MenuItem value="Q">QA (Q)</MenuItem>
-            <MenuItem value="P">Prod (P)</MenuItem>
-          </Select>
-        </FormControl>
+        <EnvironmentSelection
+          value={envFilter}
+          onChange={setEnvFilter}
+          multiple={true}
+          sx={{ minWidth: 160 }}
+          fullWidth={false}
+        />
 
         <FormControl size="small" sx={{ minWidth: 140 }}>
           <InputLabel>Role Type</InputLabel>
@@ -215,7 +214,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             color="secondary"
             onClick={() => {
               setSearchQuery('');
-              setEnvFilter('ALL');
+              setEnvFilter([]);
               setTypeFilter('ALL');
               setHealthFilter(null);
               if (setInitialFilter) setInitialFilter(null);

@@ -10,6 +10,7 @@ import { Play, Edit, Trash2, Plus, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
 import { filterRolesByPermissions } from '../utils/helpers';
+import EnvironmentSelection from './EnvironmentSelection';
 
 export default function DynamicRulesView() {
   const { permissions } = usePermissions();
@@ -324,15 +325,17 @@ export default function DynamicRulesView() {
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                         <Tooltip title="Run DRAGE Sync Rule">
-                          <IconButton 
-                            size="small" 
-                            color="primary" 
-                            onClick={() => handleSyncRule(rule.ID)}
-                            disabled={syncingRuleId === rule.ID}
-                            aria-label="Run DRAGE Sync Rule"
-                          >
-                            {syncingRuleId === rule.ID ? <CircularProgress size={16} /> : <Play size={16} />}
-                          </IconButton>
+                          <span>
+                            <IconButton 
+                              size="small" 
+                              color="primary" 
+                              onClick={() => handleSyncRule(rule.ID)}
+                              disabled={syncingRuleId === rule.ID}
+                              aria-label="Run DRAGE Sync Rule"
+                            >
+                              {syncingRuleId === rule.ID ? <CircularProgress size={16} /> : <Play size={16} />}
+                            </IconButton>
+                          </span>
                         </Tooltip>
                         <Tooltip title="Edit Rule">
                           <IconButton size="small" onClick={() => handleOpenEdit(rule)} aria-label="Edit Rule"><Edit size={16} /></IconButton>
@@ -388,16 +391,10 @@ export default function DynamicRulesView() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" fullWidth>
-              <InputLabel>Environment</InputLabel>
-              <Select
-                value={form.environment_ID}
-                label="Environment"
-                onChange={(e) => setForm(p => ({ ...p, environment_ID: e.target.value }))}
-              >
-                {environments.map(env => <MenuItem key={env.ID} value={env.ID}>{env.ID} - {env.name}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <EnvironmentSelection
+              value={form.environment_ID}
+              onChange={val => setForm(p => ({ ...p, environment_ID: val }))}
+            />
             
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Source Master Data Settings</Typography>
             
