@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, MenuItem, Select, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { Shield, Plus, GitBranch, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
@@ -45,9 +45,28 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     }
   }, [initialFilter]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, role: null });
 
   // Toggle representation states ('tree', 'grid', 'table')
   const [viewMode, setViewMode] = useState('table');
+
+  const handleDeleteClick = (role) => {
+    setDeleteConfirm({ open: true, role });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const roleId = deleteConfirm.role?.ID;
+    if (!roleId) return;
+    try {
+      await api.deleteRole(roleId);
+      setSnackbar({ open: true, message: 'Role deleted successfully', severity: 'success' });
+      load();
+    } catch (e) {
+      setSnackbar({ open: true, message: e.message || 'Failed to delete role', severity: 'error' });
+    } finally {
+      setDeleteConfirm({ open: false, role: null });
+    }
+  };
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') return;
@@ -270,6 +289,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
               orgNodes={orgNodes}
               onDerive={onDeriveRole}
               onEdit={onEditRole}
+              onDelete={handleDeleteClick}
               onRefresh={load}
               onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
               onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
@@ -313,6 +333,23 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           )}
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, role: null })}
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Delete Role</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Are you sure you want to delete role "{deleteConfirm.role?.name}"? This action cannot be undone and will remove all assignments.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteConfirm({ open: false, role: null })} color="inherit">Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">Delete</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

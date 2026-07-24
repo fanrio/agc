@@ -59,14 +59,36 @@ export default function StepReview({
 
       {/* All Restrictions */}
       <Card sx={{ p: 3 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-          Effective Restrictions ({inherited.length + restrictions.length})
-        </Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {inherited.map((r, i) => <RestrictionDisplay key={i} restriction={r} isOwn={false} />)}
-          {restrictions.map(r => <RestrictionDisplay key={r.ID} restriction={{ ...r, sourceRoleName: 'This Role' }} isOwn={true} />)}
-          {inherited.length + restrictions.length === 0 && <Typography variant="body2" color="text.secondary">No restrictions defined.</Typography>}
-        </Box>
+        {(() => {
+          const isPatternRestriction = (r) => {
+            if (!r) return false;
+            const ft = (r.filterType || '').toUpperCase();
+            const val = String(r.value || '').trim();
+            if (ft === 'ALL' || ft === 'CP') return true;
+            if (val === '*' || val.includes('*') || val.includes('?')) return true;
+            return false;
+          };
+          const ownFields = new Set(restrictions.map(r => r.field.toLowerCase()));
+          const filteredInherited = inherited.filter(r => {
+            if (isPatternRestriction(r) && ownFields.has(r.field.toLowerCase())) {
+              return false;
+            }
+            return true;
+          });
+          const totalCount = filteredInherited.length + restrictions.length;
+          return (
+            <>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
+                Effective Restrictions ({totalCount})
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {filteredInherited.map((r, i) => <RestrictionDisplay key={i} restriction={r} isOwn={false} />)}
+                {restrictions.map(r => <RestrictionDisplay key={r.ID} restriction={{ ...r, sourceRoleName: 'This Role' }} isOwn={true} />)}
+                {totalCount === 0 && <Typography variant="body2" color="text.secondary">No restrictions defined.</Typography>}
+              </Box>
+            </>
+          );
+        })()}
       </Card>
 
       {/* Access Simulation */}

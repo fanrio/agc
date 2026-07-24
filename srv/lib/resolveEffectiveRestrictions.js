@@ -10,13 +10,13 @@ const { safeJsonParse } = require('./utils');
 function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances = []) {
   // Pre-index collections into Maps for O(1) lookups
   const rolesMap = new Map(allRoles.map(r => [r.ID, r]));
-  
+
   const inheritanceMap = new Map();
   for (const i of allInheritances) {
     if (!inheritanceMap.has(i.role_ID)) inheritanceMap.set(i.role_ID, []);
     inheritanceMap.get(i.role_ID).push(i);
   }
-  
+
   const restrictionsMap = new Map();
   for (const r of allRestrictions) {
     if (!restrictionsMap.has(r.role_ID)) restrictionsMap.set(r.role_ID, []);
@@ -25,7 +25,7 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
 
   const visiting = new Set();
   const resolved = new Set();
-  const result  = [];
+  const result = [];
 
   function walk(currentRoleId, isOwn) {
     if (visiting.has(currentRoleId)) {
@@ -47,13 +47,13 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
       const ownRestrictions = restrictionsMap.get(currentRoleId) || [];
       for (const restriction of ownRestrictions) {
         result.push({
-          restrictionId  : restriction.ID,
-          field          : restriction.field,
-          filterType     : restriction.filterType,
-          value          : restriction.value,
-          sourceRoleId   : currentRoleId,
-          sourceRoleName : role.name,
-          isOwn          : isOwn,
+          restrictionId: restriction.ID,
+          field: restriction.field,
+          filterType: restriction.filterType,
+          value: restriction.value,
+          sourceRoleId: currentRoleId,
+          sourceRoleName: role.name,
+          isOwn: isOwn,
         });
       }
     }
@@ -67,12 +67,12 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
   // Filter out parent pattern/wildcard restrictions if a descendant has a restriction on the same field
   const finalResult = [];
   const fieldsRestrictedByDescendants = new Set();
-  
+
   const isPatternRestriction = (r) => {
     if (!r) return false;
     const ft = (r.filterType || '').toUpperCase();
     const val = String(r.value || '').trim();
-    if (ft === 'ALL' || ft === 'CP' || ft === 'PATTERN') return true;
+    if (ft === 'ALL' || ft === 'CP') return true;
     if (val === '*' || val.includes('*') || val.includes('?')) return true;
     return false;
   };
@@ -80,13 +80,13 @@ function resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInhe
   for (let i = result.length - 1; i >= 0; i--) {
     const r = result[i];
     const fieldLower = r.field.toLowerCase();
-    
+
     if (isPatternRestriction(r)) {
       if (fieldsRestrictedByDescendants.has(fieldLower)) {
         continue; // discard ancestor pattern/wildcard restriction
       }
     }
-    
+
     fieldsRestrictedByDescendants.add(fieldLower);
     finalResult.unshift(r);
   }

@@ -77,22 +77,23 @@ async function buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap) {
   return context;
 }
 
-/**
- * Upserts a single ORG_BASED role with the given restrictions.
- * Idempotent: keyed by name + accessDomain_ID within ORG_BASED roles.
- * @returns {string} roleId
- */
-async function upsertOrgRole(db, Roles, Restrictions, { name, description, orgNodeId, domainId, restrictionEntries }) {
+async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs, { name, description, orgNodeId, domainId, restrictionEntries, parentRoleIds = [] }) {
   let role = await db.run(
     SELECT.one.from(Roles).where({ name, accessDomain_ID: domainId, type: 'ORG_BASED' })
   );
 
   let roleId;
+  let action;
+  let details;
   if (role) {
     roleId = role.ID;
+    action = 'UPDATE';
+    details = JSON.stringify({ update: 'Role regenerated/updated by Org Generator', description, orgNodeId, domainId, restrictionEntries });
     await db.run(UPDATE(Roles).set({ name, description }).where({ ID: roleId }));
   } else {
     roleId = cds.utils.uuid();
+    action = 'CREATE';
+    details = JSON.stringify({ ID: roleId, name, type: 'ORG_BASED', description, orgNode_ID: orgNodeId, accessDomain_ID: domainId, environment_ID: 'P' });
     await db.run(INSERT.into(Roles).entries({
       ID:              roleId,
       name,
@@ -118,6 +119,28 @@ async function upsertOrgRole(db, Roles, Restrictions, { name, description, orgNo
     ));
   }
 
+  // Update RoleInheritance
+  await db.run(DELETE.from(RoleInheritance).where({ role_ID: roleId }));
+  if (parentRoleIds.length > 0) {
+    await db.run(INSERT.into(RoleInheritance).entries(
+      parentRoleIds.map(pid => ({
+        ID:        cds.utils.uuid(),
+        role_ID:   roleId,
+        parent_ID: pid
+      }))
+    ));
+  }
+
+  // Write to AuditLogs
+  await db.run(INSERT.into(AuditLogs).entries({
+    ID:         cds.utils.uuid(),
+    entityName: 'Roles',
+    action:     action,
+    recordId:   roleId,
+    targetName: name,
+    details:    details
+  }));
+
   return roleId;
 }
 
@@ -134,7 +157,7 @@ async function upsertOrgRole(db, Roles, Restrictions, { name, description, orgNo
  *  3. Recurses into children whose type is in the domain's field set (if recursive = true).
  */
 async function generateForNodeInDomain(
-  db, Roles, Restrictions, OrgNodes,
+  db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
   node, domain, fieldSet, rfMap, ancestorCtx, results, recursive = true
 ) {
   const myFieldName = rfMap.get(node.type_ID);
@@ -149,20 +172,47 @@ async function generateForNodeInDomain(
     .filter(f => !assignedFields.has(f.fieldName))
     .map(f => f.fieldName);
 
-  // Build restriction entries: assigned fields = SINGLE_VALUE, unresolved = CP *
-  const allRestrictions = domain.fields.map(f => {
-    const val = context[f.fieldName];
-    if (val != null) return { field: f.fieldName, filterType: 'SINGLE_VALUE', value: val };
-    return { field: f.fieldName, filterType: 'CP', value: '*' };
-  });
+  // Look up if parent node (or any higher ancestor) has a role for this access domain
+  let parentRoleId = null;
+  let currentParentId = node.parent_ID;
+  while (currentParentId) {
+    const parentRole = await db.run(
+      SELECT.one.from(Roles).where({
+        orgNode_ID:      currentParentId,
+        accessDomain_ID: domain.ID,
+        type:            'ORG_BASED'
+      })
+    );
+    if (parentRole) {
+      parentRoleId = parentRole.ID;
+      break;
+    }
+    const pNode = await db.run(SELECT.one.from(OrgNodes).where({ ID: currentParentId }));
+    currentParentId = pNode ? pNode.parent_ID : null;
+  }
+
+  // Build restriction entries:
+  // If parentRoleId is present, we only add this node's own field restriction.
+  // Otherwise, we build restrictions for all fields (root node case).
+  let restrictionEntries = [];
+  if (parentRoleId) {
+    restrictionEntries = [{ field: myFieldName, filterType: 'SINGLE_VALUE', value: node.name }];
+  } else {
+    restrictionEntries = domain.fields.map(f => {
+      const val = context[f.fieldName];
+      if (val != null) return { field: f.fieldName, filterType: 'SINGLE_VALUE', value: val };
+      return { field: f.fieldName, filterType: 'CP', value: '*' };
+    });
+  }
 
   const roleName = buildRoleName(domain.roleTemplateName, context, wildcardFields);
-  const roleId = await upsertOrgRole(db, Roles, Restrictions, {
+  const roleId = await upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs, {
     name:               roleName,
     description:        `Auto-generated from Org Node: ${node.name} | Domain: ${domain.name}`,
     orgNodeId:          node.ID,
     domainId:           domain.ID,
-    restrictionEntries: allRestrictions,
+    restrictionEntries: restrictionEntries,
+    parentRoleIds:      parentRoleId ? [parentRoleId] : [],
   });
   results.push({ roleId, roleName });
 
@@ -172,7 +222,7 @@ async function generateForNodeInDomain(
     for (const child of children) {
       if (!fieldSet.has(child.type_ID)) continue;
       await generateForNodeInDomain(
-        db, Roles, Restrictions, OrgNodes,
+        db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
         child, domain, fieldSet, rfMap, context, results, recursive
       );
     }
@@ -197,7 +247,7 @@ async function generateRoleForNode(cds, entities, node, recursive = true) {
   const db = cds.db;
   const {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
-    RestrictionFields, AccessDomains, AccessDomainFields,
+    RestrictionFields, AccessDomains, AccessDomainFields, RoleInheritance, AuditLogs
   } = entities;
 
   // Ensure node has type_ID
@@ -226,7 +276,7 @@ async function generateRoleForNode(cds, entities, node, recursive = true) {
     const fieldSet = new Set(domain.fields.map(f => f.field_ID));
     const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap);
     await generateForNodeInDomain(
-      db, Roles, Restrictions, OrgNodes,
+      db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
       node, domain, fieldSet, rfMap, ancestorCtx, results, recursive
     );
   }
@@ -274,6 +324,19 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
   return async function generateAllOrgRolesHandler(_req) {
     const { OrgNodes } = entities;
     const nodes = await cds.db.run(SELECT.from(OrgNodes));
+
+    // Sort nodes by hierarchical depth so parent roles are generated first
+    const nodesMap = new Map(nodes.map(n => [n.ID, n]));
+    const getNodeDepth = (node) => {
+      let depth = 0;
+      let curr = node;
+      while (curr && curr.parent_ID) {
+        depth++;
+        curr = nodesMap.get(curr.parent_ID);
+      }
+      return depth;
+    };
+    nodes.sort((a, b) => getNodeDepth(a) - getNodeDepth(b));
 
     let totalRoles = 0;
     // Process sequentially to completely eliminate DB transaction race conditions
