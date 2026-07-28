@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
-import { 
-  Box, Button, Card, Table, TableBody, TableCell, TableContainer, 
-  TableHead, TableRow, Typography, Dialog, DialogTitle, DialogContent, 
-  DialogActions, TextField, Checkbox, FormControlLabel, Select, MenuItem, 
-  InputLabel, FormControl, Autocomplete, IconButton, Snackbar, Alert, 
+import {
+  Box, Button, Card, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Typography, Dialog, DialogTitle, DialogContent,
+  DialogActions, TextField, Checkbox, FormControlLabel, Select, MenuItem,
+  InputLabel, FormControl, Autocomplete, IconButton, Snackbar, Alert,
   CircularProgress, Tooltip
 } from '@mui/material';
 import { Play, Edit, Trash2, Plus, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
-import { filterRolesByPermissions } from '../utils/helpers';
 import EnvironmentSelection from './EnvironmentSelection';
 
 export default function DynamicRulesView() {
@@ -26,7 +25,7 @@ export default function DynamicRulesView() {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [syncingRuleId, setSyncingRuleId] = useState(null);
-  
+
   // Dialog state
   const [open, setOpen] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
@@ -110,8 +109,8 @@ export default function DynamicRulesView() {
       return;
     }
     const selectedDomain = accessDomains.find(d => d.ID === form.accessDomain_ID);
-    const domainFields = selectedDomain 
-      ? (selectedDomain.restrictionFields || []).map(rf => rf.field?.name).filter(Boolean) 
+    const domainFields = selectedDomain
+      ? (selectedDomain.restrictionFields || []).map(rf => rf.field?.name).filter(Boolean)
       : [];
 
     setForm(p => {
@@ -330,9 +329,9 @@ export default function DynamicRulesView() {
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                         <Tooltip title="Run DRAGE Sync Rule">
                           <span>
-                            <IconButton 
-                              size="small" 
-                              color="primary" 
+                            <IconButton
+                              size="small"
+                              color="primary"
                               onClick={() => handleSyncRule(rule.ID)}
                               disabled={syncingRuleId === rule.ID}
                               aria-label="Run DRAGE Sync Rule"
@@ -381,9 +380,9 @@ export default function DynamicRulesView() {
               control={<Checkbox checked={form.isActive} onChange={(e) => setForm(p => ({ ...p, isActive: e.target.checked }))} />}
               label="Active Rule"
             />
-            
+
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Role Settings</Typography>
-            
+
             <FormControl size="small" fullWidth>
               <InputLabel>Access Domain</InputLabel>
               <Select
@@ -399,9 +398,9 @@ export default function DynamicRulesView() {
               value={form.environment_ID}
               onChange={val => setForm(p => ({ ...p, environment_ID: val }))}
             />
-            
+
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Source Master Data Settings</Typography>
-            
+
             <FormControl size="small" fullWidth>
               <InputLabel>BDC Connection</InputLabel>
               <Select
@@ -460,7 +459,7 @@ export default function DynamicRulesView() {
               fullWidth
             />
 
-             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
               Composite Field Mappings
               {loadingColumns && <CircularProgress size={12} sx={{ ml: 1 }} />}
             </Typography>
@@ -529,9 +528,9 @@ export default function DynamicRulesView() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={4000} 
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
         onClose={() => setSnackbar(p => ({ ...p, open: false }))}
       >
         <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>

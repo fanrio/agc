@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "performance": {
+      "source": "DanKromp/skillOverflow",
+      "sourceType": "github",
+      "skillPath": "skills/performance/SKILL.md",
+      "computedHash": "74aac217c9fde4c02ced26e3c6d5ccbcdf151c01ffd6f670af4e7d943140c863"
+    },
+    "security-auth": {
+      "source": "DanKromp/skillOverflow",
+      "sourceType": "github",
+      "skillPath": "skills/security-auth/SKILL.md",
+      "computedHash": "5596b3f0bfeabd998ed64d7234c22a0d10e46c66973d5ddfa5d6a5bdcacb0d6d"
+    }
+  }
+}

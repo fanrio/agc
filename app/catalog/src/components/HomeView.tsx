@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Box, Card, Typography, Grid, CircularProgress, Alert } from '@mui/material';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
-import { filterRolesByPermissions } from '../utils/helpers';
 
 // Import newly extracted subcomponents
 import RolesHealth from './Home/RolesHealth';
@@ -37,7 +36,7 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
       ]);
 
       const kpis = JSON.parse(kpisResponse);
-      const recentRoles = filterRolesByPermissions(rawRecentRoles, permissions);
+      const recentRoles = rawRecentRoles;
 
       setStats({
         ...kpis,
