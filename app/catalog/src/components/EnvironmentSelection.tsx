@@ -61,10 +61,14 @@ export default function EnvironmentSelection({
     }
   };
 
+  const labelId = `env-select-${multiple ? 'multi' : 'single'}-label`;
+
   return (
     <FormControl size={size} fullWidth={fullWidth} disabled={disabled || loading} required={required} sx={sx}>
-      <InputLabel>{label}</InputLabel>
+      <InputLabel id={labelId}>{label}</InputLabel>
       <Select
+        labelId={labelId}
+        id={`env-select-${multiple ? 'multi' : 'single'}`}
         multiple={multiple}
         value={multiple ? (Array.isArray(value) ? value : []) : (value || '')}
         label={label}

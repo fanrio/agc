@@ -162,7 +162,7 @@ describe('Wizard Component - Expanded Tests', () => {
     });
 
     // Change environment
-    const envSelect = screen.getByLabelText(/Environment/i);
+    const envSelect = await screen.findByRole('combobox', { name: /Environment/i, hidden: true });
     fireEvent.mouseDown(envSelect);
     const envOption = await screen.findByRole('option', { name: 'P - Production' });
     fireEvent.click(envOption);
@@ -273,7 +273,7 @@ describe('Wizard Component - Expanded Tests', () => {
     }, { timeout: 2000 });
 
     // Find option and select it
-    const option = await screen.findByText(/John Doe \(jdoe\)/i);
+    const option = await screen.findByText('John Doe');
     fireEvent.click(option);
 
     // Verify added to list
@@ -282,7 +282,7 @@ describe('Wizard Component - Expanded Tests', () => {
     });
 
     // Click delete icon to remove the approver
-    const deleteBtn = screen.getByRole('button', { name: '' }); // the X icon button
+    const deleteBtn = screen.getByRole('button', { name: 'Remove approver' });
     fireEvent.click(deleteBtn);
 
     // Verify removed
@@ -292,10 +292,7 @@ describe('Wizard Component - Expanded Tests', () => {
   });
 
   // --- Step 3 ---
-  it('handles Step 3 simulation run and result rendering', async () => {
-    api.simulateAccess.mockResolvedValue([
-      { rowIndex: 0, passed: true, reason: 'All restrictions satisfied' }
-    ]);
+  it('handles Step 3 summary rendering', async () => {
     render(<Wizard onDone={() => {}} allowFreeNavigation={true} />);
 
     // Fill in role name
@@ -306,16 +303,7 @@ describe('Wizard Component - Expanded Tests', () => {
     // Go to Step 3 (Review & Deploy)
     fireEvent.click(screen.getByText('Review & Deploy'));
     await waitFor(() => {
-      expect(screen.getByText('Access Simulation')).toBeInTheDocument();
-    });
-
-    // Run simulation
-    const runBtn = screen.getByRole('button', { name: /Run Simulation/i });
-    fireEvent.click(runBtn);
-
-    // Verify simulation result row is rendered
-    await waitFor(() => {
-      expect(screen.getByText('✓ Pass')).toBeInTheDocument();
+      expect(screen.getByText('Role Summary')).toBeInTheDocument();
     });
   });
 

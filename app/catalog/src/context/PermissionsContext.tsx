@@ -1,12 +1,38 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as api from '../api';
 
-const PermissionsContext = createContext(null);
+export interface UserPermissions {
+  isSuperAdmin: boolean;
+  canManageAppUsers: boolean;
+  canManageOrgRoles: boolean;
+  canManageSingleRoles: boolean;
+  canManageDerivedRoles: boolean;
+  managedDerivedRolesScope: string;
+  canAssignRoles: boolean;
+  canManageReplications: boolean;
+  canViewAuditLogs: boolean;
+  canManageSettings: boolean;
+  allowedEnvironments: string;
+  allowedAccessDomains: string;
+  isActive: boolean;
+  userId?: string;
+  userName?: string;
+}
 
-export function PermissionsProvider({ userId, children }) {
-  const [permissions, setPermissions] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export interface PermissionsContextType {
+  permissions: UserPermissions | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  userId: string;
+}
+
+const PermissionsContext = createContext<PermissionsContextType | null>(null);
+
+export function PermissionsProvider({ userId, children }: { userId: string; children: ReactNode }) {
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPermissions = async () => {
     setLoading(true);
