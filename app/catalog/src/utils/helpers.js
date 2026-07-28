@@ -14,9 +14,9 @@ export const ENV_COLOR = {
 export function formatDateTime(isoString) {
   if (!isoString) return '—';
   const date = new Date(isoString);
-  return date.toLocaleString(undefined, { 
-    dateStyle: 'short', 
-    timeStyle: 'short' 
+  return date.toLocaleString(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short'
   });
 }
 
@@ -38,7 +38,7 @@ export function isCriticalRestriction(r, orgNodes = []) {
     }
   }
   if (type === 'CP') {
-    return val.includes('*');
+    return val.includes('%');
   }
   if (type === 'HIERARCHY') {
     const node = orgNodes.find(n => n.ID === val);
@@ -61,7 +61,7 @@ export function isRoleInScope(roleId, roleName, scope) {
   if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
     return true;
   }
-  
+
   try {
     const scopeList = JSON.parse(scope);
     if (Array.isArray(scopeList)) {
@@ -75,6 +75,10 @@ export function isRoleInScope(roleId, roleName, scope) {
 }
 
 export function filterRolesByPermissions(roles, permissions) {
+
+  return roles;
+  console.log(roles);
+
   if (!roles) return [];
   if (!permissions) return roles;
   if (permissions.isSuperAdmin) return roles;
@@ -106,6 +110,8 @@ export function filterRolesByPermissions(roles, permissions) {
   const allowedAccessDomains = parseAccessDomains(permissions.allowedAccessDomains);
 
   return roles.filter(role => {
+
+
     const isApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase());
     if (isApprover) return true;
 

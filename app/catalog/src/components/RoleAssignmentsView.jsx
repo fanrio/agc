@@ -3,7 +3,7 @@ import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, 
 import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw, ShieldCheck } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
-import { filterRolesByPermissions, isRoleInScope } from '../utils/helpers';
+import { isRoleInScope } from '../utils/helpers';
 import UserRoleAssignment from './UserRoleAssignment';
 
 // Helper to recursively check if a role or any of its parents has restrictions
@@ -97,12 +97,9 @@ export default function RoleAssignmentsView({ onInspectUser }) {
         api.getAssignments(),
         api.getRoles()
       ]);
-      const filteredRoles = filterRolesByPermissions(roleData, permissions);
-      const allowedRoles = filteredRoles;
-      const allowedRoleIds = new Set(allowedRoles.map(r => r.ID));
-      setAssignments(assignData.filter(a => allowedRoleIds.has(a.role_ID)));
-      setRoles(allowedRoles);
-      setAllRoles(roleData);
+      setAssignments(assignData || []);
+      setRoles(roleData || []);
+      setAllRoles(roleData || []);
     } catch (e) {
       setSnackbar({ open: true, message: `Failed to load data: ${e.message}`, severity: 'error' });
     }

@@ -375,34 +375,57 @@ async function syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId) {
   const { AccessDomains } = cds.entities('fanrio.auth');
 
   try {
-    // A-12 and Issue #4 fix: pre-fetch all needed tables once, then pass as preloaded to each child call
-    const [allRoles, allRestrictions, allInheritances, allAccessDomains, bdcSettings] = await Promise.all([
-      db.run(SELECT.from(Roles)),
-      db.run(SELECT.from(Restrictions)),
-      db.run(SELECT.from(RoleInheritance)),
-      db.run(SELECT.from(AccessDomains).columns('ID', 'name')),
-      db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }))
-    ]);
-    const preloaded = { allRoles, allRestrictions, allInheritances, allAccessDomains, bdcSettings };
+    // 1. Fetch inheritance links to determine target role + descendants + parent ancestry
+    const allInheritances = (await db.run(SELECT.from(RoleInheritance))) || [];
 
-    // Collect the role itself + all descendant roles (roles that inherit from this one)
-    const roleIds = new Set([roleId]);
-    const queue   = [roleId];
+    const descendantRoleIds = new Set([roleId]);
+    const queue = [roleId];
     while (queue.length > 0) {
       const currId = queue.shift();
-      for (const ri of allInheritances.filter(r => r.parent_ID === currId)) {
-        if (!roleIds.has(ri.role_ID)) {
-          roleIds.add(ri.role_ID);
+      for (const ri of allInheritances.filter(r => r && r.parent_ID === currId)) {
+        if (!descendantRoleIds.has(ri.role_ID)) {
+          descendantRoleIds.add(ri.role_ID);
           queue.push(ri.role_ID);
         }
       }
     }
 
-    const assignments = await db.run(
-      SELECT.from(RoleAssignments).where({ role_ID: { in: Array.from(roleIds) } })
-    );
+    // Collect all ancestor parent roles required for resolution
+    const relevantRoleIdsSet = new Set(descendantRoleIds);
+    for (const id of Array.from(descendantRoleIds)) {
+      const ancQueue = [id];
+      while (ancQueue.length > 0) {
+        const currId = ancQueue.shift();
+        for (const ri of allInheritances.filter(r => r && r.role_ID === currId)) {
+          if (!relevantRoleIdsSet.has(ri.parent_ID)) {
+            relevantRoleIdsSet.add(ri.parent_ID);
+            ancQueue.push(ri.parent_ID);
+          }
+        }
+      }
+    }
 
-    // Process in batches of 5 to limit concurrency while dramatically speeding up sequential execution
+    const relevantRoleIds = Array.from(relevantRoleIdsSet);
+
+    // Fetch ONLY the relevant roles, restrictions, access domains, and active HANA connections
+    const [rolesRes, restrRes, domainsRes, bdcRes] = await Promise.all([
+      db.run(SELECT.from(Roles).where({ ID: { in: relevantRoleIds } })),
+      db.run(SELECT.from(Restrictions).where({ role_ID: { in: relevantRoleIds } })),
+      db.run(SELECT.from(AccessDomains).columns('ID', 'name')),
+      db.run(SELECT.from(BdcSettings).where({ connectionType: 'SAP Hana', isActive: true }))
+    ]);
+    const allRoles = rolesRes || [];
+    const allRestrictions = restrRes || [];
+    const allAccessDomains = domainsRes || [];
+    const bdcSettings = bdcRes || [];
+
+    const preloaded = { allRoles, allRestrictions, allInheritances, allAccessDomains, bdcSettings };
+
+    const assignments = (await db.run(
+      SELECT.from(RoleAssignments).where({ role_ID: { in: Array.from(descendantRoleIds) } })
+    )) || [];
+
+    // Process in batches of 5 to limit concurrency while speeding up execution
     const batchSize = 5;
     for (let i = 0; i < assignments.length; i += batchSize) {
       const batch = assignments.slice(i, i + batchSize);

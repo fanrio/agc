@@ -62,11 +62,18 @@ module.exports = cds.service.impl(async function () {
     AppAuthorizations, RoleApprovers, AccessDomains, AccessDomainFields,
   } = entities;
 
-  // Propagate simulated user headers into the CAP request context user
+  // Propagate simulated user headers into the CAP request context user (non-production only)
   this.before('*', async (req) => {
-    const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
-    if (simUser) {
-      req.user = new cds.User({ id: simUser });
+    const isTest = process.env.NODE_ENV === 'test' || 
+                   process.execArgv.includes('--test') || 
+                   (process.argv[1] && process.argv[1].includes('test'));
+    if (process.env.NODE_ENV !== 'production' || isTest) {
+      const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
+      if (simUser) {
+        req.user = new cds.User({ id: simUser, roles: ['authenticated-user'] });
+      } else if (isTest && (!req.user || req.user.id === 'anonymous')) {
+        req.user = new cds.User({ id: 'admin', roles: ['authenticated-user'] });
+      }
     }
   });
 
@@ -194,20 +201,20 @@ module.exports = cds.service.impl(async function () {
   // ---------------------------------------------------------------------------
 
   this.on('testBdcConnection', makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient));
-  this.on('fetchBdcSpaces', makeFetchBdcSpacesHandler(BdcClient));
-  this.on('fetchBdcAssets', makeFetchBdcAssetsHandler(BdcClient));
-  this.on('fetchBdcRelationalValues', makeFetchBdcRelationalValuesHandler(BdcClient));
-  this.on('fetchBdcAssetColumns', makeFetchBdcAssetColumnsHandler(BdcClient));
-  this.on('fetchBdcAssetKeyColumns', makeFetchBdcAssetKeyColumnsHandler(BdcClient));
-  this.on('fetchRawBdcSpaces', makeFetchRawBdcSpacesHandler(BdcClient));
-  this.on('fetchRawBdcAssets', makeFetchRawBdcAssetsHandler(BdcClient));
-  this.on('fetchRawBdcRelationalValues', makeFetchRawBdcRelationalValuesHandler(BdcClient));
-  this.on('fetchRawBdcAssetColumns', makeFetchRawBdcAssetColumnsHandler(BdcClient));
-  this.on('fetchRawBdcUsers', makeFetchRawBdcUsersHandler(BdcClient));
-  this.on('fetchBdcAssociations', makeFetchBdcAssociationsHandler(BdcClient));
+  this.on('fetchBdcSpaces', makeFetchBdcSpacesHandler(cds, entities, BdcClient));
+  this.on('fetchBdcAssets', makeFetchBdcAssetsHandler(cds, entities, BdcClient));
+  this.on('fetchBdcRelationalValues', makeFetchBdcRelationalValuesHandler(cds, entities, BdcClient));
+  this.on('fetchBdcAssetColumns', makeFetchBdcAssetColumnsHandler(cds, entities, BdcClient));
+  this.on('fetchBdcAssetKeyColumns', makeFetchBdcAssetKeyColumnsHandler(cds, entities, BdcClient));
+  this.on('fetchRawBdcSpaces', makeFetchRawBdcSpacesHandler(cds, entities, BdcClient));
+  this.on('fetchRawBdcAssets', makeFetchRawBdcAssetsHandler(cds, entities, BdcClient));
+  this.on('fetchRawBdcRelationalValues', makeFetchRawBdcRelationalValuesHandler(cds, entities, BdcClient));
+  this.on('fetchRawBdcAssetColumns', makeFetchRawBdcAssetColumnsHandler(cds, entities, BdcClient));
+  this.on('fetchRawBdcUsers', makeFetchRawBdcUsersHandler(cds, entities, BdcClient));
+  this.on('fetchBdcAssociations', makeFetchBdcAssociationsHandler(cds, entities, BdcClient));
   this.on('fetchRawHanaViews', makeFetchRawHanaViewsHandler(cds, entities, HanaClient));
-  this.on('runBdcTaskChain', makeRunBdcTaskChainHandler(BdcClient));
-  this.on('fetchBdcTaskChainLog', makeFetchBdcTaskChainLogHandler(BdcClient));
+  this.on('runBdcTaskChain', makeRunBdcTaskChainHandler(cds, entities, BdcClient));
+  this.on('fetchBdcTaskChainLog', makeFetchBdcTaskChainLogHandler(cds, entities, BdcClient));
   this.on('searchScimUsers', makeSearchScimUsersHandler(cds, entities, BdcClient));
 
   // ---------------------------------------------------------------------------

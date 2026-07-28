@@ -586,6 +586,7 @@ export function useWizardState({ context = {}, permissions }) {
     environments,
     accessDomainId, setAccessDomainId,
     accessDomains: filteredAccessDomains,
+    allAccessDomains: accessDomains,
     assignUserId, setAssignUserId,
     assignUserName, setAssignUserName,
     showImpactDialog, setShowImpactDialog,

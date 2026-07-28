@@ -122,11 +122,11 @@ entity BdcSettings {
   authType     : String(50);  // BASIC | OAUTH | TOKEN
   space        : String(100);          // BDC Space selection (e.g. DEV, QA, PROD)
   username     : String(100);
-  password     : String(100);
+  password     : String(100) @UI.Hidden;
   tokenUrl     : String(255);
   clientId     : String(100);
-  clientSecret : String(100);
-  apiToken     : String(255);
+  clientSecret : String(100) @UI.Hidden;
+  apiToken     : String(255) @UI.Hidden;
   taskChainFlat : String(255) @default : 'df_authorization_flat';      // Task chain: Flat authorization
   isActive     : Boolean @default: true;
 }

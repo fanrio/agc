@@ -80,36 +80,36 @@ export default function BdcApiTesterView() {
       if (selectedApi === 'HANA_VIEWS') {
         result = await api.fetchRawHanaViews(conn.ID);
       } else if (selectedApi === 'SPACES') {
-        result = await api.fetchRawBdcSpaces(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
+        result = await api.fetchRawBdcSpaces(conn.ID);
       } else if (selectedApi === 'ASSETS') {
-        result = await api.fetchRawBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
+        result = await api.fetchRawBdcAssets(conn.ID);
       } else if (selectedApi === 'USERS') {
-        result = await api.fetchRawBdcUsers(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
+        result = await api.fetchRawBdcUsers(conn.ID);
       } else if (selectedApi === 'VALUES') {
         if (!spaceInput.trim() || !assetInput.trim()) {
           throw new Error('Space and Asset fields are required for Relational Values API.');
         }
-        result = await api.fetchRawBdcRelationalValues(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, assetInput);
+        result = await api.fetchRawBdcRelationalValues(conn.ID, spaceInput, assetInput);
       } else if (selectedApi === 'COLUMNS') {
         if (!spaceInput.trim() || !assetInput.trim()) {
           throw new Error('Space and Asset fields are required for Metadata Columns API.');
         }
-        result = await api.fetchRawBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, assetInput);
+        result = await api.fetchRawBdcAssetColumns(conn.ID, spaceInput, assetInput);
       } else if (selectedApi === 'RUN_TASK_CHAIN') {
         if (!spaceInput.trim() || !taskChainInput.trim()) {
           throw new Error('Space and Task Chain ID fields are required to execute a run.');
         }
-        result = await api.runBdcTaskChain(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, taskChainInput);
+        result = await api.runBdcTaskChain(conn.ID, spaceInput, taskChainInput);
       } else if (selectedApi === 'FETCH_TASK_CHAIN_LOG') {
         if (!spaceInput.trim() || !logIdInput.trim()) {
           throw new Error('Space and Log ID fields are required to fetch task chain logs.');
         }
-        result = await api.fetchBdcTaskChainLog(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, logIdInput);
+        result = await api.fetchBdcTaskChainLog(conn.ID, spaceInput, logIdInput);
       } else if (selectedApi === 'ASSOCIATIONS') {
         if (!spaceInput.trim() || !assetInput.trim()) {
           throw new Error('Space and Asset fields are required to list associations.');
         }
-        result = await api.fetchBdcAssociations(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, spaceInput, assetInput);
+        result = await api.fetchBdcAssociations(conn.ID, spaceInput, assetInput);
       }
 
       setOutput(result);

@@ -1,6 +1,6 @@
 using {fanrio.auth as db} from '../db/schema';
 
-service AuthorizationService @(path: '/odata/v4/auth') {
+service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-user') {
 
   // -------------------------------------------------------------------------
   // Org Structure
@@ -99,42 +99,43 @@ service AuthorizationService @(path: '/odata/v4/auth') {
     message : String;
   };
 
-  action fetchBdcSpaces(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns array of String;
+  // fetchBdcSpaces: dual signature — connectionId (saved connection) OR direct credentials (during creation)
+  action fetchBdcSpaces(connectionId: String, url: String, tokenUrl: String, clientId: String, clientSecret: String) returns array of String;
 
-  action fetchBdcAssets(url: String, tokenUrl: String, clientId: String, clientSecret: String, space: String) returns array of String;
+  action fetchBdcAssets(connectionId: String) returns array of String;
 
-  action fetchBdcRelationalValues(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchBdcRelationalValues(connectionId: String,
                                   space: String, asset: String, assetText: String,
                                   idColumns: String, textColumn: String)        returns array of {
     id   : String;
     text : String;
   };
 
-  action fetchBdcAssetColumns(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchBdcAssetColumns(connectionId: String,
                               space: String, asset: String)                     returns array of String;
 
-  action fetchBdcAssetKeyColumns(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchBdcAssetKeyColumns(connectionId: String,
                                  space: String, asset: String)                  returns array of String;
 
-  action fetchRawBdcSpaces(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns LargeString;
+  action fetchRawBdcSpaces(connectionId: String) returns LargeString;
 
-  action fetchRawBdcAssets(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns LargeString;
+  action fetchRawBdcAssets(connectionId: String) returns LargeString;
 
-  action fetchRawBdcRelationalValues(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchRawBdcRelationalValues(connectionId: String,
                                      space: String, asset: String)             returns LargeString;
 
-  action fetchRawBdcAssetColumns(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchRawBdcAssetColumns(connectionId: String,
                                  space: String, asset: String)                 returns LargeString;
 
-  action fetchBdcAssociations(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchBdcAssociations(connectionId: String,
                               space: String, asset: String)                    returns LargeString;
 
-  action fetchRawBdcUsers(url: String, tokenUrl: String, clientId: String, clientSecret: String) returns LargeString;
+  action fetchRawBdcUsers(connectionId: String) returns LargeString;
 
-  action runBdcTaskChain(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action runBdcTaskChain(connectionId: String,
                          space: String, taskChainId: String)                   returns LargeString;
 
-  action fetchBdcTaskChainLog(url: String, tokenUrl: String, clientId: String, clientSecret: String,
+  action fetchBdcTaskChainLog(connectionId: String,
                               space: String, logId: String)                    returns LargeString;
 
   action fetchRawHanaViews(settingId: UUID)                                    returns LargeString;

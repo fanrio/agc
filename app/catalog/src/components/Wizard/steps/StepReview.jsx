@@ -1,7 +1,5 @@
-import React from 'react';
-import { Box, Card, Typography, Chip, TextField, Button, TableContainer, Table, TableHead, TableRow, TableCell, TableBody } from '@mui/material';
-import { PlayCircle } from 'lucide-react';
-import { RestrictionDisplay } from '../../RestrictionBuilder';
+import { Box, Card, Typography, Chip, Button } from '@mui/material';
+import EffectiveRestrictions from '../../EffectiveRestrictions';
 import { ENV_COLOR } from '../../../utils/helpers';
 import UserSelection from '../../UserSelection';
 
@@ -9,7 +7,7 @@ export default function StepReview({
   roleName, roleType, selectedParentIds,
   environmentId, environments, approvers, description,
   inherited, restrictions,
-  simRows, setSimRows, simResults, runSimulation,
+
   assignUserId, setAssignUserId, assignUserName, setAssignUserName,
   isEditMode, loading, permissions,
   canManageThisDerivedWizard, handleSaveClick, isReadOnly
@@ -58,38 +56,11 @@ export default function StepReview({
       </Card>
 
       {/* All Restrictions */}
-      <Card sx={{ p: 3 }}>
-        {(() => {
-          const isPatternRestriction = (r) => {
-            if (!r) return false;
-            const ft = (r.filterType || '').toUpperCase();
-            const val = String(r.value || '').trim();
-            if (ft === 'ALL' || ft === 'CP') return true;
-            if (val === '*' || val.includes('*') || val.includes('?')) return true;
-            return false;
-          };
-          const ownFields = new Set(restrictions.map(r => r.field.toLowerCase()));
-          const filteredInherited = inherited.filter(r => {
-            if (isPatternRestriction(r) && ownFields.has(r.field.toLowerCase())) {
-              return false;
-            }
-            return true;
-          });
-          const totalCount = filteredInherited.length + restrictions.length;
-          return (
-            <>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-                Effective Restrictions ({totalCount})
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {filteredInherited.map((r, i) => <RestrictionDisplay key={i} restriction={r} isOwn={false} />)}
-                {restrictions.map(r => <RestrictionDisplay key={r.ID} restriction={{ ...r, sourceRoleName: 'This Role' }} isOwn={true} />)}
-                {totalCount === 0 && <Typography variant="body2" color="text.secondary">No restrictions defined.</Typography>}
-              </Box>
-            </>
-          );
-        })()}
-      </Card>
+      <EffectiveRestrictions
+        restrictions={restrictions}
+        inherited={inherited}
+        showCard={true}
+      />
 
       {/* Access Simulation */}
       {/* Access Simulation (Hidden)
@@ -168,7 +139,7 @@ export default function StepReview({
         onClick={handleSaveClick}
         disabled={loading || isReadOnly || !roleName || (permissions?.isSuperAdmin ? false : (permissions && (
           roleType === 'ORG_BASED' ? !permissions.canManageOrgRoles :
-          (selectedParentIds.length > 0) ? !canManageThisDerivedWizard() : !permissions.canManageSingleRoles
+            (selectedParentIds.length > 0) ? !canManageThisDerivedWizard() : !permissions.canManageSingleRoles
         )))}
         sx={{ alignSelf: 'flex-end', px: 4, py: 1.25 }}
       >

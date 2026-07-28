@@ -1,29 +1,29 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Box, 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  Drawer, 
-  List, 
-  ListItem, 
-  ListItemButton, 
-  ListItemIcon, 
-  ListItemText, 
-  CircularProgress, 
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
   Button
 } from '@mui/material';
-import { 
-  Home, 
-  Building2, 
-  Shield, 
-  Settings, 
-  Users, 
-  Network, 
-  History, 
-  LogOut, 
-  UserCheck, 
-  ShieldCheck 
+import {
+  Home,
+  Building2,
+  Shield,
+  Settings,
+  Users,
+  Network,
+  History,
+  LogOut,
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
@@ -42,14 +42,14 @@ import { PermissionsProvider, usePermissions } from './context/PermissionsContex
 const DRAWER_WIDTH = 240;
 
 const NAV = [
-  { id: 'home',            label: 'Dashboard',             icon: Home },
-  { id: 'org',             label: 'Organization',          icon: Building2 },
-  { id: 'roles',           label: 'Roles',                 icon: Shield },
-  { id: 'assignments',     label: 'Role Assignments',      icon: Users },
-  { id: 'audit',           label: 'Audit Logs',            icon: History },
-  { id: 'access-profiles', label: 'Access Profiles',       icon: ShieldCheck },
-  { id: 'users',           label: 'Manage Users',          icon: UserCheck },
-  { id: 'system',          label: 'System',                icon: Settings },
+  { id: 'home', label: 'Dashboard', icon: Home },
+  { id: 'org', label: 'Organization', icon: Building2 },
+  { id: 'roles', label: 'Roles', icon: Shield },
+  { id: 'assignments', label: 'Role Assignments', icon: Users },
+  { id: 'audit', label: 'Audit Logs', icon: History },
+  { id: 'access-profiles', label: 'Access Profiles', icon: ShieldCheck },
+  { id: 'users', label: 'Manage Users', icon: UserCheck },
+  { id: 'system', label: 'System', icon: Settings },
 ];
 
 function getNavFromHash() {
@@ -63,12 +63,12 @@ function getNavFromHash() {
 }
 
 function AppContent({ simulatedUser, onLogout }) {
-  const [activeNav, setActiveNavState]         = useState(getNavFromHash);
-  const [wizardContext, setWizardContext]       = useState(null);
-  const [rolesFilter, setRolesFilter]           = useState(null);
+  const [activeNav, setActiveNavState] = useState(getNavFromHash);
+  const [wizardContext, setWizardContext] = useState(null);
+  const [rolesFilter, setRolesFilter] = useState(null);
   const [inspectingUserId, setInspectingUserId] = useState(null);
-  const isNavigatingRef                         = useRef(false);
-  
+  const isNavigatingRef = useRef(false);
+
   const { permissions, loading } = usePermissions();
 
   const setActiveNav = (navId) => {
@@ -201,7 +201,7 @@ function AppContent({ simulatedUser, onLogout }) {
               return (
                 <ListItem key={item.id} disablePadding>
                   <ListItemButton
-                     onClick={() => { setActiveNav(item.id); if (item.id !== 'wizard') setWizardContext(null); }}
+                    onClick={() => { setActiveNav(item.id); if (item.id !== 'wizard') setWizardContext(null); }}
                     sx={{
                       borderRadius: 1,
                       py: 1,
@@ -220,7 +220,7 @@ function AppContent({ simulatedUser, onLogout }) {
                     <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
                       <item.icon size={18} />
                     </ListItemIcon>
-                    <ListItemText 
+                    <ListItemText
                       primary={
                         <Typography sx={{ fontSize: '0.875rem', fontWeight: isActive ? 600 : 500 }}>
                           {item.label}
@@ -237,22 +237,22 @@ function AppContent({ simulatedUser, onLogout }) {
 
       {/* Main Content */}
       <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
-        {activeNav === 'home'              && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
-        {activeNav === 'org'               && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
-        {activeNav === 'roles'             && <RolesDashboard  onDeriveRole={(role)   => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
-        {activeNav === 'wizard'            && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
-        {activeNav === 'assignments'       && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
-        {activeNav === 'replications'      && <ReplicationsView />}
-        {activeNav === 'audit'             && <AuditLogsView />}
+        {activeNav === 'home' && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
+        {activeNav === 'org' && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
+        {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
+        {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
+        {activeNav === 'assignments' && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+        {activeNav === 'replications' && <ReplicationsView />}
+        {activeNav === 'audit' && <AuditLogsView />}
         {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
-        {activeNav === 'users'             && <AppAuthorizationsView />}
-        {activeNav === 'system'            && <SystemView />}
+        {activeNav === 'users' && <AppAuthorizationsView />}
+        {activeNav === 'system' && <SystemView />}
       </Box>
 
       {/* Global User Authorization Card Drawer */}
-      <UserAuthorizationCardDrawer 
-        userId={inspectingUserId} 
-        onClose={() => setInspectingUserId(null)} 
+      <UserAuthorizationCardDrawer
+        userId={inspectingUserId}
+        onClose={() => setInspectingUserId(null)}
       />
     </Box>
   );

@@ -46,12 +46,18 @@ async function getUserEffectiveAuthorizations(userId, cds, entities) {
     };
   }
 
-  // 2. Fetch all roles, restrictions, inheritances for graph traversal
-  const allRoles = await db.run(SELECT.from(Roles));
-  const allRestrictions = await db.run(SELECT.from(Restrictions));
-  const allInheritances = await db.run(SELECT.from(RoleInheritance));
+  // 2. Fetch all roles, restrictions, inheritances, and access domains for graph traversal & display
+  const AccessDomains = entities.AccessDomains || cds.entities('fanrio.auth').AccessDomains;
 
-  const rolesMap = new Map(allRoles.map(r => [r.ID, r]));
+  const [allRoles, allRestrictions, allInheritances, allAccessDomains] = await Promise.all([
+    db.run(SELECT.from(Roles)),
+    db.run(SELECT.from(Restrictions)),
+    db.run(SELECT.from(RoleInheritance)),
+    AccessDomains ? db.run(SELECT.from(AccessDomains)) : Promise.resolve([])
+  ]);
+
+  const rolesMap = new Map((allRoles || []).map(r => [r.ID, r]));
+  const accessDomainMap = new Map((allAccessDomains || []).map(ad => [ad.ID, ad.name || ad.description || ad.ID]));
 
   // User's directly assigned role objects
   const assignedRoles = roleIds
@@ -78,7 +84,7 @@ async function getUserEffectiveAuthorizations(userId, cds, entities) {
     // Compute effective restrictions for each assigned role in this domain
     for (const role of rolesInDomain) {
       try {
-        const effective = resolveEffectiveRestrictions(role.ID, allRoles, allRestrictions, allInheritances);
+        const effective = resolveEffectiveRestrictions(role.ID, allRoles || [], allRestrictions || [], allInheritances || []);
         for (const re of effective) {
           domainRestrictions.push(re);
         }
@@ -87,9 +93,13 @@ async function getUserEffectiveAuthorizations(userId, cds, entities) {
       }
     }
 
+    const resolvedDomainName = domainId === 'DEFAULT'
+      ? 'Global / Default Domain'
+      : (accessDomainMap.get(domainId) || domainId);
+
     domainsResult.push({
       domainId,
-      domainName: domainId === 'DEFAULT' ? 'Global / Default Domain' : domainId,
+      domainName: resolvedDomainName,
       assignedRoles: rolesInDomain.map(r => ({
         ID: r.ID,
         name: r.name,

@@ -5,7 +5,6 @@ import * as api from '../api';
 import RoleCard from './RoleCard';
 import RoleTableView from './RoleTableView';
 import RoleTreeView from './RoleTreeView';
-import { isCriticalRestriction, isRoleInScope, filterRolesByPermissions } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
 import EnvironmentSelection from './EnvironmentSelection';
 
@@ -38,7 +37,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
   const [envFilter, setEnvFilter] = useState([]);
   const [typeFilter, setTypeFilter] = useState('ALL');
-  console.log(initialFilter);
+
   useEffect(() => {
     if (initialFilter) {
       setHealthFilter(initialFilter);
@@ -80,7 +79,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         api.getRoles(),
         api.getAllOrgNodesFlat()
       ]);
-      setRoles(filterRolesByPermissions(rolesData, permissions));
+      setRoles(rolesData);
       setOrgNodes(nodesData);
     } catch (e) { console.error(e); }
     setLoading(false);

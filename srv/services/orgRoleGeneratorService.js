@@ -60,13 +60,18 @@ async function loadAllDomainsWithFields(db, AccessDomains, AccessDomainFields, R
 
 /**
  * Walks up the org tree from `node`, collecting { fieldName → value } for
- * ancestors whose type_ID is in `fieldSet`.
+ * ancestors whose type_ID is in `fieldSet`. Uses nodesMap if provided for O(1) memory lookup.
  */
-async function buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap) {
+async function buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap, nodesMap = null) {
   const context = {};
   let current = node;
-  while (current.parent_ID) {
-    const parent = await db.run(SELECT.one.from(OrgNodes).where({ ID: current.parent_ID }));
+  while (current && current.parent_ID) {
+    let parent;
+    if (nodesMap) {
+      parent = nodesMap.get(current.parent_ID);
+    } else {
+      parent = await db.run(SELECT.one.from(OrgNodes).where({ ID: current.parent_ID }));
+    }
     if (!parent) break;
     if (fieldSet.has(parent.type_ID)) {
       const fieldName = rfMap.get(parent.type_ID);
@@ -95,13 +100,13 @@ async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs
     action = 'CREATE';
     details = JSON.stringify({ ID: roleId, name, type: 'ORG_BASED', description, orgNode_ID: orgNodeId, accessDomain_ID: domainId, environment_ID: 'P' });
     await db.run(INSERT.into(Roles).entries({
-      ID:              roleId,
+      ID: roleId,
       name,
-      type:            'ORG_BASED',
+      type: 'ORG_BASED',
       description,
-      orgNode_ID:      orgNodeId,
+      orgNode_ID: orgNodeId,
       accessDomain_ID: domainId,
-      environment_ID:  'P',
+      environment_ID: 'P',
     }));
   }
 
@@ -109,11 +114,11 @@ async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs
   if (restrictionEntries.length > 0) {
     await db.run(INSERT.into(Restrictions).entries(
       restrictionEntries.map(r => ({
-        ID:          cds.utils.uuid(),
-        role_ID:     roleId,
-        field:       r.field,
-        filterType:  r.filterType,
-        value:       r.value,
+        ID: cds.utils.uuid(),
+        role_ID: roleId,
+        field: r.field,
+        filterType: r.filterType,
+        value: r.value,
         sourceLabel: r.sourceLabel || r.value,
       }))
     ));
@@ -124,8 +129,8 @@ async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs
   if (parentRoleIds.length > 0) {
     await db.run(INSERT.into(RoleInheritance).entries(
       parentRoleIds.map(pid => ({
-        ID:        cds.utils.uuid(),
-        role_ID:   roleId,
+        ID: cds.utils.uuid(),
+        role_ID: roleId,
         parent_ID: pid
       }))
     ));
@@ -133,12 +138,12 @@ async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs
 
   // Write to AuditLogs
   await db.run(INSERT.into(AuditLogs).entries({
-    ID:         cds.utils.uuid(),
+    ID: cds.utils.uuid(),
     entityName: 'Roles',
-    action:     action,
-    recordId:   roleId,
+    action: action,
+    recordId: roleId,
     targetName: name,
-    details:    details
+    details: details
   }));
 
   return roleId;
@@ -178,9 +183,9 @@ async function generateForNodeInDomain(
   while (currentParentId) {
     const parentRole = await db.run(
       SELECT.one.from(Roles).where({
-        orgNode_ID:      currentParentId,
+        orgNode_ID: currentParentId,
         accessDomain_ID: domain.ID,
-        type:            'ORG_BASED'
+        type: 'ORG_BASED'
       })
     );
     if (parentRole) {
@@ -201,18 +206,18 @@ async function generateForNodeInDomain(
     restrictionEntries = domain.fields.map(f => {
       const val = context[f.fieldName];
       if (val != null) return { field: f.fieldName, filterType: 'SINGLE_VALUE', value: val };
-      return { field: f.fieldName, filterType: 'CP', value: '*' };
+      return { field: f.fieldName, filterType: 'CP', value: '%' };
     });
   }
 
   const roleName = buildRoleName(domain.roleTemplateName, context, wildcardFields);
   const roleId = await upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs, {
-    name:               roleName,
-    description:        `Auto-generated from Org Node: ${node.name} | Domain: ${domain.name}`,
-    orgNodeId:          node.ID,
-    domainId:           domain.ID,
+    name: roleName,
+    description: `Auto-generated from Org Node: ${node.name} | Domain: ${domain.name}`,
+    orgNodeId: node.ID,
+    domainId: domain.ID,
     restrictionEntries: restrictionEntries,
-    parentRoleIds:      parentRoleId ? [parentRoleId] : [],
+    parentRoleIds: parentRoleId ? [parentRoleId] : [],
   });
   results.push({ roleId, roleName });
 
@@ -243,7 +248,7 @@ async function generateForNodeInDomain(
  * @param {boolean} recursive - Whether to recurse down to child org nodes
  * @returns {{ roles: [{roleId, roleName}], count: number }}
  */
-async function generateRoleForNode(cds, entities, node, recursive = true) {
+async function generateRoleForNode(cds, entities, node, recursive = true, nodesMap = null) {
   const db = cds.db;
   const {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
@@ -252,7 +257,7 @@ async function generateRoleForNode(cds, entities, node, recursive = true) {
 
   // Ensure node has type_ID
   if (!node.type_ID) {
-    const fresh = await db.run(SELECT.one.from(OrgNodes).where({ ID: node.ID }));
+    const fresh = nodesMap ? nodesMap.get(node.ID) : await db.run(SELECT.one.from(OrgNodes).where({ ID: node.ID }));
     if (!fresh || !fresh.type_ID) return { roles: [], count: 0 };
     node = fresh;
   }
@@ -274,7 +279,7 @@ async function generateRoleForNode(cds, entities, node, recursive = true) {
 
   for (const domain of applicableDomains) {
     const fieldSet = new Set(domain.fields.map(f => f.field_ID));
-    const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap);
+    const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap, nodesMap);
     await generateForNodeInDomain(
       db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
       node, domain, fieldSet, rfMap, ancestorCtx, results, recursive
@@ -285,10 +290,10 @@ async function generateRoleForNode(cds, entities, node, recursive = true) {
   await db.run(DELETE.from(OrgNodeAttributes).where({ node_ID: node.ID, field: 'Roles' }));
   if (results.length > 0) {
     await db.run(INSERT.into(OrgNodeAttributes).entries({
-      ID:      cds.utils.uuid(),
+      ID: cds.utils.uuid(),
       node_ID: node.ID,
-      field:   'Roles',
-      value:   `${results.length} role(s) generated`,
+      field: 'Roles',
+      value: `${results.length} role(s) generated`,
     }));
   }
 
@@ -341,7 +346,7 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
     let totalRoles = 0;
     // Process sequentially to completely eliminate DB transaction race conditions
     for (const node of nodes) {
-      const result = await generateRoleForNode(cds, entities, node, false);
+      const result = await generateRoleForNode(cds, entities, node, false, nodesMap);
       totalRoles += result.count;
     }
 

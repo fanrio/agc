@@ -84,7 +84,7 @@ export default function DynamicRulesView() {
     const conn = connections.find(c => c.ID === form.bdcConnection_ID);
     if (conn) {
       setLoadingAssets(true);
-      api.fetchBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space)
+      api.fetchBdcAssets(conn.ID)
         .then(assetsList => {
           setAssets(assetsList || []);
         })
@@ -132,7 +132,7 @@ export default function DynamicRulesView() {
     // Fetch All Columns for mapping and Responsible User selector
     setLoadingColumns(true);
     try {
-      const cols = await api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, selectedAsset);
+      const cols = await api.fetchBdcAssetColumns(conn.ID, conn.space, selectedAsset);
       setAssetColumns(cols || []);
     } catch (err) {
       console.error('Failed to fetch asset columns:', err);
@@ -189,7 +189,7 @@ export default function DynamicRulesView() {
     if (conn && rule.sourceEntity) {
       setLoadingColumns(true);
       try {
-        const cols = await api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, rule.sourceEntity);
+        const cols = await api.fetchBdcAssetColumns(conn.ID, conn.space, rule.sourceEntity);
         setAssetColumns(cols || []);
       } catch (err) {
         console.error('Failed to fetch asset columns for editing rule:', err);

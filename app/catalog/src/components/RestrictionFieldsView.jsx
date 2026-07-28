@@ -47,7 +47,7 @@ export default function RestrictionFieldsView() {
     }
     const conn = bdcConnections.find(c => c.ID === newBdcConnectionId);
     if (conn) {
-      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, newAssetHierarchy)
+      api.fetchBdcAssetColumns(conn.ID, conn.space, newAssetHierarchy)
         .then(cols => {
           const hasHierarchy = cols.some(c => c.toLowerCase() === 'hierarchy');
           setNewWithHierarchyDirectory(hasHierarchy);
@@ -66,7 +66,7 @@ export default function RestrictionFieldsView() {
     }
     const conn = bdcConnections.find(c => c.ID === editForm.bdcConnectionId);
     if (conn) {
-      api.fetchBdcAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space, editForm.assetHierarchy)
+      api.fetchBdcAssetColumns(conn.ID, conn.space, editForm.assetHierarchy)
         .then(cols => {
           const hasHierarchy = cols.some(c => c.toLowerCase() === 'hierarchy');
           setEditForm(prev => ({ ...prev, withHierarchyDirectory: hasHierarchy }));
@@ -108,7 +108,7 @@ export default function RestrictionFieldsView() {
     const conn = bdcConnections.find(c => c.ID === newBdcConnectionId);
     if (conn) {
       setLoadingAssets(true);
-      api.fetchBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space)
+      api.fetchBdcAssets(conn.ID)
         .then(assets => {
           setAssetsList(assets);
           setNewAsset(assets[0] || '');
@@ -138,7 +138,7 @@ export default function RestrictionFieldsView() {
     const conn = bdcConnections.find(c => c.ID === editForm.bdcConnectionId);
     if (conn) {
       setLoadingEditAssets(true);
-      api.fetchBdcAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space)
+      api.fetchBdcAssets(conn.ID)
         .then(assets => {
           setEditAssetsList(assets);
         })

@@ -39,7 +39,7 @@ function getHierarchyOptions(flatNodes) {
 // Helper to check if any ancestor of nodeId is present in currentSelection list
 export function isAncestorSelected(nodeId, currentSelection, flatNodes) {
   if (!flatNodes || !Array.isArray(flatNodes) || flatNodes.length === 0) return false;
-  
+
   const nodeMap = new Map();
   flatNodes.forEach(node => {
     const localId = node.localId || node.id || node.ID;
@@ -81,39 +81,39 @@ export function filterSelectedNodes(selectedList, flatNodes) {
 const FILTER_TYPES = ['ALL', 'N', 'NN', 'EQ', 'NE', 'GT', 'GE', 'LT', 'LE', 'CP', 'BT', 'MULTI_VALUE', 'HIERARCHY'];
 
 const TYPE_COLOR = {
-  ALL:          'success',
-  N:            'secondary',
-  NN:           'secondary',
-  EQ:           'primary',
-  NE:           'error',
-  GT:           'warning',
-  GE:           'warning',
-  LT:           'warning',
-  LE:           'warning',
-  CP:           'info',
-  BT:           'info',
-  MULTI_VALUE:  'secondary',
-  HIERARCHY:    'success',
+  ALL: 'success',
+  N: 'secondary',
+  NN: 'secondary',
+  EQ: 'primary',
+  NE: 'error',
+  GT: 'warning',
+  GE: 'warning',
+  LT: 'warning',
+  LE: 'warning',
+  CP: 'info',
+  BT: 'info',
+  MULTI_VALUE: 'secondary',
+  HIERARCHY: 'success',
   SINGLE_VALUE: 'primary',
-  RANGE:        'warning',
-  CP:           'info',
+  RANGE: 'warning',
+  CP: 'info',
 };
 const TYPE_LABEL = {
-  ALL:          'All (*)',
-  N:            'Is Null (N)',
-  NN:           'Not Null (NN)',
-  EQ:           'Equals (EQ)',
-  NE:           'Not Equals (NE)',
-  GT:           'Greater Than (GT)',
-  GE:           'Greater Equal (GE)',
-  LT:           'Less Than (LT)',
-  LE:           'Less Equal (LE)',
-  CP:           'Pattern (CP)',
-  BT:           'Between (BT)',
-  MULTI_VALUE:  'In List',
-  HIERARCHY:    'Hierarchy',
+  ALL: 'All (*)',
+  N: 'Is Null (N)',
+  NN: 'Not Null (NN)',
+  EQ: 'Equals (EQ)',
+  NE: 'Not Equals (NE)',
+  GT: 'Greater Than (GT)',
+  GE: 'Greater Equal (GE)',
+  LT: 'Less Than (LT)',
+  LE: 'Less Equal (LE)',
+  CP: 'Pattern (CP)',
+  BT: 'Between (BT)',
+  MULTI_VALUE: 'In List',
+  HIERARCHY: 'Hierarchy',
   SINGLE_VALUE: 'Equals',
-  RANGE:        'Range',
+  RANGE: 'Range',
 };
 
 function TagInput({ values, onChange }) {
@@ -188,14 +188,11 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     const targetAsset = filterType === 'HIERARCHY' ? fieldConfig.assetHierarchy : fieldConfig.asset;
 
     api.fetchBdcRelationalValues(
-      conn.url, 
-      conn.tokenUrl, 
-      conn.clientId, 
-      conn.clientSecret, 
-      conn.space, 
-      targetAsset, 
-      filterType === 'HIERARCHY' ? null : (fieldConfig.assetText || null), 
-      fieldConfig.idColumns || '["id"]', 
+      conn.ID,
+      conn.space,
+      targetAsset,
+      filterType === 'HIERARCHY' ? null : (fieldConfig.assetText || null),
+      fieldConfig.idColumns || '["id"]',
       fieldConfig.textColumn || 'id'
     )
       .then(values => {
@@ -378,9 +375,9 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     if (hasBdcOptions) {
       // Parse stored range: may be {from:{id,text}, to:{id,text}} or {from:id, to:id} (legacy)
       const fromObj = range.from && typeof range.from === 'object' ? range.from : null;
-      const toObj   = range.to   && typeof range.to   === 'object' ? range.to   : null;
-      const fromId  = fromObj ? fromObj.id : (range.from || '');
-      const toId    = toObj   ? toObj.id   : (range.to   || '');
+      const toObj = range.to && typeof range.to === 'object' ? range.to : null;
+      const fromId = fromObj ? fromObj.id : (range.from || '');
+      const toId = toObj ? toObj.id : (range.to || '');
       return (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
           <FormControl size="small" sx={{ flex: 1 }}>
@@ -485,7 +482,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
         return <TextField size="small" fullWidth disabled value="Loading hierarchy from Datasphere..." />;
       }
       const uniqueHierarchies = Array.from(new Set(bdcValues.map(v => v.hierarchy).filter(Boolean)));
-      
+
       // Filter options based on selected directory (if withHierarchyDirectory is true)
       const isWithDirectory = !!fieldConfig.withHierarchyDirectory;
 
@@ -581,8 +578,8 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
                 const isDisabled = isAncestorSelected(itemKey, selectedLocalIds, filteredOptions);
                 const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
                 return (
-                  <MenuItem 
-                    key={itemKey} 
+                  <MenuItem
+                    key={itemKey}
                     value={itemKey}
                     disabled={isDisabled}
                     sx={{
@@ -704,12 +701,12 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
     try {
       const parsed = JSON.parse(restriction.value);
       display = parsed.map(extractText).join(', ');
-    } catch {}
+    } catch { }
   } else if (restriction.filterType === 'RANGE' || restriction.filterType === 'BT') {
     try {
       const r = JSON.parse(restriction.value);
       display = `${extractText(r.from)} and ${extractText(r.to)}`;
-    } catch {}
+    } catch { }
   } else if (restriction.filterType === 'HIERARCHY') {
     try {
       if (restriction.value.startsWith('[')) {
@@ -724,7 +721,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
           return val;
         }).join(', ');
       }
-    } catch {}
+    } catch { }
   } else {
     // SINGLE_VALUE / EQ / NE / GT / GE / LT / LE / CP — may be stored as {id, text}
     try {
@@ -732,7 +729,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         display = parsed.text || parsed.id || restriction.value;
       }
-    } catch {}
+    } catch { }
   }
 
   return (

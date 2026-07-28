@@ -10,16 +10,17 @@ import StepReview from './steps/StepReview';
 import ImpactDialog from './ImpactDialog';
 
 const STEPS = [
-  { id: 'origin',       label: 'Origin & Parent' },
+  { id: 'origin', label: 'Origin & Parent' },
   { id: 'restrictions', label: 'Restrictions' },
-  { id: 'identity',     label: 'Approvers' },
-  { id: 'review',       label: 'Review & Deploy' },
+  { id: 'identity', label: 'Approvers' },
+  { id: 'review', label: 'Review & Deploy' },
 ];
 
 export default function Wizard({ context = {}, onDone, allowFreeNavigation = false }) {
   const { permissions } = usePermissions();
   const state = useWizardState({ context: { ...context, allowFreeNavigation }, permissions });
 
+  console.log(context);
   if (state.done) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 8, animation: 'fadeIn 0.3s' }}>

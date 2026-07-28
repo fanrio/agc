@@ -16,7 +16,10 @@ function registerAppAuthorizationsHandlers(service, entities) {
   // Action searchScimUsers protection
   service.before('searchScimUsers', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageAppUsers', req);
+    if (perms.isSuperAdmin) return;
+    if (!perms.canManageAppUsers && !perms.canAssignRoles) {
+      req.reject(403, 'Access Denied: You do not have permission to search SCIM users.');
+    }
   });
 
   // AuditLogs protection

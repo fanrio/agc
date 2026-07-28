@@ -104,6 +104,7 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       userName: 'Env D User',
       canManageSingleRoles: true,
       allowedEnvironments: JSON.stringify(['D']),
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -153,6 +154,8 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       userId: replUser,
       userName: 'Repl User without permission',
       canManageReplications: false,
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -200,6 +203,8 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       canAssignRoles: true,
       canManageDerivedRoles: true,
       canManageSingleRoles: false,
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -287,6 +292,8 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       userId: mockApprover,
       userName: 'Mock Approver Only',
       canAssignRoles: false,
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -384,6 +391,8 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       canAssignRoles: false,
       canManageDerivedRoles: true,
       managedDerivedRolesScope: 'ALL',
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -473,6 +482,8 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       canManageDerivedRoles: true,
       canManageSingleRoles: false,
       managedDerivedRolesScope: 'ALL',
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
       isActive: true
     }));
 
@@ -572,5 +583,118 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(Roles).where({ ID: roleId }));
   });
 
+  await t.test('Derived roles scope filtering for GET /Roles API', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations, Roles } = db.entities;
+
+    const scopedUser = 'derived-scoped-user';
+
+    // 1. Create a role in scope and a role out of scope
+    const inScopeRoleName = `ROLE_DERIVED_IN_SCOPE_${Date.now()}`;
+    const outOfScopeRoleName = `ROLE_DERIVED_OUT_OF_SCOPE_${Date.now()}`;
+
+    const inScopeRes = await POST('/odata/v4/auth/Roles', {
+      name: inScopeRoleName,
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const inScopeRoleId = inScopeRes.data.ID;
+
+    const outOfScopeRes = await POST('/odata/v4/auth/Roles', {
+      name: outOfScopeRoleName,
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const outOfScopeRoleId = outOfScopeRes.data.ID;
+
+    // 2. Create user with authorizations: everything unchecked except derived roles (with 1 role in scope) and assign roles
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: scopedUser }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: scopedUser,
+      userName: 'Derived Scoped User',
+      canAssignRoles: true,
+      canManageDerivedRoles: true,
+      canManageSingleRoles: false,
+      canManageOrgRoles: false,
+      canManageAppUsers: false,
+      canManageReplications: false,
+      canManageSettings: false,
+      canViewAuditLogs: false,
+      managedDerivedRolesScope: JSON.stringify([{ roleId: inScopeRoleId }]),
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: '[]',
+      isActive: true
+    }));
+
+    // 3. Call Roles API as the scoped user
+    const res = await GET('/odata/v4/auth/Roles', {
+      headers: { 'x-simulated-user': scopedUser }
+    });
+
+    // 4. Verify API response
+    assert.strictEqual(res.status, 200);
+    assert.ok(Array.isArray(res.data.value), 'Response should contain array of roles');
+
+    const returnedRoleIds = res.data.value.map(r => r.ID);
+    assert.ok(returnedRoleIds.includes(inScopeRoleId), 'The role defined in authorization scope should be returned');
+    assert.ok(!returnedRoleIds.includes(outOfScopeRoleId), 'Roles outside authorization scope should not be returned');
+
+    // Clean up
+    await db.run(cds.ql.DELETE(Roles).where({ ID: inScopeRoleId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: outOfScopeRoleId }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: scopedUser }));
+  });
+
+  await t.test('RoleAssignments CREATE and DELETE write to AuditLogs', async (t2) => {
+    const db = await cds.connect.to('db');
+    const { Roles, RoleAssignments, AuditLogs } = db.entities;
+
+    // Create a role with a restriction
+    const roleRes = await POST('/odata/v4/auth/Roles', {
+      name: `ROLE_AUDIT_ASSIGN_TEST_${Date.now()}`,
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: 'app-global'
+    });
+    const roleId = roleRes.data.ID;
+
+    await POST('/odata/v4/auth/Restrictions', {
+      role_ID: roleId,
+      field: 'SalesOrg',
+      filterType: 'SINGLE_VALUE',
+      value: 'DE01'
+    });
+
+    // 1. Assign role to user
+    const assignRes = await POST('/odata/v4/auth/RoleAssignments', {
+      role_ID: roleId,
+      userId: 'audit-target-user',
+      userName: 'Audit Target User'
+    });
+    assert.strictEqual(assignRes.status, 201);
+    const assignId = assignRes.data.ID;
+
+    // Verify CREATE audit log entry
+    const createLogs = await db.run(SELECT.from(AuditLogs).where({ entityName: 'RoleAssignments', action: 'CREATE', recordId: assignId }));
+    assert.strictEqual(createLogs.length, 1, 'Audit log entry should exist for RoleAssignments CREATE');
+    assert.strictEqual(createLogs[0].targetName, 'Audit Target User');
+
+    // 2. Delete role assignment
+    await DELETE(`/odata/v4/auth/RoleAssignments('${assignId}')`);
+
+    // Verify DELETE audit log entry
+    const deleteLogs = await db.run(SELECT.from(AuditLogs).where({ entityName: 'RoleAssignments', action: 'DELETE', recordId: assignId }));
+    assert.strictEqual(deleteLogs.length, 1, 'Audit log entry should exist for RoleAssignments DELETE');
+
+    // Clean up
+    await db.run(cds.ql.DELETE(Roles).where({ ID: roleId }));
+    await db.run(cds.ql.DELETE(AuditLogs).where({ recordId: assignId }));
+  });
+
 });
+
+
 

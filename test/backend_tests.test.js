@@ -258,12 +258,42 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
   // 2. generateOrgRole and generateAllOrgRoles
   await t.test('generateOrgRole and generateAllOrgRoles actions', async () => {
-    // Find a Plant-type node (node-de01) — the OTC domain covers Plant + Department
+    // Dynamically register AccessDomain & AccessDomainField for test in SQLite memory without editing CSV files
+    try {
+      await cds.db.run(
+        INSERT.into('fanrio.auth.AccessDomains').entries({
+          ID: 'domain-otc',
+          name: 'OTC',
+          description: 'Order to Cash',
+          roleTemplateName: 'ZOTC_{Plant}'
+        })
+      );
+    } catch { /* already inserted */ }
+    try {
+      await cds.db.run(
+        INSERT.into('fanrio.auth.AccessDomainFields').entries({
+          ID: 'adf-otc-plant-test',
+          domain_ID: 'domain-otc',
+          field_ID: '21b04295-a01f-40d2-b282-74ee3adcb01d'
+        })
+      );
+    } catch { /* already inserted */ }
+
     const nodesRes = await GET('/odata/v4/auth/OrgNodes');
     assert.strictEqual(nodesRes.status, 200);
-    // The seed has node-de01 (DE01) which has type_ID = Plant, matched by the OTC domain
-    const plantNode = nodesRes.data.value.find(n => n.name === 'DE01');
-    assert.ok(plantNode, 'Plant node DE01 must exist in test seed');
+
+    // Dynamically look up or insert test Plant node matching adf-otc-plant (21b04295-a01f-40d2-b282-74ee3adcb01d)
+    let plantNode = nodesRes.data.value.find(n => n.type_ID === '21b04295-a01f-40d2-b282-74ee3adcb01d');
+    if (!plantNode) {
+      const testNodeId = 'test-node-de01-plant';
+      await cds.db.run(INSERT.into('fanrio.auth.OrgNodes').entries({
+        ID: testNodeId,
+        name: 'DE01',
+        type_ID: '21b04295-a01f-40d2-b282-74ee3adcb01d'
+      })).catch(() => {});
+      plantNode = { ID: testNodeId, name: 'DE01' };
+    }
+    assert.ok(plantNode, 'Plant node DE01 must exist for test');
 
     // Call generateOrgRole — should produce at least the ALL role (ZOTC_DE01_ALL)
     const genRes = await POST('/odata/v4/auth/generateOrgRole', { orgNodeId: plantNode.ID });
@@ -271,8 +301,8 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.ok(genRes.data.roleId, 'roleId should be set when a matching domain exists');
     assert.ok(genRes.data.roleName, 'roleName should be set when a matching domain exists');
     assert.ok(
-      genRes.data.roleName.startsWith('ZOTC_DE01'),
-      `Role name should start with ZOTC_DE01, got: ${genRes.data.roleName}`
+      genRes.data.roleName.startsWith(`ZOTC_${plantNode.name}`),
+      `Role name should start with ZOTC_${plantNode.name}, got: ${genRes.data.roleName}`
     );
 
     // Call generateOrgRole on non-existent OrgNode (should return 404)
@@ -616,17 +646,38 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
   // 6. OData Mock BDC API connectors (fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns)
   await t.test('fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns OData actions', async () => {
-    // fetchBdcSpaces
+    // Create a mock BDC connection for these tests
+    const mockConn = await POST('/odata/v4/auth/BdcSettings', {
+      systemName: 'TEST_BDC_API_CONN',
+      connectionType: 'OData',
+      url: 'https://mock-url.com',
+      tokenUrl: 'https://mock-url.com/token',
+      clientId: 'client',
+      clientSecret: 'secret',
+      space: 'mock-space-1',
+      authType: 'OAUTH',
+      isActive: true
+    });
+    const connId = mockConn.data.ID;
+
+    // fetchBdcSpaces via connectionId
     const spacesRes = await POST('/odata/v4/auth/fetchBdcSpaces', {
+      connectionId: connId
+    });
+    assert.strictEqual(spacesRes.status, 200);
+    assert.ok(spacesRes.data.value.includes('mock-space-1'));
+
+    // fetchBdcSpaces via direct credentials (dual signature for settings creation flow)
+    const spacesDirectRes = await POST('/odata/v4/auth/fetchBdcSpaces', {
       url: 'https://mock-url.com',
       tokenUrl: 'https://mock-url.com/token',
       clientId: 'client',
       clientSecret: 'secret'
     });
-    assert.strictEqual(spacesRes.status, 200);
-    assert.ok(spacesRes.data.value.includes('mock-space-1'));
+    assert.strictEqual(spacesDirectRes.status, 200);
+    assert.ok(spacesDirectRes.data.value.includes('mock-space-1'));
 
-    // fetchBdcSpaces validation error (should throw 400)
+    // fetchBdcSpaces validation error (should throw 400 — neither connectionId nor full direct creds)
     await assertODataError(
       POST('/odata/v4/auth/fetchBdcSpaces', { url: 'https://mock-url.com' }),
       400
@@ -644,27 +695,20 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchBdcAssets
     const assetsRes = await POST('/odata/v4/auth/fetchBdcAssets', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
-      space: 'mock-space-1'
+      connectionId: connId
     });
     assert.strictEqual(assetsRes.status, 200);
     assert.ok(assetsRes.data.value.includes('mock-asset-1'));
 
-    // fetchBdcAssets missing params error (should throw 400)
+    // fetchBdcAssets missing connectionId error (should throw 400)
     await assertODataError(
-      POST('/odata/v4/auth/fetchBdcAssets', { url: 'https://mock-url.com' }),
+      POST('/odata/v4/auth/fetchBdcAssets', {}),
       400
     );
 
     // fetchBdcRelationalValues
     const relRes = await POST('/odata/v4/auth/fetchBdcRelationalValues', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       asset: 'mock-asset-1',
       idColumns: JSON.stringify(['id']),
@@ -675,10 +719,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchBdcRelationalValues with joined Asset Text
     const relJoinRes = await POST('/odata/v4/auth/fetchBdcRelationalValues', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       asset: 'mock-asset-1',
       assetText: 'mock-asset-text-1',
@@ -687,7 +728,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.strictEqual(relJoinRes.status, 200);
     assert.ok(relJoinRes.data.value.length > 0);
 
-    // fetchBdcRelationalValues missing params error (should throw 400)
+    // fetchBdcRelationalValues missing connectionId error (should throw 400)
     await assertODataError(
       POST('/odata/v4/auth/fetchBdcRelationalValues', {}),
       400
@@ -695,37 +736,48 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchBdcAssetColumns
     const colsRes = await POST('/odata/v4/auth/fetchBdcAssetColumns', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       asset: 'mock-asset-1'
     });
     assert.strictEqual(colsRes.status, 200);
     assert.ok(colsRes.data.value.includes('id'));
 
-    // fetchBdcAssetColumns missing params error (should throw 400)
+    // fetchBdcAssetColumns missing connectionId error (should throw 400)
     await assertODataError(
       POST('/odata/v4/auth/fetchBdcAssetColumns', {}),
       400
     );
+
+    // Clean up
+    await DELETE(`/odata/v4/auth/BdcSettings(ID=${connId})`);
   });
 
   // 7. Raw BDC Adapters
   await t.test('fetchRawBdcSpaces, fetchRawBdcAssets, fetchRawBdcRelationalValues, fetchRawBdcAssetColumns, fetchRawHanaViews actions', async () => {
-    // fetchRawBdcSpaces
-    const rawSpaces = await POST('/odata/v4/auth/fetchRawBdcSpaces', {
+    // Create a mock BDC connection for these tests
+    const mockConn = await POST('/odata/v4/auth/BdcSettings', {
+      systemName: 'TEST_RAW_BDC_CONN',
+      connectionType: 'OData',
       url: 'https://mock-url.com',
       tokenUrl: 'https://mock-url.com/token',
       clientId: 'client',
-      clientSecret: 'secret'
+      clientSecret: 'secret',
+      space: 'mock-space-1',
+      authType: 'OAUTH',
+      isActive: true
+    });
+    const connId = mockConn.data.ID;
+
+    // fetchRawBdcSpaces
+    const rawSpaces = await POST('/odata/v4/auth/fetchRawBdcSpaces', {
+      connectionId: connId
     });
     assert.strictEqual(rawSpaces.status, 200);
     const spacesData = JSON.parse(rawSpaces.data.value);
     assert.strictEqual(spacesData[0].id, 'mock-space-1');
 
-    // fetchRawBdcSpaces missing params
+    // fetchRawBdcSpaces missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/fetchRawBdcSpaces', {}),
       400
@@ -733,16 +785,13 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchRawBdcAssets
     const rawAssets = await POST('/odata/v4/auth/fetchRawBdcAssets', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret'
+      connectionId: connId
     });
     assert.strictEqual(rawAssets.status, 200);
     const assetsData = JSON.parse(rawAssets.data.value);
     assert.strictEqual(assetsData[0].id, 'mock-asset-1');
 
-    // fetchRawBdcAssets missing params
+    // fetchRawBdcAssets missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/fetchRawBdcAssets', {}),
       400
@@ -750,10 +799,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchRawBdcRelationalValues
     const rawRel = await POST('/odata/v4/auth/fetchRawBdcRelationalValues', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       asset: 'mock-asset-1'
     });
@@ -761,7 +807,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     const relData = JSON.parse(rawRel.data.value);
     assert.ok(relData.value);
 
-    // fetchRawBdcRelationalValues missing params
+    // fetchRawBdcRelationalValues missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/fetchRawBdcRelationalValues', {}),
       400
@@ -769,21 +815,21 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchRawBdcAssetColumns
     const rawCols = await POST('/odata/v4/auth/fetchRawBdcAssetColumns', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       asset: 'mock-asset-1'
     });
     assert.strictEqual(rawCols.status, 200);
     assert.ok(rawCols.data.value.includes('<EntityType'));
 
-    // fetchRawBdcAssetColumns missing params
+    // fetchRawBdcAssetColumns missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/fetchRawBdcAssetColumns', {}),
       400
     );
+
+    // Clean up OData connection
+    await DELETE(`/odata/v4/auth/BdcSettings(ID=${connId})`);
 
     // fetchRawHanaViews
     const hanaSetting = await POST('/odata/v4/auth/BdcSettings', {
@@ -825,12 +871,23 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
   // 9. runBdcTaskChain and fetchBdcTaskChainLog
   await t.test('runBdcTaskChain and fetchBdcTaskChainLog actions', async () => {
-    // runBdcTaskChain
-    const runRes = await POST('/odata/v4/auth/runBdcTaskChain', {
+    // Create a mock BDC connection for these tests
+    const mockConn = await POST('/odata/v4/auth/BdcSettings', {
+      systemName: 'TEST_TASKCHAIN_CONN',
+      connectionType: 'OData',
       url: 'https://mock-url.com',
       tokenUrl: 'https://mock-url.com/token',
       clientId: 'client',
       clientSecret: 'secret',
+      space: 'mock-space-1',
+      authType: 'OAUTH',
+      isActive: true
+    });
+    const connId = mockConn.data.ID;
+
+    // runBdcTaskChain
+    const runRes = await POST('/odata/v4/auth/runBdcTaskChain', {
+      connectionId: connId,
       space: 'mock-space-1',
       taskChainId: 'mock-chain-1'
     });
@@ -838,7 +895,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     const runData = JSON.parse(runRes.data.value);
     assert.strictEqual(runData.status, 'RUNNING');
 
-    // runBdcTaskChain missing params
+    // runBdcTaskChain missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/runBdcTaskChain', {}),
       400
@@ -846,10 +903,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
     // fetchBdcTaskChainLog
     const logRes = await POST('/odata/v4/auth/fetchBdcTaskChainLog', {
-      url: 'https://mock-url.com',
-      tokenUrl: 'https://mock-url.com/token',
-      clientId: 'client',
-      clientSecret: 'secret',
+      connectionId: connId,
       space: 'mock-space-1',
       logId: 'mock-log-1'
     });
@@ -857,11 +911,14 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     const logData = JSON.parse(logRes.data.value);
     assert.strictEqual(logData.status, 'RUNNING');
 
-    // fetchBdcTaskChainLog missing params
+    // fetchBdcTaskChainLog missing connectionId
     await assertODataError(
       POST('/odata/v4/auth/fetchBdcTaskChainLog', {}),
       400
     );
+
+    // Clean up
+    await DELETE(`/odata/v4/auth/BdcSettings(ID=${connId})`);
   });
 
   // 10. Replications & Replication Status Trigger checks

@@ -1,2 +1,2 @@
 ID,name,description,type_ID,parent_ID,createdAt,createdBy,modifiedAt,modifiedBy,roleTemplateName
-domain-otc,OTC,Order-to-Cash access domain,,,2024-01-01T00:00:00Z,seed,2024-01-01T00:00:00Z,seed,ZOTC_{Plant}_{Department}
+17117151-5875-4f2b-a0d8-823f0addafe7,SAL_CON,Sales Controlling,,,2026-07-24T19:13:54.673Z,admin,2026-07-24T19:13:54.673Z,admin,ZCON_{CompanyCode}_{SalesOrganization}_SALES_CONTROLLING

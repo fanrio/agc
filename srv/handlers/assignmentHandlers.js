@@ -15,12 +15,50 @@
  * @param {object} entities - { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs }
  * @param {{ cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions }} deps
  */
-const { getUserId, getSessionPermissions, requirePermission, requireEnvironment } = require('../lib/authGuard');
+const { getUserId, getSessionPermissions, requirePermission, requireEnvironment, filterAssignableRolesByBackendPermissions } = require('../lib/authGuard');
 const { fetchRoleAncestryChain } = require('../services/hanaReplicationService');
 
 function registerAssignmentHandlers(service, entities, deps) {
   const { cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions } = deps;
   const { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs, RoleApprovers, AppAuthorizations } = entities;
+
+  // -------------------------------------------------------------------------
+  // RoleAssignments READ filtering
+  // -------------------------------------------------------------------------
+  service.on('READ', 'RoleAssignments', async (req, next) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    const result = await next();
+    if (perms.isSuperAdmin) return result;
+
+    const currentUserId = getUserId(req);
+
+    // Fetch all roles to evaluate authorization scope in backend
+    const allRoles = await cds.db.run(SELECT.from(Roles));
+    const inheritances = await cds.db.run(SELECT.from(RoleInheritance));
+    const allowedRoleIds = new Set(
+      filterAssignableRolesByBackendPermissions(allRoles || [], perms, inheritances).map(r => r.ID)
+    );
+
+    const filterAssignment = (a) => {
+      if (!a) return false;
+      // Requirement 1: Users can ALWAYS see all roles assigned to themselves
+      const isSelfAssignment = a.userId && String(a.userId).toLowerCase() === String(currentUserId).toLowerCase();
+      if (isSelfAssignment) return true;
+
+      // Requirement 2: Users can see assignments for roles they are authorized to manage/assign
+      const roleId = a.role_ID || a.role?.ID;
+      if (roleId && allowedRoleIds.has(roleId)) return true;
+
+      return false;
+    };
+
+    if (Array.isArray(result)) {
+      return result.filter(filterAssignment);
+    } else if (result && typeof result === 'object') {
+      return filterAssignment(result) ? result : null;
+    }
+    return result;
+  });
 
   // -------------------------------------------------------------------------
   // RoleAssignments CRUD protection
@@ -69,10 +107,10 @@ function registerAssignmentHandlers(service, entities, deps) {
       }
 
       // If user has authorization to manage derived roles ONLY, they can only assign derived roles, not parent roles
-      if (!perms.canManageSingleRoles) {
+      if (!perms.canManageSingleRoles && !perms.canManageOrgRoles) {
         if (req.event === 'CREATE' || req.event === 'UPDATE') {
           if (role && role.type !== 'DERIVED') {
-            req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');
+            return req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');
           }
         }
       }
@@ -107,48 +145,45 @@ function registerAssignmentHandlers(service, entities, deps) {
 
 
   // -------------------------------------------------------------------------
-  // HANA sync + replication queue — after CREATE (first handler registered)
+  // HANA sync, replication queue & Audit Log — after CREATE
   // -------------------------------------------------------------------------
   service.after('CREATE', 'RoleAssignments', async (assignment, req) => {
-    // Read role_ID from req.data — the `assignment` result object may not carry association
-    // FK fields (role_ID) depending on CAP version / OData projection behaviour.
     const roleId = req.data?.role_ID || assignment.role_ID;
     const assignmentId = assignment.ID || req.data?.ID;
     const userId = assignment.userId || req.data?.userId;
+    const userName = assignment.userName || req.data?.userName || userId;
+    const actorUser = getUserId(req);
 
-    // Run HANA sync and queue replication in background to prevent blocking HTTP thread
-    cds.spawn({ user: req?.user }, async () => {
-      try {
-        await syncAssignmentToHana(assignmentId, userId, roleId, false);
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-        if (role) await queueReplication(role.name, role.environment_ID, req?.user?.id);
-      } catch (err) {
-        console.error('[AssignmentHandlers] Background sync/replication failed for RoleAssignments CREATE:', err.message);
-      }
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Audit log — after CREATE (second handler registered)
-  // -------------------------------------------------------------------------
-  service.after('CREATE', 'RoleAssignments', async (assignment) => {
+    // Audit log insertion
     try {
       let roleName = undefined;
-      if (assignment.role_ID) {
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
+      if (roleId) {
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
         if (role) roleName = role.name;
       }
       await cds.db.run(INSERT.into(AuditLogs).entries({
         ID:         cds.utils.uuid(),
         entityName: 'RoleAssignments',
         action:     'CREATE',
-        recordId:   assignment.ID,
-        targetName: assignment.userName || assignment.userId,
-        details:    JSON.stringify({ ...assignment, roleName })
+        recordId:   assignmentId,
+        targetName: userName || userId || 'Unknown User',
+        createdBy:  actorUser,
+        details:    JSON.stringify({ ID: assignmentId, role_ID: roleId, userId, userName, roleName })
       }));
     } catch (err) {
       console.error('[AssignmentHandlers] Audit Log failed for RoleAssignments CREATE:', err.message);
     }
+
+    // Run HANA sync and queue replication in background to prevent blocking HTTP thread
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        await syncAssignmentToHana(assignmentId, userId, roleId, false);
+        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+        if (role) await queueReplication(role.name, role.environment_ID, actorUser);
+      } catch (err) {
+        console.error('[AssignmentHandlers] Background sync/replication failed for RoleAssignments CREATE:', err.message);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -202,6 +237,7 @@ function registerAssignmentHandlers(service, entities, deps) {
           action:     'UPDATE',
           recordId:   id,
           targetName: afterState?.userName || afterState?.userId || beforeState?.userName || beforeState?.userId || 'Unknown User',
+          createdBy:  getUserId(req),
           details:    JSON.stringify({ ...diff, roleName })
         }));
       }
@@ -223,7 +259,7 @@ function registerAssignmentHandlers(service, entities, deps) {
   // HANA sync + audit log — before DELETE
   // -------------------------------------------------------------------------
   service.before('DELETE', 'RoleAssignments', async (req) => {
-    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data.ID;
+    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data?.ID;
     if (!id) return;
 
     let targetUserId = null;
@@ -246,6 +282,7 @@ function registerAssignmentHandlers(service, entities, deps) {
           action:     'DELETE',
           recordId:   id,
           targetName: assignment.userName || assignment.userId,
+          createdBy:  getUserId(req),
           details:    JSON.stringify({
             ...assignment,
             roleName: role ? role.name : undefined

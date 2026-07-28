@@ -1,4 +1,5 @@
-const { getSessionPermissions } = require('../lib/authGuard');
+const { getSessionPermissions, isRoleInScope } = require('../lib/authGuard');
+const { filterRolesByBackendPermissions } = require('../lib/authGuard');
 
 async function getDashboardKpis(req, cds) {
   const db = cds.db;
@@ -18,98 +19,124 @@ async function getDashboardKpis(req, cds) {
   // 1. Fetch permissions
   const permissions = await getSessionPermissions(req, db, AppAuthorizations);
 
-  // 2. Fetch all required tables in parallel
+  // 2. Fetch required tables and SQL aggregate queries in parallel
   const [
     allRoles,
     allRestrictions,
     allInheritances,
     allApprovers,
     allAssignments,
-    allNodes,
-    allAccessDomains,
     allFields,
-    allBdcSettings
+    nodeCountRes,
+    domainCountRes,
+    fieldCountRes,
+    bdcCountRes,
+    groupedNodesRes
   ] = await Promise.all([
-    db.run(SELECT.from(Roles)),
+    db.run(SELECT.from(Roles).columns(e => {
+      e('*')
+      e.parentRoles(p => p.parent_ID) //expand composition, but only select 'parent_ID'
+      e.approvers(a => a.userId)
+    })),
     db.run(SELECT.from(Restrictions)),
     db.run(SELECT.from(RoleInheritance)),
     db.run(SELECT.from(RoleApprovers)),
     db.run(SELECT.from(RoleAssignments)),
-    db.run(SELECT.from(OrgNodes)),
-    db.run(SELECT.from(AccessDomains)),
     db.run(SELECT.from(RestrictionFields)),
-    db.run(SELECT.from(BdcSettings))
+    db.run(SELECT.one.from(OrgNodes).columns('count(*) as count')),
+    db.run(SELECT.one.from(AccessDomains).columns('count(*) as count')),
+    db.run(SELECT.one.from(RestrictionFields).columns('count(*) as count')),
+    db.run(SELECT.one.from(BdcSettings).columns('count(*) as count')),
+    db.run(SELECT.from(OrgNodes).columns('type_ID', 'count(*) as count').groupBy('type_ID'))
   ]);
 
-  // Stitch node type association in memory
-  allNodes.forEach(node => {
-    node.type = allFields.find(f => f.ID === node.type_ID);
+
+  // Map SQL aggregate count results
+  const fieldsMap = new Map(allFields.map(f => [f.ID, f.name]));
+  const nodeTypeCounts = {};
+  (groupedNodesRes || []).filter(row => row.type_ID !== null)
+    .forEach(row => {
+      const typeName = fieldsMap.get(row.type_ID);
+      nodeTypeCounts[typeName] = (nodeTypeCounts[typeName] || 0) + Number(row.count || 0);
+    });
+
+  // Pre-index child collections by role_ID in O(N) single pass
+  const ownRestrictionsCountMap = new Map();
+  allRestrictions.forEach(r => {
+    ownRestrictionsCountMap.set(r.role_ID, (ownRestrictionsCountMap.get(r.role_ID) || 0) + 1);
   });
 
-  // 3. Stitch roles in memory
-  const stitchedRoles = allRoles.map(role => {
-    return {
-      ...role,
-      ownRestrictions: allRestrictions.filter(r => r.role_ID === role.ID),
-      assignments: allAssignments.filter(a => a.role_ID === role.ID),
-      approvers: allApprovers.filter(a => a.role_ID === role.ID),
-      parentRoles: allInheritances.filter(ri => ri.role_ID === role.ID).map(ri => {
-        const parent = allRoles.find(r => r.ID === ri.parent_ID);
-        return {
-          ...ri,
-          parent
-        };
-      })
-    };
+  const approversCountMap = new Map();
+  const userApproverRoleIds = new Set();
+  const currentUserIdLower = String(permissions.userId || '').toLowerCase();
+  allApprovers.forEach(a => {
+    approversCountMap.set(a.role_ID, (approversCountMap.get(a.role_ID) || 0) + 1);
+    if (a.userId && String(a.userId).toLowerCase() === currentUserIdLower) {
+      userApproverRoleIds.add(a.role_ID);
+    }
   });
 
-  // 4. Apply backend filtering matching frontend filterRolesByPermissions
-  const filteredRoles = filterRolesByPermissions(stitchedRoles, permissions, allInheritances);
+  const assignmentsByRoleMap = new Map();
+  allAssignments.forEach(a => {
+    if (!assignmentsByRoleMap.has(a.role_ID)) assignmentsByRoleMap.set(a.role_ID, []);
+    assignmentsByRoleMap.get(a.role_ID).push(a);
+  });
 
-  // 4b. Filter assignments to only those for roles within the user's scope
-  const filteredAssignments = allAssignments.filter(a => filteredRoles.some(r => r.ID === a.role_ID));
+  const inheritancesByRoleMap = new Map();
+  allInheritances.forEach(ri => {
+    if (!inheritancesByRoleMap.has(ri.role_ID)) inheritancesByRoleMap.set(ri.role_ID, []);
+    inheritancesByRoleMap.get(ri.role_ID).push(ri);
+  });
 
-  // 5. Calculate unique users
-  const uniqueUsers = new Set(filteredAssignments.map(a => a.userId));
-
-  // 6. Calculate unique users with critical roles
-  const usersWithCritical = new Set(
-    filteredAssignments
-      .filter(a => {
-        const role = filteredRoles.find(r => r.ID === a.role_ID);
-        return role && role.critical;
-      })
-      .map(a => a.userId)
+  const rolesMap = new Map(allRoles.map(r => [r.ID, r]));
+  // 3. Filter roles by permissions in O(N) linear time
+  const filteredRoles = filterRolesByBackendPermissions(
+    allRoles,
+    permissions,
+    inheritancesByRoleMap,
+    rolesMap,
+    userApproverRoleIds
   );
 
-  // 7. Group org nodes by type
-  const nodeTypeCounts = {};
-  allNodes.forEach(node => {
-    const type = node.type?.name || 'UNKNOWN';
-    nodeTypeCounts[type] = (nodeTypeCounts[type] || 0) + 1;
-  });
 
-  // 8. Count roles with missing attributes (among filtered roles)
+
+  // 4. Calculate assignments and users for in-scope roles in single pass
+  const uniqueUsers = new Set();
+  const usersWithCritical = new Set();
+  let totalFilteredAssignments = 0;
   let rolesWithoutRestriction = 0;
   let rolesWithoutApprover = 0;
   let rolesWithoutAssignment = 0;
   let criticalRoles = 0;
 
   filteredRoles.forEach(role => {
-    if (!role.ownRestrictions || role.ownRestrictions.length === 0) {
-      rolesWithoutRestriction++;
-    }
-    if (!role.approvers || role.approvers.length === 0) {
-      rolesWithoutApprover++;
-    }
-    if (!role.assignments || role.assignments.length === 0) {
-      rolesWithoutAssignment++;
-    }
+    const hasRestrictions = (ownRestrictionsCountMap.get(role.ID) || 0) > 0;
+    const hasApprovers = (approversCountMap.get(role.ID) || 0) > 0;
+    const roleAssignments = assignmentsByRoleMap.get(role.ID) || [];
+    const hasAssignments = roleAssignments.length > 0;
+
+    if (!hasRestrictions) rolesWithoutRestriction++;
+    if (!hasApprovers) rolesWithoutApprover++;
+    if (!hasAssignments) rolesWithoutAssignment++;
+
     if (role.critical) {
       criticalRoles++;
     }
+
+    totalFilteredAssignments += roleAssignments.length;
+    roleAssignments.forEach(a => {
+      uniqueUsers.add(a.userId);
+      if (role.critical) {
+        usersWithCritical.add(a.userId);
+      }
+    });
   });
 
+  // Calculate health score
+  const total = filteredRoles.length;
+  const penalty = rolesWithoutRestriction * 40 + rolesWithoutApprover * 40 + rolesWithoutAssignment * 20;
+  const healthScore = total ? Math.max(0, Math.round(100 - (penalty / total))) : 100;
+  console.log(nodeCountRes);
   return {
     roleCount: filteredRoles.length,
     rolesWithoutRestriction,
@@ -117,36 +144,18 @@ async function getDashboardKpis(req, cds) {
     rolesWithoutAssignment,
     criticalRoles,
     usersWithCritical: usersWithCritical.size,
-    nodeCount: allNodes.length,
+    healthScore,
+    nodeCount: Number(nodeCountRes?.count || 0),
     nodeTypeCounts,
-    assignmentCount: filteredAssignments.length,
+    assignmentCount: totalFilteredAssignments,
     userCount: uniqueUsers.size,
-    accessDomainCount: allAccessDomains.length,
-    fieldCount: allFields.length,
-    bdcCount: allBdcSettings.length
+    accessDomainCount: Number(domainCountRes?.count || 0),
+    fieldCount: Number(fieldCountRes?.count || 0),
+    bdcCount: Number(bdcCountRes?.count || 0)
   };
 }
 
-function isRoleInScope(roleId, roleName, scope) {
-  if (!scope || scope === 'ALL' || scope === '*') return true;
-  try {
-    const parsed = JSON.parse(scope);
-    if (Array.isArray(parsed)) {
-      const lowerId = (roleId || '').toLowerCase();
-      const lowerName = (roleName || '').toLowerCase();
-      return parsed.some(term => {
-        const lowerTerm = String(term).toLowerCase();
-        return lowerId === lowerTerm || lowerName === lowerTerm;
-      });
-    }
-  } catch (e) {
-    const terms = scope.split(',').map(s => s.trim().toLowerCase());
-    return terms.includes((roleId || '').toLowerCase()) || terms.includes((roleName || '').toLowerCase());
-  }
-  return false;
-}
-
-function filterRolesByPermissions(roles, permissions, roleInheritances) {
+function filterRolesByPermissions(roles, permissions, inheritancesByRoleMap, rolesMap, userApproverRoleIds) {
   if (!roles) return [];
   if (!permissions) return roles;
   if (permissions.isSuperAdmin) return roles;
@@ -178,8 +187,7 @@ function filterRolesByPermissions(roles, permissions, roleInheritances) {
   const allowedAccessDomains = parseAccessDomains(permissions.allowedAccessDomains);
 
   return roles.filter(role => {
-    const isApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase());
-    if (isApprover) return true;
+    if (userApproverRoleIds.has(role.ID)) return true;
 
     // Environment and Access Domain scope restrictions
     if (allowedEnvs !== 'ALL') {
@@ -214,11 +222,11 @@ function filterRolesByPermissions(roles, permissions, roleInheritances) {
     if (role.type === 'DERIVED') {
       if (!permissions.canManageDerivedRoles) return false;
       const scope = permissions.managedDerivedRolesScope;
-      
-      const parentInheritances = roleInheritances.filter(ri => ri.role_ID === role.ID);
+
+      const parentInheritances = inheritancesByRoleMap.get(role.ID) || [];
       const hasParentInScope = parentInheritances.some(ri => {
         const parentId = ri.parent_ID;
-        const parentRole = roles.find(r => r.ID === parentId);
+        const parentRole = rolesMap.get(parentId);
         return isRoleInScope(parentId, parentRole?.name, scope);
       });
       return hasParentInScope;

@@ -15,6 +15,9 @@
  *   - fetchBdcTaskChainLog
  *   - searchLdapUsers
  *
+ * Security: All handlers resolve connection credentials from BdcSettings in the DB
+ * using the connectionId passed by the frontend. Credentials are NEVER sent by the frontend.
+ *
  * Previously embedded in authorization-service.js (L455-841, L1094-1121, L563-585).
  * F-03 fix: credential console.log removed from testBdcConnection.
  */
@@ -25,7 +28,23 @@ const { isMockUrl } = require('../lib/urlUtils');
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-
+/**
+ * Load a BdcSettings connection from DB by its ID.
+ * Returns the setting row or calls req.error(404) and returns null.
+ */
+async function _loadConnection(cds, entities, connectionId, req) {
+  if (!connectionId) {
+    req.error(400, 'Missing connectionId');
+    return null;
+  }
+  const { BdcSettings } = entities;
+  const setting = await cds.db.run(SELECT.one.from(BdcSettings).where({ ID: connectionId }));
+  if (!setting) {
+    req.error(404, `BDC Connection with ID ${connectionId} not found`);
+    return null;
+  }
+  return setting;
+}
 
 // ---------------------------------------------------------------------------
 // Handler factories
@@ -95,10 +114,24 @@ function makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient) {
   };
 }
 
-function makeFetchBdcSpacesHandler(BdcClient) {
+function makeFetchBdcSpacesHandler(cds, entities, BdcClient) {
   return async function fetchBdcSpacesHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    const { connectionId, url: directUrl, tokenUrl: directTokenUrl, clientId: directClientId, clientSecret: directClientSecret } = req.data;
+
+    let url, tokenUrl, clientId, clientSecret;
+
+    if (connectionId) {
+      // Preferred path: load credentials from DB
+      const conn = await _loadConnection(cds, entities, connectionId, req);
+      if (!conn) return;
+      url = conn.url; tokenUrl = conn.tokenUrl; clientId = conn.clientId; clientSecret = conn.clientSecret;
+    } else if (directUrl && directTokenUrl && directClientId && directClientSecret) {
+      // Fallback: direct credentials (used during BdcSettings creation before save)
+      url = directUrl; tokenUrl = directTokenUrl; clientId = directClientId; clientSecret = directClientSecret;
+    } else {
+      return req.error(400, 'Missing connectionId or direct credentials (url, tokenUrl, clientId, clientSecret)');
+    }
+
     try {
       return BdcClient.fetchSpaces(url, tokenUrl, clientId, clientSecret);
     } catch (e) {
@@ -107,12 +140,13 @@ function makeFetchBdcSpacesHandler(BdcClient) {
   };
 }
 
-function makeFetchBdcAssetsHandler(BdcClient) {
+function makeFetchBdcAssetsHandler(cds, entities, BdcClient) {
   return async function fetchBdcAssetsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    const { connectionId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
     try {
-      const { assetsList } = await BdcClient.fetchAssets(url, tokenUrl, clientId, clientSecret, space);
+      const { assetsList } = await BdcClient.fetchAssets(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, conn.space);
       return assetsList;
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
@@ -120,12 +154,24 @@ function makeFetchBdcAssetsHandler(BdcClient) {
   };
 }
 
-function makeFetchBdcRelationalValuesHandler(BdcClient) {
+function makeFetchBdcRelationalValuesHandler(cds, entities, BdcClient) {
   return async function fetchBdcRelationalValuesHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset, assetText, idColumns, textColumn } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    const { connectionId, space, asset, assetText, idColumns, textColumn } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!asset) return req.error(400, 'Missing asset');
+
+    const effectiveSpace = space || conn.space;
+    const url = conn.url;
+    const tokenUrl = conn.tokenUrl;
+    const clientId = conn.clientId;
+    const clientSecret = conn.clientSecret;
+
     try {
-      const { rawData, assetRecords, assetTextRecords } = await BdcClient.fetchRelationalValues(req.data);
+      const { rawData, assetRecords, assetTextRecords } = await BdcClient.fetchRelationalValues({
+        url, tokenUrl, clientId, clientSecret,
+        space: effectiveSpace, asset, assetText, idColumns, textColumn
+      });
 
       if (isMockUrl(url)) {
         const mockRows = [
@@ -144,7 +190,7 @@ function makeFetchBdcRelationalValuesHandler(BdcClient) {
       let resolvedKeyCols = [];
       try {
         const accessToken = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-        resolvedKeyCols = await BdcClient.fetchAssetKeyColumns(url, accessToken, space, asset);
+        resolvedKeyCols = await BdcClient.fetchAssetKeyColumns(url, accessToken, effectiveSpace, asset);
       } catch (err) {
         console.error(`Failed to automatically resolve key columns for asset ${asset}:`, err.message);
       }
@@ -163,25 +209,29 @@ function makeFetchBdcRelationalValuesHandler(BdcClient) {
   };
 }
 
-function makeFetchBdcAssetColumnsHandler(BdcClient) {
+function makeFetchBdcAssetColumnsHandler(cds, entities, BdcClient) {
   return async function fetchBdcAssetColumnsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    const { connectionId, space, asset } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!asset) return req.error(400, 'Missing asset');
+    const effectiveSpace = space || conn.space;
     try {
-      return BdcClient.fetchAssetColumns(url, tokenUrl, clientId, clientSecret, space, asset);
+      return BdcClient.fetchAssetColumns(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, effectiveSpace, asset);
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
   };
 }
 
-function makeFetchRawBdcSpacesHandler(BdcClient) {
+function makeFetchRawBdcSpacesHandler(cds, entities, BdcClient) {
   return async function fetchRawBdcSpacesHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    const { connectionId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
     try {
-      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
+      const token = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      const endpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/spaces`;
       const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Spaces request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
@@ -191,13 +241,14 @@ function makeFetchRawBdcSpacesHandler(BdcClient) {
   };
 }
 
-function makeFetchRawBdcAssetsHandler(BdcClient) {
+function makeFetchRawBdcAssetsHandler(cds, entities, BdcClient) {
   return async function fetchRawBdcAssetsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    const { connectionId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
     try {
-      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
+      const token = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      const endpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/catalog/assets`;
       const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Assets request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
@@ -207,14 +258,17 @@ function makeFetchRawBdcAssetsHandler(BdcClient) {
   };
 }
 
-function makeFetchRawBdcRelationalValuesHandler(BdcClient) {
+function makeFetchRawBdcRelationalValuesHandler(cds, entities, BdcClient) {
   return async function fetchRawBdcRelationalValuesHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    const { connectionId, space, asset } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!asset) return req.error(400, 'Missing asset');
+    const effectiveSpace = space || conn.space;
     try {
-      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim(); const a = asset.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`;
+      const token = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      const s = effectiveSpace.trim(); const a = asset.trim();
+      const endpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/${a}`;
       const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
       if (!res.ok) throw new Error(`Relational Values request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return JSON.stringify(await res.json(), null, 2);
@@ -224,14 +278,17 @@ function makeFetchRawBdcRelationalValuesHandler(BdcClient) {
   };
 }
 
-function makeFetchRawBdcAssetColumnsHandler(BdcClient) {
+function makeFetchRawBdcAssetColumnsHandler(cds, entities, BdcClient) {
   return async function fetchRawBdcAssetColumnsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    const { connectionId, space, asset } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!asset) return req.error(400, 'Missing asset');
+    const effectiveSpace = space || conn.space;
     try {
-      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const s = space.trim(); const a = asset.trim();
-      const endpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
+      const token = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      const s = effectiveSpace.trim(); const a = asset.trim();
+      const endpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
       const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/xml, application/json' } });
       if (!res.ok) throw new Error(`Asset Columns Metadata request failed: ${res.status} [Endpoint: ${endpoint}]`);
       return res.text();
@@ -241,16 +298,16 @@ function makeFetchRawBdcAssetColumnsHandler(BdcClient) {
   };
 }
 
-function makeFetchBdcAssociationsHandler(BdcClient) {
+function makeFetchBdcAssociationsHandler(cds, entities, BdcClient) {
   return async function fetchBdcAssociationsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || space === undefined || asset === undefined) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
-    }
-    const s = space ? space.trim() : '';
+    const { connectionId, space, asset } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    const effectiveSpace = space || conn.space;
+    const s = effectiveSpace ? effectiveSpace.trim() : '';
     const a = asset ? asset.trim() : '';
 
-    if (isMockUrl(url)) {
+    if (isMockUrl(conn.url)) {
       return JSON.stringify([
         { name: 'to_TextTable', targetType: 'MY_SPACE.COMPANY_TEXT' },
         { name: 'to_HierarchyDirectory', targetType: 'MY_SPACE.MY_HIERARCHY_DIRECTORY' }
@@ -258,9 +315,9 @@ function makeFetchBdcAssociationsHandler(BdcClient) {
     }
 
     try {
-      const token = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      const analyticalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/analytical/${s}/${a}/$metadata`;
-      const relationalEndpoint = `${url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
+      const token = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      const analyticalEndpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/analytical/${s}/${a}/$metadata`;
+      const relationalEndpoint = `${conn.url.replace(/\/$/, '')}/api/v1/datasphere/consumption/relational/${s}/${a}/$metadata`;
 
       let res;
       try {
@@ -308,14 +365,15 @@ function makeFetchRawHanaViewsHandler(cds, entities, HanaClient) {
   };
 }
 
-function makeRunBdcTaskChainHandler(BdcClient) {
+function makeRunBdcTaskChainHandler(cds, entities, BdcClient) {
   return async function runBdcTaskChainHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, taskChainId } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !taskChainId) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or taskChainId');
-    }
+    const { connectionId, space, taskChainId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!taskChainId) return req.error(400, 'Missing taskChainId');
+    const effectiveSpace = space || conn.space;
     try {
-      const data = await BdcClient.runTaskChain(url, tokenUrl, clientId, clientSecret, space, taskChainId);
+      const data = await BdcClient.runTaskChain(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, effectiveSpace, taskChainId);
       return JSON.stringify(data, null, 2);
     } catch (e) {
       return req.error(500, `Datasphere API runBdcTaskChain Error: ${e.message}`);
@@ -323,14 +381,15 @@ function makeRunBdcTaskChainHandler(BdcClient) {
   };
 }
 
-function makeFetchBdcTaskChainLogHandler(BdcClient) {
+function makeFetchBdcTaskChainLogHandler(cds, entities, BdcClient) {
   return async function fetchBdcTaskChainLogHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, logId } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !logId) {
-      return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or logId');
-    }
+    const { connectionId, space, logId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!logId) return req.error(400, 'Missing logId');
+    const effectiveSpace = space || conn.space;
     try {
-      const data = await BdcClient.fetchTaskChainLog(url, tokenUrl, clientId, clientSecret, space, logId);
+      const data = await BdcClient.fetchTaskChainLog(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret, effectiveSpace, logId);
       return JSON.stringify(data, null, 2);
     } catch (e) {
       return req.error(500, `Datasphere API fetchBdcTaskChainLog Error: ${e.message}`);
@@ -410,25 +469,29 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
   };
 }
 
-function makeFetchBdcAssetKeyColumnsHandler(BdcClient) {
+function makeFetchBdcAssetKeyColumnsHandler(cds, entities, BdcClient) {
   return async function fetchBdcAssetKeyColumnsHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret, space, asset } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret || !space || !asset) return req.error(400, 'Missing url, tokenUrl, clientId, clientSecret, space, or asset');
+    const { connectionId, space, asset } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
+    if (!asset) return req.error(400, 'Missing asset');
+    const effectiveSpace = space || conn.space;
     try {
-      const accessToken = await BdcClient.getAccessToken(tokenUrl, clientId, clientSecret);
-      return BdcClient.fetchAssetKeyColumns(url, accessToken, space, asset);
+      const accessToken = await BdcClient.getAccessToken(conn.tokenUrl, conn.clientId, conn.clientSecret);
+      return BdcClient.fetchAssetKeyColumns(conn.url, accessToken, effectiveSpace, asset);
     } catch (e) {
       return req.error(500, `Datasphere API Error: ${e.message}`);
     }
   };
 }
 
-function makeFetchRawBdcUsersHandler(BdcClient) {
+function makeFetchRawBdcUsersHandler(cds, entities, BdcClient) {
   return async function fetchRawBdcUsersHandler(req) {
-    const { url, tokenUrl, clientId, clientSecret } = req.data;
-    if (!url || !tokenUrl || !clientId || !clientSecret) return req.error(400, 'Missing url, tokenUrl, clientId, or clientSecret');
+    const { connectionId } = req.data;
+    const conn = await _loadConnection(cds, entities, connectionId, req);
+    if (!conn) return;
     try {
-      const data = await BdcClient.fetchRawBdcUsers(url, tokenUrl, clientId, clientSecret);
+      const data = await BdcClient.fetchRawBdcUsers(conn.url, conn.tokenUrl, conn.clientId, conn.clientSecret);
       return JSON.stringify(data, null, 2);
     } catch (e) {
       return req.error(500, `Datasphere Users API Raw Error: ${e.message}`);

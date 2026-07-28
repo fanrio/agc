@@ -9,14 +9,13 @@ import { Activity, Shield, ShieldAlert, Ban, UserX, UserCheck } from 'lucide-rea
 export default function RolesHealth({ stats, setActiveNav, navigateToRoles }) {
   if (!stats) return null;
 
-  // Calculate health score: start at 100%, apply penalties of 40 (no restriction), 40 (no approvers), and 20 (no assignments)
+  // Use backend calculated health score (or fallback if undefined)
   const total = stats.roleCount || 0;
-  const penalty = (stats.rolesWithoutRestriction || 0) * 40 +
-                  (stats.rolesWithoutApprover || 0) * 40 +
-                  (stats.rolesWithoutAssignment || 0) * 20;
-  const healthPercentage = total 
-    ? Math.max(0, Math.round(100 - (penalty / total)))
-    : 100;
+  const healthPercentage = stats.healthScore !== undefined
+    ? stats.healthScore
+    : (total 
+        ? Math.max(0, Math.round(100 - (((stats.rolesWithoutRestriction || 0) * 40 + (stats.rolesWithoutApprover || 0) * 40 + (stats.rolesWithoutAssignment || 0) * 20) / total)))
+        : 100);
 
   const handleNav = (filter) => {
     if (navigateToRoles) navigateToRoles(filter);

@@ -11,11 +11,13 @@ vi.mock('../../api', () => ({
   getBdcSettings: vi.fn(),
   fetchRawBdcSpaces: vi.fn(),
   fetchRawBdcAssets: vi.fn(),
+  fetchRawBdcUsers: vi.fn(),
   fetchRawBdcRelationalValues: vi.fn(),
   fetchRawBdcAssetColumns: vi.fn(),
   runBdcTaskChain: vi.fn(),
   fetchBdcTaskChainLog: vi.fn(),
   fetchBdcAssociations: vi.fn(),
+  fetchRawHanaViews: vi.fn(),
 }));
 
 describe('BdcApiTesterView Component', () => {
@@ -82,10 +84,7 @@ describe('BdcApiTesterView Component', () => {
 
     await waitFor(() => {
       expect(api.fetchBdcTaskChainLog).toHaveBeenCalledWith(
-        'https://mock.datasphere.com',
-        'https://mock.oauth.com',
-        'client-123',
-        'secret-456',
+        'conn-1',
         'SPACE_TEST',
         'log-789'
       );
@@ -136,10 +135,7 @@ describe('BdcApiTesterView Component', () => {
 
     await waitFor(() => {
       expect(api.fetchBdcAssociations).toHaveBeenCalledWith(
-        'https://mock.datasphere.com',
-        'https://mock.oauth.com',
-        'client-123',
-        'secret-456',
+        'conn-1',
         'SPACE_TEST',
         'asset-789'
       );
