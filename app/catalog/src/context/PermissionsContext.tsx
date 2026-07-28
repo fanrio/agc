@@ -7,13 +7,13 @@ export interface UserPermissions {
   canManageOrgRoles: boolean;
   canManageSingleRoles: boolean;
   canManageDerivedRoles: boolean;
-  managedDerivedRolesScope: string;
+  managedDerivedRolesScope: [];
   canAssignRoles: boolean;
   canManageReplications: boolean;
   canViewAuditLogs: boolean;
   canManageSettings: boolean;
-  allowedEnvironments: string;
-  allowedAccessDomains: string;
+  allowedEnvironments: [];
+  allowedAccessDomains: [];
   isActive: boolean;
   userId?: string;
   userName?: string;
@@ -65,13 +65,13 @@ export function PermissionsProvider({ userId, children }: { userId: string; chil
         canManageOrgRoles: false,
         canManageSingleRoles: false,
         canManageDerivedRoles: false,
-        managedDerivedRolesScope: '[]',
+        managedDerivedRolesScope: [],
         canAssignRoles: false,
         canManageReplications: false,
         canViewAuditLogs: false,
         canManageSettings: false,
-        allowedEnvironments: '[]',
-        allowedAccessDomains: '[]',
+        allowedEnvironments: [],
+        allowedAccessDomains: [],
         isActive: false
       });
     } finally {

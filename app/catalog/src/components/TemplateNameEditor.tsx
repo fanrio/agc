@@ -1,12 +1,27 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Chip, Menu, MenuItem, Typography } from '@mui/material';
 
-export default function TemplateNameEditor({ value = '', onChange, availableFields = [] }) {
-  const [segments, setSegments] = useState([]);
-  const [menuAnchor, setMenuAnchor] = useState(null);
-  const [activeSegmentIndex, setActiveSegmentIndex] = useState(null);
-  const [caretPos, setCaretPos] = useState(0);
-  const inputRefs = useRef([]);
+interface Segment {
+  type: 'chip' | 'text';
+  value: string;
+}
+
+interface TemplateNameEditorProps {
+  value?: string;
+  onChange: (value: string) => void;
+  availableFields?: string[];
+}
+
+export default function TemplateNameEditor({
+  value = '',
+  onChange,
+  availableFields = []
+}: TemplateNameEditorProps) {
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState<number | null>(null);
+  const [caretPos, setCaretPos] = useState<number>(0);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Parse string value (e.g. "ROLE_{CostCenter}_CUSTOM") to segments
   useEffect(() => {
@@ -195,7 +210,7 @@ export default function TemplateNameEditor({ value = '', onChange, availableFiel
           return (
             <input
               key={idx}
-              ref={el => inputRefs.current[idx] = el}
+              ref={el => { inputRefs.current[idx] = el; }}
               type="text"
               value={seg.value}
               onChange={e => handleTextChange(idx, e.target.value)}

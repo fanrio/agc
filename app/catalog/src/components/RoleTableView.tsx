@@ -19,7 +19,7 @@ export default function RoleTableView({
   permissions
 }) {
   const [orderBy, setOrderBy] = useState('name');
-  const [order, setOrder] = useState('asc');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedMap, setExpandedMap] = useState({});
 
   const toggleExpand = (roleId) => {

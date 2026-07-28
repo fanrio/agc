@@ -293,7 +293,9 @@ export default function UserAuthorizationCard({ userId, onClose }) {
               showCard={false}
               defaultView="list"
               emptyMessage="No restrictions configured for this domain (Full Unrestricted Access Granted)."
-            />
+              restrictions={undefined}
+              inherited={undefined}
+              title={undefined} />
           </Box>
         )}
       </Box>

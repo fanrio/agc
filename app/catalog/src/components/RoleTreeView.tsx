@@ -1,6 +1,4 @@
-import { useState } from 'react';
-import { Box, Button, Typography, Card } from '@mui/material';
-import { ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { Box, Typography, Card } from '@mui/material';
 import RoleCard from './RoleCard';
 
 export default function RoleTreeView({

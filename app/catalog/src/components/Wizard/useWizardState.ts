@@ -1,8 +1,23 @@
 import { useState, useEffect } from 'react';
 import * as api from '../../api';
 import { isCriticalRestriction, isRoleInScope, isPatternRestriction } from '../../utils/helpers';
+import { UserPermissions } from '../../context/PermissionsContext';
 
-export function useWizardState({ context = {}, permissions }) {
+export interface WizardContext {
+  orgNodeId?: string;
+  parentRoleId?: string;
+  roleId?: string;
+  allowFreeNavigation?: boolean;
+  accessDomainId?: string;
+  [key: string]: any;
+}
+
+export interface UseWizardStateProps {
+  context?: WizardContext;
+  permissions?: UserPermissions | null;
+}
+
+export function useWizardState({ context = {}, permissions }: UseWizardStateProps) {
   const [step, setStep] = useState(0);
   const [roleType, setRoleType] = useState(context.orgNodeId ? 'ORG_BASED' : 'SINGLE');
   const [selectedOrgNodeId, setOrgNode] = useState(context.orgNodeId || '');
@@ -21,7 +36,11 @@ export function useWizardState({ context = {}, permissions }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [isEditMode, setIsEditMode] = useState(!!context.roleId);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
   const [scimOptions, setScimOptions] = useState([]);
   const [scimLoading, setScimLoading] = useState(false);
 
@@ -149,7 +168,7 @@ export function useWizardState({ context = {}, permissions }) {
     return true;
   };
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };
@@ -453,14 +472,14 @@ export function useWizardState({ context = {}, permissions }) {
           accessDomain_ID: accessDomainId,
           ownRestrictions,
           parentRoles,
-          approvers: formattedApprovers
+          approvers: formattedApprovers,
+          ...(assignUserId.trim() ? {
+            assignments: [{
+              userId: assignUserId.trim(),
+              userName: assignUserName.trim() || assignUserId.trim()
+            }]
+          } : {})
         };
-        if (assignUserId.trim()) {
-          deepPayload.assignments = [{
-            userId: assignUserId.trim(),
-            userName: assignUserName.trim() || assignUserId.trim()
-          }];
-        }
         await api.updateRole(roleId, deepPayload);
       } else {
         const deepPayload = {
@@ -472,14 +491,14 @@ export function useWizardState({ context = {}, permissions }) {
           accessDomain_ID: accessDomainId,
           ownRestrictions,
           parentRoles,
-          approvers: formattedApprovers
+          approvers: formattedApprovers,
+          ...(assignUserId.trim() ? {
+            assignments: [{
+              userId: assignUserId.trim(),
+              userName: assignUserName.trim() || assignUserId.trim()
+            }]
+          } : {})
         };
-        if (assignUserId.trim()) {
-          deepPayload.assignments = [{
-            userId: assignUserId.trim(),
-            userName: assignUserName.trim() || assignUserId.trim()
-          }];
-        }
         const created = await api.createRole(deepPayload);
         roleId = created.ID;
       }
@@ -522,7 +541,7 @@ export function useWizardState({ context = {}, permissions }) {
       }
     });
 
-    const wildcardFieldNames = new Set();
+    const wildcardFieldNames = new Set<string>();
     parentRestrictions.forEach(r => {
       if (r && r.field && isPatternRestriction(r)) {
         wildcardFieldNames.add(String(r.field).toLowerCase());

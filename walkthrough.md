@@ -81,3 +81,19 @@ Split the 1135-line `Wizard.jsx` monolith into a clean, modular component direct
  Test Files  4 passed (4)
       Tests  21 passed (21)
 ```
+
+---
+
+## 5. TypeScript Compilation & Linting Fix (Recent)
+
+* **Issue**: TypeScript was reporting compilation error `Property 'orgNodeId' does not exist on type '{}'` in `app/catalog/src/components/Wizard/useWizardState.ts:L7` (and other properties of `context`). This happened because the function arguments destructor default parameter `context = {}` led TypeScript to infer the type of `context` as `{}` (an empty object with no keys).
+* **Fix**:
+  1. Defined `WizardContext` interface in [`useWizardState.ts`](file:///c:/Users/Fan/Documents/fanrio-auth/app/catalog/src/components/Wizard/useWizardState.ts) outlining all possible properties of `context` (e.g. `orgNodeId`, `parentRoleId`, `roleId`, `allowFreeNavigation`, `accessDomainId`).
+  2. Imported `UserPermissions` type from [`PermissionsContext.tsx`](file:///c:/Users/Fan/Documents/fanrio-auth/app/catalog/src/context/PermissionsContext.tsx) to type the `permissions` argument.
+  3. Formulated the `UseWizardStateProps` interface to type the destructured function parameters.
+  4. Modified `deepPayload` assignments in `useWizardState.ts` to use inline object spread logic instead of dynamic property assignments, resolving TypeScript errors on implicit types.
+  5. Annotated `wildcardFieldNames` Set explicitly as `Set<string>` to ensure `fieldNameLower` is correctly typed as `string` instead of `unknown`.
+* **Validation**:
+  - Ran `npm run build --prefix app/catalog` successfully.
+  - Verified no compiler errors are reported for `useWizardState.ts`.
+  - Ran all backend tests successfully with `npm run test` (57 tests passed).

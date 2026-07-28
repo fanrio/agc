@@ -12,7 +12,7 @@ import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInSc
 import { usePermissions } from '../context/PermissionsContext';
 import UserRoleAssignment from './UserRoleAssignment';
 
-export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete, onRefresh, isSearchActive = false, onError, onSuccess, onAssign, isCompact, permissions: propPermissions }) {
+export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete = undefined, onRefresh, isSearchActive = false, onError, onSuccess, onAssign = undefined, isCompact, permissions: propPermissions }) {
   const { permissions: contextPermissions } = usePermissions();
   const permissions = propPermissions || contextPermissions;
   if (depth > 10) {
@@ -304,7 +304,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             ) : (
               <Grid container spacing={2}>
                 {effective && effective.map((eff, index) => (
-                  <Grid xs={12} sm={4} key={index}>
+                  <Grid size={{ xs: 12, sm: 4 }} key={index}>
                     <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>Field: {eff.field}</Typography>
                       <Box sx={{ mt: 1 }}>

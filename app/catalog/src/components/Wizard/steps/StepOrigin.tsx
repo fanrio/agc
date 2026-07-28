@@ -14,7 +14,7 @@ export default function StepOrigin({
   environmentId, setEnvironmentId, filteredEnvironments,
   accessDomainId, setAccessDomainId, accessDomains,
   critical, setCritical, setIsCriticalManuallySet,
-  isEditMode, permissions, context = {}, isReadOnly,
+  isEditMode, permissions, context = {} as any, isReadOnly,
   allAccessDomains
 }) {
 

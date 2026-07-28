@@ -3,6 +3,18 @@ import { FormControl, InputLabel, Select, MenuItem, Checkbox, ListItemText, Box,
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
 
+interface EnvironmentSelectionProps {
+  value: any;
+  onChange?: (val: any) => void;
+  multiple?: boolean;
+  label?: string;
+  size?: 'small' | 'medium';
+  fullWidth?: boolean;
+  disabled?: boolean;
+  required?: boolean;
+  sx?: any;
+}
+
 export default function EnvironmentSelection({
   value,
   onChange,
@@ -13,7 +25,7 @@ export default function EnvironmentSelection({
   disabled = false,
   required = false,
   sx = {}
-}) {
+}: EnvironmentSelectionProps) {
   const { permissions } = usePermissions();
   const [environments, setEnvironments] = useState([]);
   const [loading, setLoading] = useState(true);

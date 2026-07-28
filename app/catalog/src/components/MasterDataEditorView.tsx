@@ -21,7 +21,11 @@ export default function MasterDataEditorView() {
     status: 'ACTIVE'
   });
 
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   const loadCustomers = async () => {
     setLoading(true);

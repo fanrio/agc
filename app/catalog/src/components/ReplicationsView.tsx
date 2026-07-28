@@ -31,7 +31,11 @@ export default function ReplicationsView() {
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'info' });
 
   const load = async () => {
     setLoading(true);
@@ -85,7 +89,7 @@ export default function ReplicationsView() {
     setRefreshing(false);
   };
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };

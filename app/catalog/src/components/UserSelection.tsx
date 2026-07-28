@@ -14,6 +14,16 @@ import * as api from '../api';
  * @param {string} [props.size] - MUI size variant ('small' or 'medium')
  * @param {boolean} [props.fullWidth] - Should the component take full width
  */
+interface UserSelectionProps {
+  value: any;
+  onChange: (event: any, newValue: any) => void;
+  label?: string;
+  placeholder?: string;
+  size?: 'small' | 'medium';
+  fullWidth?: boolean;
+  disabled?: boolean;
+}
+
 export default function UserSelection({
   value,
   onChange,
@@ -22,7 +32,7 @@ export default function UserSelection({
   size = 'small',
   fullWidth = true,
   disabled = false
-}) {
+}: UserSelectionProps) {
   const [scimInput, setScimInput] = useState('');
   const [scimOptions, setScimOptions] = useState([]);
   const [scimLoading, setScimLoading] = useState(false);

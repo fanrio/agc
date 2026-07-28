@@ -15,7 +15,13 @@ import GlobalParameters from './Home/GlobalParameters';
  * Orchestrator View for Governance Center Homepage.
  * Fetches dashboard statistics and metrics and lays out subcomponents in a modern grid.
  */
-export default function HomeView({ setActiveNav, navigateToRoles }) {
+interface HomeViewProps {
+  setActiveNav: (navId: string) => void;
+  navigateToRoles: (filter?: any) => void;
+  onCreateRole?: () => void;
+}
+
+export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }: HomeViewProps) {
   const { permissions } = usePermissions();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);

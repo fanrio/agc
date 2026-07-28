@@ -46,7 +46,11 @@ export default function DynamicRulesView() {
     mappings: []
   });
 
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   const loadData = async () => {
     setLoading(true);

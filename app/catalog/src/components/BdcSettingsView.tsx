@@ -4,11 +4,6 @@ import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-r
 import * as api from '../api';
 import EnvironmentSelection from './EnvironmentSelection';
 
-const ENV_LABEL = {
-  P: 'Production',
-  Q: 'Quality Assurance',
-  D: 'Development'
-};
 
 const ENV_COLOR = {
   P: 'error',
@@ -18,16 +13,20 @@ const ENV_COLOR = {
 
 export default function BdcSettingsView() {
   const [settings, setSettings] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  
+  const [loading, setLoading] = useState(true);
+
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
-  const [showAdd, setShowAdd]   = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [environments, setEnvironments] = useState([]);
-  
+
   // State for Toast Notifications
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
 
   const [fetchedSpaces, setFetchedSpaces] = useState([]);
   const [fetchingSpaces, setFetchingSpaces] = useState(false);
@@ -69,7 +68,7 @@ export default function BdcSettingsView() {
     isActive: true
   });
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };
@@ -167,7 +166,7 @@ export default function BdcSettingsView() {
         environment_ID: form.environment_ID,
         url: form.connectionType === 'SAP Hana' ? '' : form.url,
         host: form.connectionType === 'SAP Hana' ? form.host : '',
-        port: form.connectionType === 'SAP Hana' ? parseInt(form.port) || 443 : 443,
+        port: form.connectionType === 'SAP Hana' ? Number(form.port) || 443 : 443,
         authType: form.connectionType === 'SAP Hana' ? '' : 'OAUTH',
         space: form.connectionType === 'SAP Hana' ? '' : form.space,
         username: form.username,
@@ -179,7 +178,7 @@ export default function BdcSettingsView() {
         isActive: form.isActive
       };
       const created = await api.createBdcSetting(payload);
-      
+
       setForm({
         systemName: '',
         connectionType: 'OData',
@@ -232,7 +231,7 @@ export default function BdcSettingsView() {
         environment_ID: editForm.environment_ID,
         url: editForm.connectionType === 'SAP Hana' ? '' : editForm.url,
         host: editForm.connectionType === 'SAP Hana' ? editForm.host : '',
-        port: editForm.connectionType === 'SAP Hana' ? parseInt(editForm.port) || 443 : 443,
+        port: editForm.connectionType === 'SAP Hana' ? Number(editForm.port) || 443 : 443,
         authType: editForm.connectionType === 'SAP Hana' ? '' : 'OAUTH',
         space: editForm.connectionType === 'SAP Hana' ? '' : editForm.space,
         username: editForm.username,
@@ -360,10 +359,10 @@ export default function BdcSettingsView() {
         <Card sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>New System Connection</Typography>
           <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <TextField label="System Connection Name" size="small" fullWidth placeholder="e.g. Datasphere Production" value={form.systemName} onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))} />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <FormControl size="small" fullWidth>
                 <InputLabel id="add-conn-type-label">Connection Type</InputLabel>
                 <Select
@@ -377,45 +376,45 @@ export default function BdcSettingsView() {
                 </Select>
               </FormControl>
             </Grid>
-             <Grid item xs={12} sm={4}>
-               <EnvironmentSelection
-                 value={form.environment_ID}
-                 onChange={val => setForm(f => ({ ...f, environment_ID: val }))}
-               />
-             </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <EnvironmentSelection
+                value={form.environment_ID}
+                onChange={val => setForm(f => ({ ...f, environment_ID: val }))}
+              />
+            </Grid>
 
             {form.connectionType === 'SAP Hana' ? (
               /* HANA FIELDS */
               <>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Hostname" size="small" fullWidth placeholder="e.g. host.company.com" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Port" type="number" size="small" fullWidth value={form.port} onChange={e => setForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="User" size="small" fullWidth value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Password" type="password" size="small" fullWidth value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                 </Grid>
               </>
             ) : (
               /* ODATA FIELDS */
               <>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Basis URL" size="small" fullWidth placeholder="https://port-xxxx.datasphere.cloud.sap" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Token URL" size="small" fullWidth placeholder="https://oauth.datasphere.cloud.sap/oauth/token" value={form.tokenUrl} onChange={e => setForm(f => ({ ...f, tokenUrl: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Client ID" size="small" fullWidth value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Client Secret" type="password" size="small" fullWidth value={form.clientSecret} onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))} />
                 </Grid>
-                <Grid item xs={12} sm={8}>
+                <Grid size={{ xs: 12, sm: 8 }}>
                   <FormControl size="small" fullWidth>
                     <InputLabel id="add-space-label">Space</InputLabel>
                     <Select
@@ -434,7 +433,7 @@ export default function BdcSettingsView() {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={4} sx={{ display: 'flex', alignItems: 'center' }}>
+                <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
                   <Button
                     variant="outlined"
                     color="secondary"
@@ -448,7 +447,7 @@ export default function BdcSettingsView() {
                     Fetch Spaces
                   </Button>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Task chan" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={form.taskChainFlat} onChange={e => setForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
                 </Grid>
               </>
@@ -483,10 +482,10 @@ export default function BdcSettingsView() {
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Edit Connection: {s.systemName}</Typography>
                     <Grid container spacing={2.5}>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField label="System Connection Name" size="small" fullWidth value={editForm.systemName} onChange={e => setEditForm(f => ({ ...f, systemName: e.target.value }))} />
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl size="small" fullWidth>
                           <InputLabel id="edit-conn-type-label">Connection Type</InputLabel>
                           <Select
@@ -500,7 +499,7 @@ export default function BdcSettingsView() {
                           </Select>
                         </FormControl>
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <EnvironmentSelection
                           value={editForm.environment_ID}
                           onChange={val => setEditForm(f => ({ ...f, environment_ID: val }))}
@@ -510,35 +509,35 @@ export default function BdcSettingsView() {
                       {editForm.connectionType === 'SAP Hana' ? (
                         /* HANA EDIT FIELDS */
                         <>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Hostname" size="small" fullWidth placeholder="e.g. host.company.com" value={editForm.host} onChange={e => setEditForm(f => ({ ...f, host: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Port" type="number" size="small" fullWidth value={editForm.port} onChange={e => setEditForm(f => ({ ...f, port: parseInt(e.target.value) || '' }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="User" size="small" fullWidth value={editForm.username} onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Password" type="password" size="small" fullWidth placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} />
                           </Grid>
                         </>
                       ) : (
                         /* ODATA EDIT FIELDS */
                         <>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Basis URL" size="small" fullWidth value={editForm.url} onChange={e => setEditForm(f => ({ ...f, url: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Token URL" size="small" fullWidth value={editForm.tokenUrl} onChange={e => setEditForm(f => ({ ...f, tokenUrl: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Client ID" size="small" fullWidth value={editForm.clientId} onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Client Secret" type="password" size="small" fullWidth placeholder="••••••••" value={editForm.clientSecret} onChange={e => setEditForm(f => ({ ...f, clientSecret: e.target.value }))} />
                           </Grid>
-                          <Grid item xs={12} sm={8}>
+                          <Grid size={{ xs: 12, sm: 8 }}>
                             <FormControl size="small" fullWidth>
                               <InputLabel id="edit-space-label">Space</InputLabel>
                               <Select
@@ -557,7 +556,7 @@ export default function BdcSettingsView() {
                               </Select>
                             </FormControl>
                           </Grid>
-                          <Grid item xs={12} sm={4} sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
                             <Button
                               variant="outlined"
                               color="secondary"
@@ -571,13 +570,13 @@ export default function BdcSettingsView() {
                               Fetch Spaces
                             </Button>
                           </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField label="Task chan" size="small" fullWidth placeholder="e.g. TC_FLAT_AUTH" value={editForm.taskChainFlat} onChange={e => setEditForm(f => ({ ...f, taskChainFlat: e.target.value }))} />
                           </Grid>
                         </>
                       )}
 
-                      <Grid item xs={12}>
+                      <Grid size={12}>
                         <FormControlLabel
                           control={<Checkbox checked={editForm.isActive} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} />}
                           label="Is Active Connection"
@@ -640,25 +639,25 @@ export default function BdcSettingsView() {
                     {currentType === 'SAP Hana' ? (
                       /* HANA VIEW DETAILS GRID */
                       <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
-                        <Grid item xs={12} sm={5}>
+                        <Grid size={{ xs: 12, sm: 5 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Hostname</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.host || '—'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={2}>
+                        <Grid size={{ xs: 12, sm: 2 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Port</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.port || '443'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={3}>
+                        <Grid size={{ xs: 12, sm: 3 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>User</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.username || '—'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={2}>
+                        <Grid size={{ xs: 12, sm: 2 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>State</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: s.isActive ? '#10b981' : 'text.secondary' }}>
                             {s.isActive ? '● Active' : '○ Inactive'}
@@ -668,31 +667,31 @@ export default function BdcSettingsView() {
                     ) : (
                       /* ODATA VIEW DETAILS GRID */
                       <Grid container spacing={2} sx={{ mt: 1, borderTop: '1px solid rgba(255,255,255,0.05)', pt: 2 }}>
-                        <Grid item xs={12} sm={3}>
+                        <Grid size={{ xs: 12, sm: 3 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Token URL</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.tokenUrl || '—'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={3}>
+                        <Grid size={{ xs: 12, sm: 3 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Client ID</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.clientId || '—'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={2}>
+                        <Grid size={{ xs: 12, sm: 2 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Selected Space</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: '#3b82f6' }}>
                             {s.space || '—'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={2}>
+                        <Grid size={{ xs: 12, sm: 2 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>State</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: s.isActive ? '#10b981' : 'text.secondary' }}>
                             {s.isActive ? '● Active' : '○ Inactive'}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={12} sx={{ mt: 1 }}>
+                        <Grid size={12} sx={{ mt: 1 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Task chan</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {s.taskChainFlat || '—'}

@@ -7,40 +7,29 @@ import { isRoleInScope } from '../utils/helpers';
 import UserRoleAssignment from './UserRoleAssignment';
 
 // Helper to recursively check if a role or any of its parents has restrictions
-function hasAnyRestrictions(role, allRoles) {
-  if (role.ownRestrictions && role.ownRestrictions.length > 0) return true;
-  if (role.parentRoles && role.parentRoles.length > 0) {
-    for (const pr of role.parentRoles) {
-      const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-      if (parentId) {
-        const parent = allRoles.find(r => r.ID === parentId);
-        if (parent && hasAnyRestrictions(parent, allRoles)) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
 
 export default function RoleAssignmentsView({ onInspectUser }) {
   const { permissions } = usePermissions();
   const [assignments, setAssignments] = useState([]);
-  
+
   // Confirm Dialog State
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: 'Confirm', message: '', onConfirm: null });
-  const [roles, setRoles]             = useState([]);
-  const [allRoles, setAllRoles]       = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [roles, setRoles] = useState([]);
+  const [allRoles, setAllRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [error, setError]             = useState(''); // Kept for reference but using snackbar instead
-  const [snackbar, setSnackbar]       = useState({ open: false, message: '', severity: 'error' });
+  const [error, setError] = useState(''); // Kept for reference but using snackbar instead
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
 
   // Filtering States
-  const [filterUser, setFilterUser]           = useState('');
-  const [filterRole, setFilterRole]           = useState('ALL');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterRole, setFilterRole] = useState('ALL');
   const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate]     = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
 
   // Extract unique roles present in current assignments
@@ -50,8 +39,8 @@ export default function RoleAssignmentsView({ onInspectUser }) {
   const filteredAssignments = assignments.filter(a => {
     if (filterUser.trim()) {
       const q = filterUser.toLowerCase();
-      const match = (a.userId && a.userId.toLowerCase().includes(q)) || 
-                    (a.userName && a.userName.toLowerCase().includes(q));
+      const match = (a.userId && a.userId.toLowerCase().includes(q)) ||
+        (a.userName && a.userName.toLowerCase().includes(q));
       if (!match) return false;
     }
     if (filterRole !== 'ALL') {
@@ -85,7 +74,7 @@ export default function RoleAssignmentsView({ onInspectUser }) {
     setFilterCreatedBy('');
   };
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };
@@ -136,9 +125,9 @@ export default function RoleAssignmentsView({ onInspectUser }) {
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Role Assignments</Typography>
           <Typography variant="body2" color="text.secondary">Assign authorization roles to users and groups</Typography>
         </Box>
-        <Button 
-          variant="contained" 
-          onClick={() => { setAssignDialogOpen(true); setSnackbar(prev => ({ ...prev, open: false })); }} 
+        <Button
+          variant="contained"
+          onClick={() => { setAssignDialogOpen(true); setSnackbar(prev => ({ ...prev, open: false })); }}
           disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && roles.length === 0)}
           startIcon={<Plus size={15} />}
         >
@@ -345,9 +334,9 @@ export default function RoleAssignmentsView({ onInspectUser }) {
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                         <Tooltip title="View User Authorization Card">
-                          <IconButton 
-                            color="primary" 
-                            onClick={() => onInspectUser && onInspectUser(a.userId)} 
+                          <IconButton
+                            color="primary"
+                            onClick={() => onInspectUser && onInspectUser(a.userId)}
                             size="small"
                             aria-label="View User Authorization Card"
                           >
@@ -355,10 +344,10 @@ export default function RoleAssignmentsView({ onInspectUser }) {
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Remove assignment">
-                          <IconButton 
-                            color="error" 
-                            onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')} 
-                            disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))} 
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDelete(a.ID, a.userName || a.userId, a.role?.name || 'Unknown')}
+                            disabled={loading || (permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && !roles.some(r => r.ID === a.role_ID)))}
                             size="small"
                             aria-label="Remove assignment"
                           >

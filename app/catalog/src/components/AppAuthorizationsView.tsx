@@ -22,6 +22,7 @@ import {
   Autocomplete,
   CircularProgress,
   Alert,
+  AlertColor,
   Snackbar,
   Select,
   MenuItem,
@@ -96,7 +97,11 @@ export default function AppAuthorizationsView() {
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: AlertColor;
+  }>({ open: false, message: '', severity: 'success' });
 
   const [activeTab, setActiveTab] = useState(0); // 0 = System, 1 = Roles
   const [addMode, setAddMode] = useState('system'); // 'system' | 'roles'
@@ -373,7 +378,7 @@ export default function AppAuthorizationsView() {
   };
 
   // ─── Table cell helpers ─────────────────────────────────────────────────────
-  const BoolCell = ({ auth, field, color }) => (
+  const BoolCell = ({ auth, field, color }: { auth: any; field: string; color?: string }) => (
     <TableCell align="center">
       <Checkbox
         size="small"

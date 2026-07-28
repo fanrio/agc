@@ -96,7 +96,6 @@ const TYPE_COLOR = {
   HIERARCHY: 'success',
   SINGLE_VALUE: 'primary',
   RANGE: 'warning',
-  CP: 'info',
 };
 const TYPE_LABEL = {
   ALL: 'All (*)',
@@ -764,9 +763,13 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
 
 export default function RestrictionBuilder({ restrictions, onChange, inheritedRestrictions = [], orgNodes = [], restrictionFields = [], isReadOnly = false }) {
   const [draft, setDraft] = useState({ field: '', filterType: 'EQ', value: '' });
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };

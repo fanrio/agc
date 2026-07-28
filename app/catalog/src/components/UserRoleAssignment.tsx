@@ -20,10 +20,28 @@ function hasAnyRestrictions(role, allRoles) {
   return false;
 }
 
-export default function UserRoleAssignment({ open, role, roles = [], allRoles = roles, onClose, onSuccess, onError }) {
+interface UserRoleAssignmentProps {
+  open: boolean;
+  role?: any;
+  roles?: any[];
+  allRoles?: any[];
+  onClose: () => void;
+  onSuccess?: (msg: string) => void | Promise<void>;
+  onError?: (msg: string) => void;
+}
+
+export default function UserRoleAssignment({
+  open,
+  role,
+  roles = [],
+  allRoles = roles,
+  onClose,
+  onSuccess,
+  onError
+}: UserRoleAssignmentProps) {
   const [selectedScimUser, setSelectedScimUser] = useState(null);
   const [assignForm, setAssignForm] = useState({ userId: '', userName: '' });
-  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Reset state when dialog is closed or role changes
@@ -131,7 +149,10 @@ export default function UserRoleAssignment({ open, role, roles = [], allRoles = 
                 label="Role"
                 multiple
                 value={selectedRoleIds}
-                onChange={e => setSelectedRoleIds(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSelectedRoleIds(Array.isArray(val) ? val : typeof val === 'string' ? val.split(',') : []);
+                }}
                 disabled={loading}
                 renderValue={(selected) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>

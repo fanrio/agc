@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip } from '@mui/material';
 import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
@@ -144,7 +144,7 @@ function NodeRow({
     }
     setLoading(true);
     try {
-      const payload = { name: newChild.name, parent_ID: node.ID };
+      const payload: any = { name: newChild.name, parent_ID: node.ID };
       if (showTypeSelector) {
         payload.type_ID = newChild.type || null;
       }
@@ -195,7 +195,7 @@ function NodeRow({
     }
     setLoading(true);
     try {
-      const payload = { name: editName };
+      const payload: any = { name: editName };
       if (showDescriptionField) {
         payload.description = editDesc;
       }
@@ -516,7 +516,10 @@ function NodeRow({
                   label="Restriction Fields"
                   multiple
                   value={newChildFields}
-                  onChange={e => setNewChildFields(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setNewChildFields(typeof val === 'string' ? val.split(',') : val);
+                  }}
                   renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
                 >
                   {nodeTypes.map(f => (
@@ -607,6 +610,43 @@ function buildTree(flatNodes) {
   return roots;
 }
 
+interface HierarchicalManagerProps {
+  title: string;
+  subtitle: string;
+  emptyTitle: string;
+  emptySubtitle: string;
+  addNodePlaceholder?: string;
+
+  // API calls
+  fetchNodesFlat: () => Promise<any>;
+  createNode: (body: any) => Promise<any>;
+  updateNode: (id: string, body: any) => Promise<any>;
+  deleteNode: (id: string) => Promise<any>;
+  createAttribute: (body: any) => Promise<any>;
+  deleteAttribute: (id: string) => Promise<any>;
+
+  // Styling
+  typeIcons?: Record<string, any>;
+  defaultIcon?: any;
+
+  // Actions
+  onGenerateNode?: (nodeId: string) => Promise<any> | void;
+  onGenerateAll?: () => Promise<any>;
+  generateAllText?: string;
+
+  // Permissions
+  canManage: boolean;
+
+  // Customization props
+  showTypeSelector?: boolean;
+  showDescriptionField?: boolean;
+  maxNameLength?: number;
+  showRestrictionFields?: boolean;
+  createRestrictionField?: (body: any) => Promise<any>;
+  deleteRestrictionField?: (id: string) => Promise<any>;
+  showRoleTemplateName?: boolean;
+}
+
 // ─── Main Hierarchical Manager Component ─────────────────────────────────────
 export default function HierarchicalManager({
   title,
@@ -643,18 +683,22 @@ export default function HierarchicalManager({
   createRestrictionField,
   deleteRestrictionField,
   showRoleTemplateName = false,
-}) {
-  const [allNodes, setAllNodes]   = useState([]);
-  const [roots, setRoots]         = useState([]);
-  const [nodeTypes, setNodeTypes] = useState([]);
+}: HierarchicalManagerProps) {
+  const [allNodes, setAllNodes]   = useState<any[]>([]);
+  const [roots, setRoots]         = useState<any[]>([]);
+  const [nodeTypes, setNodeTypes] = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [showAdd, setShowAdd]     = useState(false);
   const [newRoot, setNewRoot]     = useState({ name: '', description: '', type: '' });
   const [newRootTemplate, setNewRootTemplate] = useState('');
-  const [newRootFields, setNewRootFields] = useState([]);
-  const [snackbar, setSnackbar]   = useState({ open: false, message: '', severity: 'error' });
+  const [newRootFields, setNewRootFields] = useState<string[]>([]);
+  const [snackbar, setSnackbar]   = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };
@@ -685,7 +729,7 @@ export default function HierarchicalManager({
       return;
     }
     try {
-      const payload = { name: newRoot.name };
+      const payload: any = { name: newRoot.name };
       if (showTypeSelector) {
         payload.type_ID = newRoot.type || null;
       }
@@ -767,7 +811,7 @@ export default function HierarchicalManager({
             placeholder={addNodePlaceholder || "Node name..."}
             value={newRoot.name}
             onChange={e => setNewRoot(r => ({ ...r, name: e.target.value.slice(0, maxNameLength) }))}
-            slotProps={{ input: { maxLength: maxNameLength } }}
+            inputProps={{ maxLength: maxNameLength }}
             sx={{ flex: 1, minWidth: 120 }}
           />
           {showDescriptionField && (
@@ -776,7 +820,7 @@ export default function HierarchicalManager({
               placeholder="Description (max 200 chars)..."
               value={newRoot.description || ''}
               onChange={e => setNewRoot(r => ({ ...r, description: e.target.value.slice(0, 200) }))}
-              slotProps={{ input: { maxLength: 200 } }}
+              inputProps={{ maxLength: 200 }}
               sx={{ flex: 2, minWidth: 200 }}
             />
           )}
@@ -802,7 +846,10 @@ export default function HierarchicalManager({
                 label="Restriction Fields"
                 multiple
                 value={newRootFields}
-                onChange={e => setNewRootFields(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setNewRootFields(typeof val === 'string' ? val.split(',') : val);
+                }}
                 renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
               >
                 {nodeTypes.map(f => (

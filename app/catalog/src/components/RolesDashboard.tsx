@@ -43,7 +43,11 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
       setHealthFilter(initialFilter);
     }
   }, [initialFilter]);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'info' | 'warning' | 'error';
+  }>({ open: false, message: '', severity: 'error' });
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, role: null });
 
   // Toggle representation states ('tree', 'grid', 'table')
@@ -67,7 +71,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     }
   };
 
-  const handleCloseSnackbar = (event, reason) => {
+  const handleCloseSnackbar = (event?: any, reason?: string) => {
     if (reason === 'clickaway') return;
     setSnackbar(prev => ({ ...prev, open: false }));
   };

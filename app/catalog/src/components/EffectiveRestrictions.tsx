@@ -136,6 +136,18 @@ export function computeEffectiveRestrictions(restrictions = [], inherited = []) 
   return [...inheritedList, ...ownList];
 }
 
+export interface EffectiveRestrictionsProps {
+  restrictions?: any[];
+  inherited?: any[];
+  effectiveRestrictions?: any[];
+  title?: string;
+  showCard?: boolean;
+  defaultView?: string;
+  allowViewToggle?: boolean;
+  emptyMessage?: string;
+  groupByRole?: boolean;
+}
+
 export default function EffectiveRestrictions({
   restrictions,
   inherited,
@@ -146,7 +158,7 @@ export default function EffectiveRestrictions({
   allowViewToggle = true,
   emptyMessage = 'No restrictions defined.',
   groupByRole = true
-}) {
+}: EffectiveRestrictionsProps) {
   const [viewMode, setViewMode] = useState(defaultView);
 
   let items = [];

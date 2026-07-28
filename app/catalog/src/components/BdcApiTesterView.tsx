@@ -148,7 +148,7 @@ export default function BdcApiTesterView() {
 
       <Grid container spacing={3}>
         {/* API Selection Panel */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1.2 }}>
               <Server size={15} color="#a78bfa" />
@@ -287,7 +287,7 @@ export default function BdcApiTesterView() {
         </Grid>
 
         {/* Live Payload Output Panel */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Card sx={{ p: 3, minHeight: 400, display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
