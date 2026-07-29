@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, MenuItem, Select, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TablePagination } from '@mui/material';
 import { Shield, Plus, GitBranch, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
@@ -7,6 +7,7 @@ import RoleTableView from './RoleTableView';
 import RoleTreeView from './RoleTreeView';
 import { usePermissions } from '../context/PermissionsContext';
 import EnvironmentSelection from './EnvironmentSelection';
+import SearchableSelect from './SearchableSelect';
 
 // Helper recursively collecting all restrictions for a role
 function getEffectiveRestrictionsFlat(role, allRoles) {
@@ -37,6 +38,12 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [healthFilter, setHealthFilter] = useState(initialFilter || null);
   const [envFilter, setEnvFilter] = useState([]);
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery, envFilter, typeFilter, healthFilter]);
 
   useEffect(() => {
     if (initialFilter) {
@@ -113,7 +120,6 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
   // Apply health filters
   const healthFilteredRoles = envFilteredRoles.filter(role => {
-    console.log(role);
     if (!healthFilter) return true;
     if (healthFilter === 'unrestricted') {
       return !role.ownRestrictions || role.ownRestrictions.length === 0;
@@ -142,6 +148,29 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     );
     return nameMatch || descMatch || restMatch;
   });
+
+  // Find top-level root roles among filteredRoles
+  const rootRoles = filteredRoles.filter(r => {
+    if (!r.parentRoles || r.parentRoles.length === 0) return true;
+    return !r.parentRoles.some(pr => {
+      const parentId = pr.parent_ID || pr.parent?.ID;
+      return filteredRoles.some(vr => vr.ID === parentId);
+    });
+  });
+
+  const paginatedRoots = rootRoles.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginatedFilteredRoles = filteredRoles.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const paginationCount = (viewMode === 'table' || viewMode === 'tree') ? rootRoles.length : filteredRoles.length;
 
   const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL');
 
@@ -203,15 +232,18 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           fullWidth={false}
         />
 
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Role Type</InputLabel>
-          <Select value={typeFilter} label="Role Type" onChange={e => setTypeFilter(e.target.value)}>
-            <MenuItem value="ALL">All Types</MenuItem>
-            <MenuItem value="SINGLE">Single Role</MenuItem>
-            <MenuItem value="DERIVED">Derived Role</MenuItem>
-            <MenuItem value="ORG_BASED">Org-Based Role</MenuItem>
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={[
+            { value: 'ALL', label: 'All Types' },
+            { value: 'SINGLE', label: 'Single Role' },
+            { value: 'DERIVED', label: 'Derived Role' },
+            { value: 'ORG_BASED', label: 'Org-Based Role' }
+          ]}
+          value={typeFilter}
+          onChange={val => setTypeFilter(val)}
+          label="Role Type"
+          sx={{ minWidth: 160 }}
+        />
 
         {healthFilter && (
           <Chip
@@ -287,7 +319,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         <>
           {viewMode === 'table' && (
             <RoleTableView
-              roles={filteredRoles}
+              roles={paginatedRoots}
               allRoles={roles}
               orgNodes={orgNodes}
               onDerive={onDeriveRole}
@@ -302,7 +334,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
           {viewMode === 'tree' && (
             <RoleTreeView
-              roles={filteredRoles}
+              roles={paginatedRoots}
               allRoles={roles}
               orgNodes={orgNodes}
               onDeriveRole={onDeriveRole}
@@ -316,7 +348,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
           {viewMode === 'grid' && (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 2 }}>
-              {filteredRoles.map(r => (
+              {paginatedFilteredRoles.map(r => (
                 <RoleCard
                   key={r.ID}
                   role={r}
@@ -335,6 +367,21 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             </Box>
           )}
         </>
+      )}
+
+      {!loading && visibleRoles.length > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+          <TablePagination
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            component="div"
+            count={paginationCount}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            sx={{ borderTop: 'none', color: 'text.secondary' }}
+          />
+        </Box>
       )}
 
       {/* Delete Confirmation Dialog */}

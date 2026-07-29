@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FormControl, InputLabel, Select, MenuItem, Checkbox, ListItemText, Box, Chip } from '@mui/material';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
+import SearchableSelect from './SearchableSelect';
 
 interface EnvironmentSelectionProps {
   value: any;
@@ -66,62 +66,29 @@ export default function EnvironmentSelection({
     return allowedEnvs.includes(env.ID);
   });
 
-  const handleSelectChange = (event) => {
-    const val = event.target.value;
+  const envOptions = filteredEnvironments.map(env => ({
+    value: env.ID,
+    label: `${env.ID} - ${env.name}`
+  }));
+
+  const handleSelectChange = (val) => {
     if (onChange) {
       onChange(val);
     }
   };
 
-  const labelId = `env-select-${multiple ? 'multi' : 'single'}-label`;
-
   return (
-    <FormControl size={size} fullWidth={fullWidth} disabled={disabled || loading} required={required} sx={sx}>
-      <InputLabel id={labelId}>{label}</InputLabel>
-      <Select
-        labelId={labelId}
-        id={`env-select-${multiple ? 'multi' : 'single'}`}
-        multiple={multiple}
-        value={multiple ? (Array.isArray(value) ? value : []) : (value || '')}
-        label={label}
-        onChange={handleSelectChange}
-        renderValue={(selected) => {
-          if (multiple) {
-            return (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {selected.map((val) => {
-                  const env = filteredEnvironments.find(e => e.ID === val);
-                  return <Chip key={val} label={env ? `${env.ID} - ${env.name}` : val} size="small" />;
-                })}
-              </Box>
-            );
-          }
-          const env = filteredEnvironments.find(e => e.ID === selected);
-          return env ? `${env.ID} - ${env.name}` : selected;
-        }}
-      >
-        {loading && multiple && Array.isArray(value) && value.map(val => (
-          <MenuItem key={val} value={val} style={{ display: 'none' }}>{val}</MenuItem>
-        ))}
-        {loading && !multiple && value && (
-          <MenuItem value={value} style={{ display: 'none' }}>{value}</MenuItem>
-        )}
-        {filteredEnvironments.map((env) => {
-          const isSelected = multiple
-            ? (Array.isArray(value) && value.includes(env.ID))
-            : value === env.ID;
-
-          return (
-            <MenuItem key={env.ID} value={env.ID}>
-              {multiple && <Checkbox checked={isSelected} />}
-              <ListItemText primary={`${env.ID} - ${env.name}`} />
-            </MenuItem>
-          );
-        })}
-        {filteredEnvironments.length === 0 && !loading && (
-          <MenuItem value="" disabled>No environments available</MenuItem>
-        )}
-      </Select>
-    </FormControl>
+    <SearchableSelect
+      options={envOptions}
+      value={value}
+      onChange={handleSelectChange}
+      label={label}
+      multiple={multiple}
+      disabled={disabled || loading}
+      required={required}
+      size={size}
+      fullWidth={fullWidth}
+      sx={sx}
+    />
   );
 }

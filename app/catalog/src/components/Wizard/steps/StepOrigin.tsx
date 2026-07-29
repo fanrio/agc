@@ -1,9 +1,8 @@
 import React from 'react';
-import { Box, Card, Typography, TextField, FormControl, InputLabel, Select, MenuItem, OutlinedInput, ListItemText, FormControlLabel, Checkbox } from '@mui/material';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import { Box, Card, Typography, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import { Check, Shield, Zap, GitFork } from 'lucide-react';
 import EnvironmentSelection from '../../EnvironmentSelection';
+import SearchableSelect from '../../SearchableSelect';
 
 export default function StepOrigin({
   roleType, setRoleType,
@@ -63,57 +62,38 @@ export default function StepOrigin({
 
       {roleType === 'ORG_BASED' && (
         <Box sx={{ mb: 3 }}>
-          <FormControl size="small" fullWidth sx={{ maxWidth: 400 }}>
-            <InputLabel id="origin-org-label">Select Org Node</InputLabel>
-            <Select
-              labelId="origin-org-label"
-              label="Select Org Node"
-              value={selectedOrgNodeId}
-              onChange={e => setOrgNode(e.target.value)}
-              disabled={isEditMode || isReadOnly}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {orgNodes.map(n => (
-                <MenuItem key={n.ID} value={n.ID}>{n.name} ({n.type?.name || ''})</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'None' },
+              ...orgNodes.map(n => ({
+                value: n.ID,
+                label: `${n.name} (${n.type?.name || ''})`
+              }))
+            ]}
+            value={selectedOrgNodeId}
+            onChange={val => setOrgNode(val)}
+            label="Select Org Node"
+            disabled={isEditMode || isReadOnly}
+            sx={{ maxWidth: 400 }}
+          />
         </Box>
       )}
 
       {roleType === 'SINGLE' && (
         <Box sx={{ mb: 3 }}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="parent-roles-select-label">Inherit from Roles (Multiple Select)</InputLabel>
-            <Select
-              labelId="parent-roles-select-label"
-              id="parent-roles-select"
-              multiple
-              value={selectedParentIds}
-              onChange={e => setSelectedParentIds(e.target.value)}
-              disabled={isReadOnly || (selectedParentIds && selectedParentIds.length > 0)}
-              input={<OutlinedInput label="Inherit from Roles (Multiple Select)" />}
-              renderValue={selected => {
-                const names = selected.map(id => allRoles.find(r => r.ID === id)?.name).filter(Boolean);
-                return names.join(', ');
-              }}
-            >
-              {allRoles.filter(r => r.ID !== context.roleId).map(r => {
-                const isChecked = selectedParentIds.includes(r.ID);
-                const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-
-                return (
-                  <MenuItem key={r.ID} value={r.ID}>
-                    <SelectionIcon
-                      fontSize="small"
-                      style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                    />
-                    <ListItemText primary={r.name} />
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={allRoles
+              .filter(r => r.ID !== context.roleId)
+              .map(r => ({
+                value: r.ID,
+                label: r.name
+              }))}
+            value={selectedParentIds}
+            onChange={vals => setSelectedParentIds(vals)}
+            label="Inherit from Roles (Multiple Select)"
+            multiple
+            disabled={isReadOnly || (selectedParentIds && selectedParentIds.length > 0)}
+          />
         </Box>
       )}
 
@@ -143,27 +123,25 @@ export default function StepOrigin({
           disabled={isReadOnly}
           sx={{ mt: 1 }}
         />
-        <FormControl size="small" fullWidth sx={{ mt: 1 }} required>
-          <InputLabel id="role-access-domain-label">Access Domain</InputLabel>
-          <Select
-            labelId="role-access-domain-label"
-            label="Access Domain *"
+        <Box sx={{ mt: 1 }}>
+          <SearchableSelect
+            options={(() => {
+              if (accessDomains.length === 0 || !accessDomains.some(d => d.ID === accessDomainId)) {
+                const matchedName = (allAccessDomains || []).find(d => d.ID === accessDomainId)?.name || accessDomainId;
+                return [{ value: accessDomainId, label: matchedName }];
+              }
+              return accessDomains.map(ctx => ({
+                value: ctx.ID,
+                label: ctx.name
+              }));
+            })()}
             value={accessDomainId}
-            onChange={e => setAccessDomainId(e.target.value)}
+            onChange={val => setAccessDomainId(val)}
+            label="Access Domain"
+            required
             disabled={isReadOnly || (selectedParentIds && selectedParentIds.length > 0)}
-          >
-            {accessDomains.length === 0 || !accessDomains.some(d => d.ID === accessDomainId) ? (
-              // Locked to parent's domain — look up name from full list
-              <MenuItem value={accessDomainId}>
-                {(allAccessDomains || []).find(d => d.ID === accessDomainId)?.name || accessDomainId}
-              </MenuItem>
-            ) : (
-              accessDomains.map(ctx => (
-                <MenuItem key={ctx.ID} value={ctx.ID}>{ctx.name}</MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
+          />
+        </Box>
         <FormControlLabel
           control={
             <Checkbox

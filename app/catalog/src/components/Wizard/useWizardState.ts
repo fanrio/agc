@@ -141,6 +141,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
     if (!permissions) return false;
     if (!permissions.canManageDerivedRoles) return false;
     const scope = permissions.managedDerivedRolesScope;
+    console.log(scope);
     if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
       return true;
     }
@@ -418,8 +419,8 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   async function handleDeploy() {
     setLoading(true);
     try {
-      const computedType = roleType === 'DRAGE' 
-        ? 'DRAGE' 
+      const computedType = roleType === 'DRAGE'
+        ? 'DRAGE'
         : (roleType === 'ORG_BASED' ? 'ORG_BASED' : (selectedParentIds.length > 0 ? 'DERIVED' : 'SINGLE'));
 
       const ownRestrictions = restrictions.map(r => ({
@@ -566,7 +567,6 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
     return selectable;
   })();
 
-  const isUserApprover = Array.isArray(approvers) && approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
   const isReadOnly = (() => {
     if (!isEditMode) return false;
     if (permissions?.isSuperAdmin) return false;

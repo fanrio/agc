@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Alert, Collapse, Grid, Snackbar, Checkbox, FormControlLabel, Chip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { Plus, Trash2, Edit3, X, Check, Cloud, Link2, Wifi, Key } from 'lucide-react';
 import * as api from '../api';
 import EnvironmentSelection from './EnvironmentSelection';
+import SearchableSelect from './SearchableSelect';
 
 
 const ENV_COLOR = {
@@ -363,18 +364,15 @@ export default function BdcSettingsView() {
               <TextField label="System Connection Name" size="small" fullWidth placeholder="e.g. Datasphere Production" value={form.systemName} onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))} />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <FormControl size="small" fullWidth>
-                <InputLabel id="add-conn-type-label">Connection Type</InputLabel>
-                <Select
-                  labelId="add-conn-type-label"
-                  label="Connection Type"
-                  value={form.connectionType}
-                  onChange={e => setForm(f => ({ ...f, connectionType: e.target.value }))}
-                >
-                  <MenuItem value="OData">OData (REST Catalog)</MenuItem>
-                  <MenuItem value="SAP Hana">SAP Hana (Direct DB)</MenuItem>
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={[
+                  { value: 'OData', label: 'OData (REST Catalog)' },
+                  { value: 'SAP Hana', label: 'SAP Hana (Direct DB)' }
+                ]}
+                value={form.connectionType}
+                onChange={val => setForm(f => ({ ...f, connectionType: val }))}
+                label="Connection Type"
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <EnvironmentSelection
@@ -415,23 +413,14 @@ export default function BdcSettingsView() {
                   <TextField label="Client Secret" type="password" size="small" fullWidth value={form.clientSecret} onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 8 }}>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="add-space-label">Space</InputLabel>
-                    <Select
-                      labelId="add-space-label"
-                      label="Space"
-                      value={form.space}
-                      onChange={e => setForm(f => ({ ...f, space: e.target.value }))}
-                      disabled={fetchingSpaces}
-                    >
-                      {Array.from(new Set([...fetchedSpaces, form.space])).filter(Boolean).map(sp => (
-                        <MenuItem key={sp} value={sp}>{sp}</MenuItem>
-                      ))}
-                      {fetchedSpaces.length === 0 && !form.space && (
-                        <MenuItem value="" disabled>Please fetch spaces first</MenuItem>
-                      )}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect
+                    options={Array.from(new Set([...fetchedSpaces, form.space])).filter(Boolean)}
+                    value={form.space}
+                    onChange={val => setForm(f => ({ ...f, space: val }))}
+                    label="Space"
+                    disabled={fetchingSpaces}
+                    placeholder="Please fetch spaces first"
+                  />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
                   <Button
@@ -486,18 +475,15 @@ export default function BdcSettingsView() {
                         <TextField label="System Connection Name" size="small" fullWidth value={editForm.systemName} onChange={e => setEditForm(f => ({ ...f, systemName: e.target.value }))} />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
-                        <FormControl size="small" fullWidth>
-                          <InputLabel id="edit-conn-type-label">Connection Type</InputLabel>
-                          <Select
-                            labelId="edit-conn-type-label"
-                            label="Connection Type"
-                            value={editForm.connectionType}
-                            onChange={e => setEditForm(f => ({ ...f, connectionType: e.target.value }))}
-                          >
-                            <MenuItem value="OData">OData (REST Catalog)</MenuItem>
-                            <MenuItem value="SAP Hana">SAP Hana (Direct DB)</MenuItem>
-                          </Select>
-                        </FormControl>
+                        <SearchableSelect
+                          options={[
+                            { value: 'OData', label: 'OData (REST Catalog)' },
+                            { value: 'SAP Hana', label: 'SAP Hana (Direct DB)' }
+                          ]}
+                          value={editForm.connectionType}
+                          onChange={val => setEditForm(f => ({ ...f, connectionType: val }))}
+                          label="Connection Type"
+                        />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
                         <EnvironmentSelection
@@ -538,23 +524,14 @@ export default function BdcSettingsView() {
                             <TextField label="Client Secret" type="password" size="small" fullWidth placeholder="••••••••" value={editForm.clientSecret} onChange={e => setEditForm(f => ({ ...f, clientSecret: e.target.value }))} />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 8 }}>
-                            <FormControl size="small" fullWidth>
-                              <InputLabel id="edit-space-label">Space</InputLabel>
-                              <Select
-                                labelId="edit-space-label"
-                                label="Space"
-                                value={editForm.space}
-                                onChange={e => setEditForm(f => ({ ...f, space: e.target.value }))}
-                                disabled={fetchingSpaces}
-                              >
-                                {Array.from(new Set([...fetchedSpaces, editForm.space])).filter(Boolean).map(sp => (
-                                  <MenuItem key={sp} value={sp}>{sp}</MenuItem>
-                                ))}
-                                {fetchedSpaces.length === 0 && !editForm.space && (
-                                  <MenuItem value="" disabled>Please fetch spaces first</MenuItem>
-                                )}
-                              </Select>
-                            </FormControl>
+                            <SearchableSelect
+                              options={Array.from(new Set([...fetchedSpaces, editForm.space])).filter(Boolean)}
+                              value={editForm.space}
+                              onChange={val => setEditForm(f => ({ ...f, space: val }))}
+                              label="Space"
+                              disabled={fetchingSpaces}
+                              placeholder="Please fetch spaces first"
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
                             <Button

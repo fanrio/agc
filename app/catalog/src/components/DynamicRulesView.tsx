@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import {
   Box, Button, Card, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Typography, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, Checkbox, FormControlLabel, Select, MenuItem,
-  InputLabel, FormControl, Autocomplete, IconButton, Snackbar, Alert,
+  DialogActions, TextField, Checkbox, FormControlLabel, Autocomplete, IconButton, Snackbar, Alert,
   CircularProgress, Tooltip
 } from '@mui/material';
 import { Play, Edit, Trash2, Plus, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
 import EnvironmentSelection from './EnvironmentSelection';
+import SearchableSelect from './SearchableSelect';
 
 export default function DynamicRulesView() {
   const { permissions } = usePermissions();
@@ -63,7 +63,7 @@ export default function DynamicRulesView() {
         api.getEnvironments()
       ]);
       setRules(rData || []);
-      setRoles(filterRolesByPermissions(rolesData || [], permissions));
+      setRoles(rolesData || []);
       setFields(fieldsData || []);
       setConnections(connData || []);
       setAccessDomains(streamsData || []);
@@ -383,16 +383,12 @@ export default function DynamicRulesView() {
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Role Settings</Typography>
 
-            <FormControl size="small" fullWidth>
-              <InputLabel>Access Domain</InputLabel>
-              <Select
-                value={form.accessDomain_ID}
-                label="Access Domain"
-                onChange={(e) => setForm(p => ({ ...p, accessDomain_ID: e.target.value }))}
-              >
-                {accessDomains.map(s => <MenuItem key={s.ID} value={s.ID}>{s.name} ({s.description})</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={accessDomains.map(s => ({ value: s.ID, label: `${s.name} (${s.description})` }))}
+              value={form.accessDomain_ID}
+              onChange={val => setForm(p => ({ ...p, accessDomain_ID: val }))}
+              label="Access Domain"
+            />
 
             <EnvironmentSelection
               value={form.environment_ID}
@@ -401,54 +397,28 @@ export default function DynamicRulesView() {
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Source Master Data Settings</Typography>
 
-            <FormControl size="small" fullWidth>
-              <InputLabel>BDC Connection</InputLabel>
-              <Select
-                value={form.bdcConnection_ID}
-                label="BDC Connection"
-                onChange={(e) => setForm(p => ({ ...p, bdcConnection_ID: e.target.value }))}
-              >
-                {connections.map(c => <MenuItem key={c.ID} value={c.ID}>{c.systemName} ({c.space})</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={connections.map(c => ({ value: c.ID, label: `${c.systemName} (${c.space})` }))}
+              value={form.bdcConnection_ID}
+              onChange={val => setForm(p => ({ ...p, bdcConnection_ID: val }))}
+              label="BDC Connection"
+            />
 
-            <FormControl size="small" fullWidth disabled={loadingAssets || !form.bdcConnection_ID}>
-              <InputLabel id="bdc-asset-label">
-                {loadingAssets ? 'Loading Assets...' : 'BDC Asset'}
-              </InputLabel>
-              <Select
-                labelId="bdc-asset-label"
-                label="BDC Asset"
-                value={form.sourceEntity || ''}
-                onChange={(e) => handleAssetChange(e.target.value)}
-              >
-                {assets.map(asset => (
-                  <MenuItem key={asset} value={asset}>{asset}</MenuItem>
-                ))}
-                {assets.length === 0 && !loadingAssets && (
-                  <MenuItem value="" disabled>No assets available</MenuItem>
-                )}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={assets}
+              value={form.sourceEntity || ''}
+              onChange={val => handleAssetChange(val)}
+              label={loadingAssets ? 'Loading Assets...' : 'BDC Asset'}
+              disabled={loadingAssets || !form.bdcConnection_ID}
+            />
 
-            <FormControl size="small" fullWidth disabled={loadingColumns || !form.sourceEntity}>
-              <InputLabel id="bdc-responsible-label">
-                {loadingColumns ? 'Loading Columns...' : 'User (Responsible) Field'}
-              </InputLabel>
-              <Select
-                labelId="bdc-responsible-label"
-                label="User (Responsible) Field"
-                value={form.sourceResponsibleField || ''}
-                onChange={(e) => setForm(p => ({ ...p, sourceResponsibleField: e.target.value }))}
-              >
-                {assetColumns.map(col => (
-                  <MenuItem key={col} value={col}>{col}</MenuItem>
-                ))}
-                {assetColumns.length === 0 && !loadingColumns && (
-                  <MenuItem value="" disabled>No columns available</MenuItem>
-                )}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={assetColumns}
+              value={form.sourceResponsibleField || ''}
+              onChange={val => setForm(p => ({ ...p, sourceResponsibleField: val }))}
+              label={loadingColumns ? 'Loading Columns...' : 'User (Responsible) Field'}
+              disabled={loadingColumns || !form.sourceEntity}
+            />
 
             <TextField
               label="Source Filter Condition"
@@ -496,29 +466,23 @@ export default function DynamicRulesView() {
             ))}
 
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>Target Configuration</Typography>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Generation Mode</InputLabel>
-              <Select
-                value={form.generationMode}
-                label="Generation Mode"
-                onChange={(e) => setForm(p => ({ ...p, generationMode: e.target.value }))}
-              >
-                <MenuItem value="USER_CONSOLIDATED_ROLE">User Consolidated Role (Highly Optimized)</MenuItem>
-                <MenuItem value="TEMPLATE_ASSIGNMENT">Static Template Role Assignment</MenuItem>
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={[
+                { value: 'USER_CONSOLIDATED_ROLE', label: 'User Consolidated Role (Highly Optimized)' },
+                { value: 'TEMPLATE_ASSIGNMENT', label: 'Static Template Role Assignment' }
+              ]}
+              value={form.generationMode}
+              onChange={val => setForm(p => ({ ...p, generationMode: val }))}
+              label="Generation Mode"
+            />
 
             {form.generationMode === 'TEMPLATE_ASSIGNMENT' && (
-              <FormControl size="small" fullWidth>
-                <InputLabel>Template Role</InputLabel>
-                <Select
-                  value={form.templateRole_ID}
-                  label="Template Role"
-                  onChange={(e) => setForm(p => ({ ...p, templateRole_ID: e.target.value }))}
-                >
-                  {roles.map(r => <MenuItem key={r.ID} value={r.ID}>{r.name}</MenuItem>)}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={roles.map(r => ({ value: r.ID, label: r.name }))}
+                value={form.templateRole_ID}
+                onChange={val => setForm(p => ({ ...p, templateRole_ID: val }))}
+                label="Template Role"
+              />
             )}
           </Box>
         </DialogContent>

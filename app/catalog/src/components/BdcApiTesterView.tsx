@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Box, Card, Typography, FormControl, InputLabel, Select, MenuItem, TextField, Button, CircularProgress, Alert, Grid, Paper, Tooltip, IconButton } from '@mui/material';
+import { Box, Card, Typography, TextField, Button, CircularProgress, Alert, Grid, Paper, Tooltip, IconButton } from '@mui/material';
 import { Play, Copy, Check, Terminal, Server, ShieldCheck } from 'lucide-react';
 import * as api from '../api';
+import SearchableSelect from './SearchableSelect';
 
 export default function BdcApiTesterView() {
   const [connections, setConnections] = useState([]);
@@ -160,51 +161,31 @@ export default function BdcApiTesterView() {
                 <CircularProgress size={20} />
               </Box>
             ) : (
-              <FormControl size="small" fullWidth>
-                <InputLabel id="tester-conn-label">Target BDC Connection</InputLabel>
-                <Select
-                  labelId="tester-conn-label"
-                  label="Target BDC Connection"
-                  value={selectedConnId}
-                  onChange={e => setSelectedConnId(e.target.value)}
-                >
-                  {connections.map(c => (
-                    <MenuItem key={c.ID} value={c.ID}>
-                      {c.systemName}
-                    </MenuItem>
-                  ))}
-                  {connections.length === 0 && (
-                    <MenuItem value="" disabled>No connections configured</MenuItem>
-                  )}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={connections.map(c => ({ value: c.ID, label: c.systemName }))}
+                value={selectedConnId}
+                onChange={val => setSelectedConnId(val)}
+                label="Target BDC Connection"
+              />
             )}
 
-            <FormControl size="small" fullWidth>
-              <InputLabel id="tester-api-label">Select API Endpoint</InputLabel>
-              <Select
-                labelId="tester-api-label"
-                label="Select API Endpoint"
-                value={selectedApi}
-                onChange={e => setSelectedApi(e.target.value)}
-                data-testid="api-endpoint-select"
-              >
-                {isHana ? (
-                  <MenuItem value="HANA_VIEWS">fetchRawHanaViews (List Database Views)</MenuItem>
-                ) : (
-                  [
-                    <MenuItem key="SPACES" value="SPACES">fetchRawBdcSpaces (Spaces Catalog)</MenuItem>,
-                    <MenuItem key="ASSETS" value="ASSETS">fetchRawBdcAssets (Assets Catalog)</MenuItem>,
-                    <MenuItem key="USERS" value="USERS">fetchRawBdcUsers (SCIM 2.0 User List)</MenuItem>,
-                    <MenuItem key="VALUES" value="VALUES">fetchRawBdcRelationalValues (Relational Data)</MenuItem>,
-                    <MenuItem key="COLUMNS" value="COLUMNS">fetchRawBdcAssetColumns ($metadata XML Schema)</MenuItem>,
-                    <MenuItem key="RUN_TASK_CHAIN" value="RUN_TASK_CHAIN">runBdcTaskChain (Start Task Chain Run)</MenuItem>,
-                    <MenuItem key="FETCH_TASK_CHAIN_LOG" value="FETCH_TASK_CHAIN_LOG">fetchBdcTaskChainLog (Fetch Task Chain Log)</MenuItem>,
-                    <MenuItem key="ASSOCIATIONS" value="ASSOCIATIONS">fetchBdcAssociations (List View Associations)</MenuItem>
-                  ]
-                )}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={isHana ? [
+                { value: 'HANA_VIEWS', label: 'fetchRawHanaViews (List Database Views)' }
+              ] : [
+                { value: 'SPACES', label: 'fetchRawBdcSpaces (Spaces Catalog)' },
+                { value: 'ASSETS', label: 'fetchRawBdcAssets (Assets Catalog)' },
+                { value: 'USERS', label: 'fetchRawBdcUsers (SCIM 2.0 User List)' },
+                { value: 'VALUES', label: 'fetchRawBdcRelationalValues (Relational Data)' },
+                { value: 'COLUMNS', label: 'fetchRawBdcAssetColumns ($metadata XML Schema)' },
+                { value: 'RUN_TASK_CHAIN', label: 'runBdcTaskChain (Start Task Chain Run)' },
+                { value: 'FETCH_TASK_CHAIN_LOG', label: 'fetchBdcTaskChainLog (Fetch Task Chain Log)' },
+                { value: 'ASSOCIATIONS', label: 'fetchBdcAssociations (List View Associations)' }
+              ]}
+              value={selectedApi}
+              onChange={val => setSelectedApi(val)}
+              label="Select API Endpoint"
+            />
 
             {showSpaceAssetFields && (
               <>

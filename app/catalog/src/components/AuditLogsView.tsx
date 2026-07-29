@@ -19,22 +19,20 @@ import {
   DialogActions,
   Button,
   TextField,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
   TablePagination,
   CircularProgress,
   InputAdornment,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Grid
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
-import { Eye, Search, RefreshCw, AlertCircle } from 'lucide-react';
-import { getAuditLogs, getRoles } from '../api';
+import { Eye, Search, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
+import * as api from '../api';
+import SearchableSelect from './SearchableSelect';
 import AuditDetailsDispatcher from './AuditDetails';
 
 export default function AuditLogsView() {
@@ -149,7 +147,7 @@ export default function AuditLogsView() {
     setLoading(true);
     setError('');
     try {
-      const [data, rolesData] = await Promise.all([getAuditLogs(), getRoles()]);
+      const [data, rolesData] = await Promise.all([api.getAuditLogs(), api.getRoles()]);
       const consolidated = consolidateLogs(data || []);
       setLogs(consolidated);
       setRoles(rolesData || []);
@@ -522,20 +520,19 @@ export default function AuditLogsView() {
                   }}
                 />
 
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Time Range</InputLabel>
-                  <Select
-                    value={dateFilter}
-                    label="Time Range"
-                    onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Time</MenuItem>
-                    <MenuItem value="TODAY">Today</MenuItem>
-                    <MenuItem value="WEEK">Past 7 Days</MenuItem>
-                    <MenuItem value="MONTH">Past 30 Days</MenuItem>
-                    <MenuItem value="CUSTOM">Custom Range...</MenuItem>
-                  </Select>
-                </FormControl>
+                <SearchableSelect
+                  options={[
+                    { value: 'ALL', label: 'All Time' },
+                    { value: 'TODAY', label: 'Today' },
+                    { value: 'WEEK', label: 'Past 7 Days' },
+                    { value: 'MONTH', label: 'Past 30 Days' },
+                    { value: 'CUSTOM', label: 'Custom Range...' }
+                  ]}
+                  value={dateFilter}
+                  onChange={val => { setDateFilter(val); setPage(0); }}
+                  label="Time Range"
+                  sx={{ minWidth: 150 }}
+                />
 
                 {dateFilter === 'CUSTOM' && (
                   <>
@@ -554,51 +551,44 @@ export default function AuditLogsView() {
                   </>
                 )}
 
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Action</InputLabel>
-                  <Select
-                    value={actionFilter}
-                    label="Action"
-                    onChange={(e) => { setActionFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Actions</MenuItem>
-                    <MenuItem value="CREATE">CREATE</MenuItem>
-                    <MenuItem value="UPDATE">UPDATE</MenuItem>
-                    <MenuItem value="DELETE">DELETE</MenuItem>
-                  </Select>
-                </FormControl>
+                <SearchableSelect
+                  options={[
+                    { value: 'ALL', label: 'All Actions' },
+                    { value: 'CREATE', label: 'CREATE' },
+                    { value: 'UPDATE', label: 'UPDATE' },
+                    { value: 'DELETE', label: 'DELETE' }
+                  ]}
+                  value={actionFilter}
+                  onChange={val => { setActionFilter(val); setPage(0); }}
+                  label="Action"
+                  sx={{ minWidth: 150 }}
+                />
 
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select
-                    value={entityFilter}
-                    label="Entity Type"
-                    onChange={(e) => { setEntityFilter(e.target.value); setPage(0); }}
-                  >
-                    <MenuItem value="ALL">All Entities</MenuItem>
-                    <MenuItem value="Roles">Roles</MenuItem>
-                    <MenuItem value="RoleAssignments">Role Assignments</MenuItem>
-                  </Select>
-                </FormControl>
+                <SearchableSelect
+                  options={[
+                    { value: 'ALL', label: 'All Entities' },
+                    { value: 'Roles', label: 'Roles' },
+                    { value: 'RoleAssignments', label: 'Role Assignments' }
+                  ]}
+                  value={entityFilter}
+                  onChange={val => { setEntityFilter(val); setPage(0); }}
+                  label="Entity Type"
+                  sx={{ minWidth: 180 }}
+                />
               </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', flexGrow: 1 }}>
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel id="actor-filter-label">Performed By</InputLabel>
-                    <Select
-                      labelId="actor-filter-label"
-                      id="actor-filter-select"
-                      value={actorFilter}
-                      label="Performed By"
-                      onChange={(e) => { setActorFilter(e.target.value); setPage(0); }}
-                    >
-                      <MenuItem value="ALL">All Performers</MenuItem>
-                      {actorsList.map(actor => (
-                        <MenuItem key={actor} value={actor}>{actor}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect
+                    options={[
+                      { value: 'ALL', label: 'All Performers' },
+                      ...actorsList.map(actor => ({ value: actor, label: actor }))
+                    ]}
+                    value={actorFilter}
+                    onChange={val => { setActorFilter(val); setPage(0); }}
+                    label="Performed By"
+                    sx={{ minWidth: 180 }}
+                  />
                 </Box>
 
                 <FormControlLabel

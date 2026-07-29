@@ -83,6 +83,7 @@ export function isCriticalRestriction(r: Restriction, orgNodes: OrgNode[] = []):
  * Handles both JSON arrays and comma-separated string fallbacks.
  */
 export function isRoleInScope(roleId: string, roleName: string | undefined, scope: string | undefined): boolean {
+
   if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
     return true;
   }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip } from '@mui/material';
+import { Box, Card, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip } from '@mui/material';
 import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
 import TemplateNameEditor from './TemplateNameEditor';
+import SearchableSelect from './SearchableSelect';
 
 // ─── Move Dialog ──────────────────────────────────────────────────────────────
 function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
@@ -27,22 +28,15 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
         <IconButton onClick={onClose} size="small" aria-label="Close"><X size={16} /></IconButton>
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
-        <FormControl size="small" fullWidth sx={{ mt: 1 }}>
-          <InputLabel id="move-parent-select-label">New Parent Node</InputLabel>
-          <Select
-            labelId="move-parent-select-label"
-            label="New Parent Node"
-            value={selectedParentId}
-            onChange={e => setSelectedParentId(e.target.value)}
-          >
-            <MenuItem value=""><em>— Make root node (no parent) —</em></MenuItem>
-            {validParents.map(n => (
-              <MenuItem key={n.ID} value={n.ID}>
-                {n.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={[
+            { value: '', label: '— Make root node (no parent) —' },
+            ...validParents.map(n => ({ value: n.ID, label: n.name }))
+          ]}
+          value={selectedParentId}
+          onChange={val => setSelectedParentId(val)}
+          label="New Parent Node"
+        />
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose} color="inherit">Cancel</Button>
@@ -495,38 +489,26 @@ function NodeRow({
               />
             )}
             {showTypeSelector && (
-              <FormControl size="small" sx={{ width: 140 }}>
-                <InputLabel id="child-type-label">Type</InputLabel>
-                <Select
-                  labelId="child-type-label"
-                  label="Type"
+                <SearchableSelect
+                  options={[
+                    { value: '', label: 'None' },
+                    ...nodeTypes.map(t => ({ value: t.ID, label: t.name }))
+                  ]}
                   value={newChild.type || ''}
-                  onChange={e => setNewChild(c => ({ ...c, type: e.target.value }))}
-                >
-                  <MenuItem value=""><em>None</em></MenuItem>
-                  {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
-                </Select>
-              </FormControl>
-            )}
-            {showRestrictionFields && nodeTypes.length > 0 && (
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <InputLabel id={`child-fields-label-${node.ID}`}>Restriction Fields</InputLabel>
-                <Select
-                  labelId={`child-fields-label-${node.ID}`}
+                  onChange={val => setNewChild(c => ({ ...c, type: val }))}
+                  label="Type"
+                  sx={{ width: 140 }}
+                />
+              )}
+              {showRestrictionFields && nodeTypes.length > 0 && (
+                <SearchableSelect
+                  options={nodeTypes.map(f => ({ value: f.ID, label: f.name }))}
+                  value={newChildFields}
+                  onChange={vals => setNewChildFields(vals)}
                   label="Restriction Fields"
                   multiple
-                  value={newChildFields}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setNewChildFields(typeof val === 'string' ? val.split(',') : val);
-                  }}
-                  renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
-                >
-                  {nodeTypes.map(f => (
-                    <MenuItem key={f.ID} value={f.ID}>{f.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  sx={{ minWidth: 180 }}
+                />
             )}
             {showRoleTemplateName && (
               <Box sx={{ width: '100%', mt: 1.5, mb: 1 }}>
@@ -825,38 +807,26 @@ export default function HierarchicalManager({
             />
           )}
           {showTypeSelector && (
-            <FormControl size="small" sx={{ width: 160 }}>
-              <InputLabel id="root-type-label">Type</InputLabel>
-              <Select
-                labelId="root-type-label"
-                label="Type"
-                value={newRoot.type || ''}
-                onChange={e => setNewRoot(r => ({ ...r, type: e.target.value }))}
-              >
-                <MenuItem value=""><em>None</em></MenuItem>
-                {nodeTypes.map(t => <MenuItem key={t.ID} value={t.ID}>{t.name}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={[
+                { value: '', label: 'None' },
+                ...nodeTypes.map(t => ({ value: t.ID, label: t.name }))
+              ]}
+              value={newRoot.type || ''}
+              onChange={val => setNewRoot(r => ({ ...r, type: val }))}
+              label="Type"
+              sx={{ width: 160 }}
+            />
           )}
           {showRestrictionFields && nodeTypes.length > 0 && (
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel id="root-fields-label">Restriction Fields</InputLabel>
-              <Select
-                labelId="root-fields-label"
-                label="Restriction Fields"
-                multiple
-                value={newRootFields}
-                onChange={e => {
-                  const val = e.target.value;
-                  setNewRootFields(typeof val === 'string' ? val.split(',') : val);
-                }}
-                renderValue={selected => selected.map(id => nodeTypes.find(f => f.ID === id)?.name || id).join(', ')}
-              >
-                {nodeTypes.map(f => (
-                  <MenuItem key={f.ID} value={f.ID}>{f.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={nodeTypes.map(f => ({ value: f.ID, label: f.name }))}
+              value={newRootFields}
+              onChange={vals => setNewRootFields(vals)}
+              label="Restriction Fields"
+              multiple
+              sx={{ minWidth: 200 }}
+            />
           )}
           {showRoleTemplateName && (
             <Box sx={{ width: '100%', mt: 1.5, mb: 1 }}>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, FormControl, InputLabel, Select, MenuItem, Box, Chip } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box } from '@mui/material';
 import UserSelection from './UserSelection';
+import SearchableSelect from './SearchableSelect';
 import * as api from '../api';
 
 // Helper to recursively check if a role or any of its parents has restrictions
@@ -142,37 +143,25 @@ export default function UserRoleAssignment({
                 disabled={loading}
               />
             </Box>
-            <FormControl size="small" fullWidth sx={{ flex: 1 }}>
-              <InputLabel id="dialog-role-select-label">Role</InputLabel>
-              <Select
-                labelId="dialog-role-select-label"
-                label="Role"
-                multiple
-                value={selectedRoleIds}
-                onChange={e => {
-                  const val = e.target.value;
-                  setSelectedRoleIds(Array.isArray(val) ? val : typeof val === 'string' ? val.split(',') : []);
-                }}
-                disabled={loading}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => {
-                      const r = roles.find(roleItem => roleItem.ID === value);
-                      return <Chip key={value} label={r?.name || value} size="small" />;
-                    })}
-                  </Box>
-                )}
-              >
-                {roles.map(r => {
-                  const allowed = hasAnyRestrictions(r, allRoles);
-                  return (
-                    <MenuItem key={r.ID} value={r.ID} disabled={!allowed}>
-                      {r.name} ({r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}){!allowed ? ' - No Restrictions' : ''}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={roles.map(r => {
+                const allowed = hasAnyRestrictions(r, allRoles);
+                const typeStr = r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single');
+                return {
+                  value: r.ID,
+                  label: r.name,
+                  sublabel: `${typeStr}${!allowed ? ' - No Restrictions' : ''}`,
+                  disabled: !allowed
+                };
+              })}
+              value={selectedRoleIds}
+              onChange={vals => setSelectedRoleIds(vals)}
+              label="Role"
+              multiple
+              disabled={loading}
+              getOptionDisabled={(option) => !!option.disabled}
+              sx={{ flex: 1 }}
+            />
           </Box>
         )}
       </DialogContent>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Collapse, Select, MenuItem, FormControl, InputLabel, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Autocomplete, InputAdornment, Tooltip, Skeleton } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, CircularProgress, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment, Tooltip, Skeleton } from '@mui/material';
 import { Plus, Trash2, X, Check, Shield, Users, Search, RefreshCw, ShieldCheck } from 'lucide-react';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
-import { isRoleInScope } from '../utils/helpers';
 import UserRoleAssignment from './UserRoleAssignment';
+import SearchableSelect from './SearchableSelect';
 
 // Helper to recursively check if a role or any of its parents has restrictions
 
@@ -168,20 +168,16 @@ export default function RoleAssignmentsView({ onInspectUser }) {
             }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="filter-role-label">Role</InputLabel>
-            <Select
-              labelId="filter-role-label"
-              label="Role"
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-            >
-              <MenuItem value="ALL">All Roles</MenuItem>
-              {uniqueRoles.map(roleName => (
-                <MenuItem key={roleName} value={roleName}>{roleName}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: 'ALL', label: 'All Roles' },
+              ...uniqueRoles.map(name => ({ value: name, label: name }))
+            ]}
+            value={filterRole}
+            onChange={val => setFilterRole(val)}
+            label="Role"
+            sx={{ minWidth: 180 }}
+          />
 
           <TextField
             label="Assigned On: Start"

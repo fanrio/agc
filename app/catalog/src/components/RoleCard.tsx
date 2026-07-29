@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid, Tooltip
@@ -88,12 +88,17 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
     setLoading(false);
   };
 
-  const childrenRoles = getRoleDirectChildren(role.ID, allRoles);
-  const { descendants, users } = getDescendantsAndUsers(role.ID, allRoles);
+  const childrenRoles = useMemo(() => getRoleDirectChildren(role.ID, allRoles), [role.ID, allRoles]);
+  const { descendants, users } = useMemo(() => {
+    if (!confirmDeleteOpen) return { descendants: [], users: [] };
+    return getDescendantsAndUsers(role.ID, allRoles);
+  }, [confirmDeleteOpen, role.ID, allRoles]);
 
   // Check if role is critical
-  const directCritical = Array.isArray(role.ownRestrictions) && role.ownRestrictions.some(r => isCriticalRestriction(r, orgNodes));
-  const isCritical = role.critical || directCritical;
+  const isCritical = useMemo(() => {
+    const directCritical = Array.isArray(role.ownRestrictions) && role.ownRestrictions.some(r => isCriticalRestriction(r, orgNodes));
+    return role.critical || directCritical;
+  }, [role.critical, role.ownRestrictions, orgNodes]);
 
   const executeDelete = async () => {
     try {

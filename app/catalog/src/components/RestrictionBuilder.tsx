@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, Typography, IconButton, Chip, FormControlLabel, Checkbox, OutlinedInput, ListItemText, ListSubheader, Alert, Snackbar, Tooltip } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, Chip, FormControlLabel, Checkbox, Alert, Snackbar, Tooltip } from '@mui/material';
 import * as api from '../api';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import { Filter, Lock, Unlock, X, Plus, Globe, Building2, MapPin, Factory, Briefcase } from 'lucide-react';
+import SearchableSelect from './SearchableSelect';
 
 // Helper to structure flat list into hierarchical select options with indentation
 function getHierarchyOptions(flatNodes) {
@@ -241,42 +240,31 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       const parsedSingleVal = (() => { try { const p = JSON.parse(value); return p && typeof p === 'object' && !Array.isArray(p) ? p : null; } catch { return null; } })();
       const selectedId = parsedSingleVal ? parsedSingleVal.id : value;
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-bdc-label">Select {field}</InputLabel>
-          <Select
-            labelId="restriction-bdc-label"
-            label={`Select ${field}`}
-            value={selectedId}
-            onChange={e => {
-              const chosen = bdcValues.find(v => v.id === e.target.value);
-              onChange(chosen ? JSON.stringify({ id: chosen.id, text: chosen.text || chosen.id }) : '');
-            }}
-            renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {bdcValues.map(v => (
-              <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={[
+            { value: '', label: 'None' },
+            ...bdcValues.map(v => ({ value: v.id, label: v.text || v.id }))
+          ]}
+          value={selectedId}
+          onChange={val => {
+            const chosen = bdcValues.find(v => v.id === val);
+            onChange(chosen ? JSON.stringify({ id: chosen.id, text: chosen.text || chosen.id }) : '');
+          }}
+          label={`Select ${field}`}
+        />
       );
     }
     if (hasOrgOptions) {
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-org-label">Select {field}</InputLabel>
-          <Select
-            labelId="restriction-org-label"
-            label={`Select ${field}`}
-            value={value}
-            onChange={e => onChange(e.target.value)}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {matchingNodes.map(n => (
-              <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={[
+            { value: '', label: 'None' },
+            ...matchingNodes.map(n => ({ value: n.name, label: n.name }))
+          ]}
+          value={value}
+          onChange={val => onChange(val)}
+          label={`Select ${field}`}
+        />
       );
     }
     return (
@@ -298,69 +286,31 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       const rawMulti = value ? (() => { try { return JSON.parse(value); } catch { return []; } })() : [];
       const selectedIds = rawMulti.map(item => (item && typeof item === 'object' ? item.id : item));
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-multivalue-bdc-label">Select {field} (Multiple)</InputLabel>
-          <Select
-            labelId="restriction-multivalue-bdc-label"
-            multiple
-            value={selectedIds}
-            onChange={e => {
-              const chosen = e.target.value.map(id => {
-                const v = bdcValues.find(x => x.id === id);
-                return v ? { id: v.id, text: v.text || v.id } : { id, text: id };
-              });
-              onChange(JSON.stringify(chosen));
-            }}
-            input={<OutlinedInput label={`Select ${field} (Multiple)`} />}
-            renderValue={selected => selected.map(id => bdcValues.find(x => x.id === id)?.text || id).join(', ')}
-          >
-            {bdcValues.map(v => {
-              const selected = selectedIds.includes(v.id);
-              const SelectionIcon = selected ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-              return (
-                <MenuItem key={v.id} value={v.id}>
-                  <SelectionIcon
-                    fontSize="small"
-                    style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                  />
-                  <ListItemText primary={v.text} />
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={bdcValues.map(v => ({ value: v.id, label: v.text || v.id }))}
+          value={selectedIds}
+          onChange={vals => {
+            const chosen = vals.map(id => {
+              const v = bdcValues.find(x => x.id === id);
+              return v ? { id: v.id, text: v.text || v.id } : { id, text: id };
+            });
+            onChange(JSON.stringify(chosen));
+          }}
+          label={`Select ${field} (Multiple)`}
+          multiple
+        />
       );
     }
     if (hasOrgOptions) {
       const selectedNames = value ? JSON.parse(value) : [];
       return (
-        <FormControl size="small" fullWidth>
-          <InputLabel id="restriction-multivalue-label">Select {field} (Multiple)</InputLabel>
-          <Select
-            labelId="restriction-multivalue-label"
-            id="restriction-multivalue-select"
-            multiple
-            value={selectedNames}
-            onChange={e => onChange(JSON.stringify(e.target.value))}
-            input={<OutlinedInput label={`Select ${field} (Multiple)`} />}
-            renderValue={selected => selected.join(', ')}
-          >
-            {matchingNodes.map(n => {
-              const selected = selectedNames.includes(n.name);
-              const SelectionIcon = selected ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-
-              return (
-                <MenuItem key={n.ID} value={n.name}>
-                  <SelectionIcon
-                    fontSize="small"
-                    style={{ marginRight: 8, padding: 9, boxSizing: 'content-box' }}
-                  />
-                  <ListItemText primary={n.name} />
-                </MenuItem>
-              );
-            })}
-          </Select>
-        </FormControl>
+        <SearchableSelect
+          options={matchingNodes.map(n => ({ value: n.name, label: n.name }))}
+          value={selectedNames}
+          onChange={vals => onChange(JSON.stringify(vals))}
+          label={`Select ${field} (Multiple)`}
+          multiple
+        />
       );
     }
     const tags = value ? JSON.parse(value) : [];
@@ -379,78 +329,60 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       const toId = toObj ? toObj.id : (range.to || '');
       return (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-from-label">From</InputLabel>
-            <Select
-              labelId="restriction-range-from-label"
-              label="From"
-              value={fromId}
-              onChange={e => {
-                const chosen = bdcValues.find(v => v.id === e.target.value);
-                onChange(JSON.stringify({ ...range, from: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : e.target.value }));
-              }}
-              renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {bdcValues.map(v => (
-                <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'None' },
+              ...bdcValues.map(v => ({ value: v.id, label: v.text || v.id }))
+            ]}
+            value={fromId}
+            onChange={val => {
+              const chosen = bdcValues.find(v => v.id === val);
+              onChange(JSON.stringify({ ...range, from: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : val }));
+            }}
+            label="From"
+            sx={{ flex: 1 }}
+          />
           <Typography variant="body2" color="text.secondary">-</Typography>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-to-label">To</InputLabel>
-            <Select
-              labelId="restriction-range-to-label"
-              label="To"
-              value={toId}
-              onChange={e => {
-                const chosen = bdcValues.find(v => v.id === e.target.value);
-                onChange(JSON.stringify({ ...range, to: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : e.target.value }));
-              }}
-              renderValue={sel => bdcValues.find(v => v.id === sel)?.text || sel}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {bdcValues.map(v => (
-                <MenuItem key={v.id} value={v.id}>{v.text}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'None' },
+              ...bdcValues.map(v => ({ value: v.id, label: v.text || v.id }))
+            ]}
+            value={toId}
+            onChange={val => {
+              const chosen = bdcValues.find(v => v.id === val);
+              onChange(JSON.stringify({ ...range, to: chosen ? { id: chosen.id, text: chosen.text || chosen.id } : val }));
+            }}
+            label="To"
+            sx={{ flex: 1 }}
+          />
         </Box>
       );
     }
     if (hasOrgOptions) {
       return (
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: '100%' }}>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-from-label">From</InputLabel>
-            <Select
-              labelId="restriction-range-from-label"
-              label="From"
-              value={range.from}
-              onChange={e => onChange(JSON.stringify({ ...range, from: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {matchingNodes.map(n => (
-                <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'None' },
+              ...matchingNodes.map(n => ({ value: n.name, label: n.name }))
+            ]}
+            value={range.from}
+            onChange={val => onChange(JSON.stringify({ ...range, from: val }))}
+            label="From"
+            sx={{ flex: 1 }}
+          />
           <Typography variant="body2" color="text.secondary">-</Typography>
-          <FormControl size="small" sx={{ flex: 1 }}>
-            <InputLabel id="restriction-range-to-label">To</InputLabel>
-            <Select
-              labelId="restriction-range-to-label"
-              label="To"
-              value={range.to}
-              onChange={e => onChange(JSON.stringify({ ...range, to: e.target.value }))}
-            >
-              <MenuItem value=""><em>None</em></MenuItem>
-              {matchingNodes.map(n => (
-                <MenuItem key={n.ID} value={n.name}>{n.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SearchableSelect
+            options={[
+              { value: '', label: 'None' },
+              ...matchingNodes.map(n => ({ value: n.name, label: n.name }))
+            ]}
+            value={range.to}
+            onChange={val => onChange(JSON.stringify({ ...range, to: val }))}
+            label="To"
+            sx={{ flex: 1 }}
+          />
         </Box>
       );
     }
@@ -519,86 +451,59 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
           {isWithDirectory && (
-            <FormControl size="small" fullWidth>
-              <InputLabel id="hierarchy-directory-label">Hierarchy Directory</InputLabel>
-              <Select
-                labelId="hierarchy-directory-label"
-                value={selectedHierarchyDirectory || initialDir}
-                onChange={e => {
-                  setSelectedHierarchyDirectory(e.target.value);
-                  onChange(JSON.stringify([]));
-                }}
-                label="Hierarchy Directory"
-              >
-                <MenuItem value=""><em>All Directories</em></MenuItem>
-                {uniqueHierarchies.map(h => (
-                  <MenuItem key={h} value={h}>{h}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={[
+                { value: '', label: 'All Directories' },
+                ...uniqueHierarchies.map(h => ({ value: h, label: h }))
+              ]}
+              value={selectedHierarchyDirectory || initialDir}
+              onChange={val => {
+                setSelectedHierarchyDirectory(val);
+                onChange(JSON.stringify([]));
+              }}
+              label="Hierarchy Directory"
+            />
           )}
 
-          <FormControl size="small" fullWidth>
-            <InputLabel id="restriction-hierarchy-bdc-label">Select Hierarchy Nodes</InputLabel>
-            <Select
-              labelId="restriction-hierarchy-bdc-label"
-              multiple
-              value={selectedLocalIds}
-              onChange={e => {
-                const nextSelected = e.target.value;
-                const filtered = filterSelectedNodes(nextSelected, filteredOptions);
-                const finalValues = filtered.map(localId => {
-                  const matchingNode = filteredOptions.find(n => n.localId === localId);
-                  if (matchingNode) {
-                    const idStr = isWithDirectory && activeDir
-                      ? `${activeDir}/${matchingNode.id}`
-                      : matchingNode.id;
-                    const savedId = matchingNode.value || idStr;
-                    return {
-                      id: savedId,
-                      nodeType: matchingNode.nodeType || '',
-                      text: matchingNode.text || matchingNode.id || idStr,
-                      hierarchy: matchingNode.hierarchy || ''
-                    };
-                  }
-                  return { id: localId, nodeType: '', text: localId };
-                });
-                onChange(JSON.stringify(finalValues));
-              }}
-              input={<OutlinedInput label="Select Hierarchy Nodes" />}
-
-              renderValue={(selected) => {
-                return selected.map(localId => bdcValues.find(x => x.localId === localId)?.text || localId).join(', ');
-              }}
-            >
-              {getHierarchyOptions(filteredOptions).map(v => {
+          <SearchableSelect
+            options={(() => {
+              return getHierarchyOptions(filteredOptions).map(v => {
                 const itemKey = v.localId || v.id;
-                const isChecked = selectedLocalIds.includes(itemKey);
                 const isDisabled = isAncestorSelected(itemKey, selectedLocalIds, filteredOptions);
-                const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-                return (
-                  <MenuItem
-                    key={itemKey}
-                    value={itemKey}
-                    disabled={isDisabled}
-                    sx={{
-                      pl: 2 + (v.depth || 0) * 3, // Indent based on depth hierarchy
-                      py: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                    }}
-                  >
-                    <SelectionIcon
-                      fontSize="small"
-                      style={{ marginRight: 8, boxSizing: 'content-box' }}
-                    />
-                    <ListItemText primary={v.text} />
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
+                return {
+                  value: itemKey,
+                  label: "\u00A0\u00A0\u00A0\u00A0".repeat(v.depth || 0) + v.text,
+                  sublabel: v.nodeType || '',
+                  disabled: isDisabled
+                };
+              });
+            })()}
+            value={selectedLocalIds}
+            onChange={vals => {
+              const nextSelected = vals;
+              const filtered = filterSelectedNodes(nextSelected, filteredOptions);
+              const finalValues = filtered.map(localId => {
+                const matchingNode = filteredOptions.find(n => n.localId === localId);
+                if (matchingNode) {
+                  const idStr = isWithDirectory && activeDir
+                    ? `${activeDir}/${matchingNode.id}`
+                    : matchingNode.id;
+                  const savedId = matchingNode.value || idStr;
+                  return {
+                    id: savedId,
+                    nodeType: matchingNode.nodeType || '',
+                    text: matchingNode.text || matchingNode.id || idStr,
+                    hierarchy: matchingNode.hierarchy || ''
+                  };
+                }
+                return { id: localId, nodeType: '', text: localId };
+              });
+              onChange(JSON.stringify(finalValues));
+            }}
+            label="Select Hierarchy Nodes"
+            multiple
+            getOptionDisabled={(option) => !!option.disabled}
+          />
         </Box>
       );
     }
@@ -609,77 +514,34 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
     const selectedIds = rawSelected.map(val => typeof val === 'object' ? val.id : val);
 
     return (
-      <FormControl size="small" fullWidth>
-        <InputLabel id="restriction-hierarchy-label">Select Hierarchy Nodes</InputLabel>
-        <Select
-          labelId="restriction-hierarchy-label"
-          id="restriction-hierarchy-select"
-          multiple
-          value={selectedIds}
-          onChange={e => {
-            const nextSelected = e.target.value;
-            const filtered = filterSelectedNodes(nextSelected, orgNodes);
-            const finalValues = filtered.map(id => {
-              const matchingNode = orgNodes.find(n => n.ID === id);
-              return {
-                id: id,
-                nodeType: matchingNode?.type || '',
-                text: matchingNode?.name || id
-              };
-            });
-            onChange(JSON.stringify(finalValues));
-          }}
-          input={<OutlinedInput label="Select Hierarchy Nodes" />}
-
-          renderValue={(selected) => {
-            const names = selected.map(id => orgNodes.find(n => n.ID === id)?.name).filter(Boolean);
-            return names.join(', ');
-          }}
-        >
-          {sortedNodes.map(n => {
-            const isChecked = selectedIds.includes(n.ID);
-            const SelectionIcon = isChecked ? CheckBoxIcon : CheckBoxOutlineBlankIcon;
-            const isDisabled = isAncestorSelected(n.ID, selectedIds, orgNodes);
-
-            // Choose icon based on node type
-            let TypeIcon = Building2;
-            if (n.type === 'GLOBAL') TypeIcon = Globe;
-            else if (n.type === 'REGION') TypeIcon = Building2;
-            else if (n.type === 'COUNTRY') TypeIcon = MapPin;
-            else if (n.type === 'PLANT') TypeIcon = Factory;
-            else if (n.type === 'DEPARTMENT') TypeIcon = Briefcase;
-
-            return (
-              <MenuItem
-                key={n.ID}
-                value={n.ID}
-                disabled={isDisabled}
-                sx={{
-                  pl: 2 + n.depth * 3, // Indent based on depth hierarchy
-                  py: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                <SelectionIcon
-                  fontSize="small"
-                  style={{ marginRight: 8, boxSizing: 'content-box' }}
-                />
-                <TypeIcon size={16} color={isDisabled ? "text.disabled" : "primary.main"} />
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: isDisabled ? 'text.disabled' : 'text.primary' }}>
-                    {n.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, textTransform: 'uppercase', lineHeight: 1.2 }}>
-                    {n.type?.name || ''}
-                  </Typography>
-                </Box>
-              </MenuItem>
-            );
-          })}
-        </Select>
-      </FormControl>
+      <SearchableSelect
+        options={sortedNodes.map(n => {
+          const isDisabled = isAncestorSelected(n.ID, selectedIds, orgNodes);
+          return {
+            value: n.ID,
+            label: "\u00A0\u00A0\u00A0\u00A0".repeat(n.depth || 0) + n.name,
+            sublabel: String(n.type || ''),
+            disabled: isDisabled
+          };
+        })}
+        value={selectedIds}
+        onChange={vals => {
+          const nextSelected = vals;
+          const filtered = filterSelectedNodes(nextSelected, orgNodes);
+          const finalValues = filtered.map(id => {
+            const matchingNode = orgNodes.find(n => n.ID === id);
+            return {
+              id: id,
+              nodeType: matchingNode?.type || '',
+              text: matchingNode?.name || id
+            };
+          });
+          onChange(JSON.stringify(finalValues));
+        }}
+        label="Select Hierarchy Nodes"
+        multiple
+        getOptionDisabled={(option) => !!option.disabled}
+      />
     );
   }
   return null;
@@ -871,34 +733,22 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
             <Plus size={12} /> Add restriction
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 2fr auto' }, gap: 2, alignItems: 'end' }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel id="builder-field-label">Field</InputLabel>
-              <Select
-                labelId="builder-field-label"
-                label="Field"
-                value={draft.field}
-                onChange={e => setDraft(d => ({ ...d, field: e.target.value }))}
-              >
-                <MenuItem value=""><em>Select Field</em></MenuItem>
-                {availableFields.map(f => (
-                  <MenuItem key={f.ID} value={f.name}>{f.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={[
+                { value: '', label: 'Select Field' },
+                ...availableFields.map(f => ({ value: f.name, label: f.name }))
+              ]}
+              value={draft.field}
+              onChange={val => setDraft(d => ({ ...d, field: val }))}
+              label="Field"
+            />
 
-            <FormControl size="small" fullWidth>
-              <InputLabel id="builder-type-label">Type</InputLabel>
-              <Select
-                labelId="builder-type-label"
-                label="Type"
-                value={draft.filterType}
-                onChange={e => setDraft(d => ({ ...d, filterType: e.target.value, value: '' }))}
-              >
-                {FILTER_TYPES.map(t => (
-                  <MenuItem key={t} value={t}>{TYPE_LABEL[t]}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              options={FILTER_TYPES.map(t => ({ value: t, label: TYPE_LABEL[t] }))}
+              value={draft.filterType}
+              onChange={val => setDraft(d => ({ ...d, filterType: val, value: '' }))}
+              label="Type"
+            />
 
             <Box sx={{ width: '100%' }}>
               <RestrictionInput

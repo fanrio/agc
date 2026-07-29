@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Collapse, Select, MenuItem, FormControl, InputLabel, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Checkbox, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Button, TextField, Card, Typography, IconButton, CircularProgress, Collapse, Checkbox, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { Plus, Trash2, X, Settings, Cloud, Edit3, Check } from 'lucide-react';
 import * as api from '../api';
+import SearchableSelect from './SearchableSelect';
 
 export default function RestrictionFieldsView() {
   const [fields, setFields] = useState([]);
@@ -270,76 +271,48 @@ export default function RestrictionFieldsView() {
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 2.25 }}>
-              <FormControl size="small" fullWidth>
-                <InputLabel id="bdc-connection-select-label">BDC Connection</InputLabel>
-                <Select
-                  labelId="bdc-connection-select-label"
-                  label="BDC Connection"
-                  value={newBdcConnectionId}
-                  onChange={e => setNewBdcConnectionId(e.target.value)}
-                >
-                  <MenuItem value=""><em>None (No BDC Link)</em></MenuItem>
-                  {bdcConnections.map(c => (
-                    <MenuItem key={c.ID} value={c.ID}>{c.systemName}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={[
+                  { value: '', label: 'None (No BDC Link)' },
+                  ...bdcConnections.map(c => ({ value: c.ID, label: c.systemName }))
+                ]}
+                value={newBdcConnectionId}
+                onChange={val => setNewBdcConnectionId(val)}
+                label="BDC Connection"
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 2 }}>
-              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
-                <InputLabel id="new-asset-id-label">
-                  {loadingAssets ? 'Loading...' : 'Asset ID'}
-                </InputLabel>
-                <Select
-                  labelId="new-asset-id-label"
-                  label="Asset ID"
-                  value={newAsset}
-                  onChange={e => setNewAsset(e.target.value)}
-                >
-                  {assetsList.map(a => (
-                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                  ))}
-                  {assetsList.length === 0 && (
-                    <MenuItem value="" disabled>No assets available</MenuItem>
-                  )}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={assetsList}
+                value={newAsset}
+                onChange={val => setNewAsset(val)}
+                label={loadingAssets ? 'Loading...' : 'Asset ID'}
+                disabled={!newBdcConnectionId || loadingAssets}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 2 }}>
-              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
-                <InputLabel id="new-asset-text-label">
-                  {loadingAssets ? 'Loading...' : 'Asset Text'}
-                </InputLabel>
-                <Select
-                  labelId="new-asset-text-label"
-                  label="Asset Text"
-                  value={newAssetText}
-                  onChange={e => setNewAssetText(e.target.value)}
-                >
-                  <MenuItem value=""><em>None</em></MenuItem>
-                  {assetsList.map(a => (
-                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={[
+                  { value: '', label: 'None' },
+                  ...assetsList
+                ]}
+                value={newAssetText}
+                onChange={val => setNewAssetText(val)}
+                label={loadingAssets ? 'Loading...' : 'Asset Text'}
+                disabled={!newBdcConnectionId || loadingAssets}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 2 }}>
-              <FormControl size="small" fullWidth disabled={!newBdcConnectionId || loadingAssets}>
-                <InputLabel id="new-asset-hierarchy-label">
-                  {loadingAssets ? 'Loading...' : 'Asset Hierarchy'}
-                </InputLabel>
-                <Select
-                  labelId="new-asset-hierarchy-label"
-                  label="Asset Hierarchy"
-                  value={newAssetHierarchy}
-                  onChange={e => setNewAssetHierarchy(e.target.value)}
-                >
-                  <MenuItem value=""><em>None</em></MenuItem>
-                  {assetsList.map(a => (
-                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={[
+                  { value: '', label: 'None' },
+                  ...assetsList
+                ]}
+                value={newAssetHierarchy}
+                onChange={val => setNewAssetHierarchy(val)}
+                label={loadingAssets ? 'Loading...' : 'Asset Hierarchy'}
+                disabled={!newBdcConnectionId || loadingAssets}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 2.25 }} sx={{ display: 'flex', alignItems: 'center' }}>
               <FormControlLabel
@@ -413,76 +386,48 @@ export default function RestrictionFieldsView() {
                               />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 2.25 }}>
-                              <FormControl size="small" fullWidth>
-                                <InputLabel id="edit-bdc-select-label">BDC Connection</InputLabel>
-                                <Select
-                                  labelId="edit-bdc-select-label"
-                                  label="BDC Connection"
-                                  value={editForm.bdcConnectionId}
-                                  onChange={e => setEditForm(prev => ({ ...prev, bdcConnectionId: e.target.value }))}
-                                >
-                                  <MenuItem value=""><em>None (No BDC Link)</em></MenuItem>
-                                  {bdcConnections.map(c => (
-                                    <MenuItem key={c.ID} value={c.ID}>{c.systemName}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
+                              <SearchableSelect
+                                options={[
+                                  { value: '', label: 'None (No BDC Link)' },
+                                  ...bdcConnections.map(c => ({ value: c.ID, label: c.systemName }))
+                                ]}
+                                value={editForm.bdcConnectionId}
+                                onChange={val => setEditForm(prev => ({ ...prev, bdcConnectionId: val }))}
+                                label="BDC Connection"
+                              />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 2 }}>
-                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
-                                <InputLabel id="edit-asset-id-label">
-                                  {loadingEditAssets ? 'Loading...' : 'Asset ID'}
-                                </InputLabel>
-                                <Select
-                                  labelId="edit-asset-id-label"
-                                  label="Asset ID"
-                                  value={editForm.asset}
-                                  onChange={e => setEditForm(prev => ({ ...prev, asset: e.target.value }))}
-                                >
-                                  {Array.from(new Set([...editAssetsList, editForm.asset])).filter(Boolean).map(a => (
-                                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                                  ))}
-                                  {editAssetsList.length === 0 && (
-                                    <MenuItem value="" disabled>No assets available</MenuItem>
-                                  )}
-                                </Select>
-                              </FormControl>
+                              <SearchableSelect
+                                options={Array.from(new Set([...editAssetsList, editForm.asset])).filter(Boolean)}
+                                value={editForm.asset}
+                                onChange={val => setEditForm(prev => ({ ...prev, asset: val }))}
+                                label={loadingEditAssets ? 'Loading...' : 'Asset ID'}
+                                disabled={!editForm.bdcConnectionId || loadingEditAssets}
+                              />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 2 }}>
-                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
-                                <InputLabel id="edit-asset-text-label">
-                                  {loadingEditAssets ? 'Loading...' : 'Asset Text'}
-                                </InputLabel>
-                                <Select
-                                  labelId="edit-asset-text-label"
-                                  label="Asset Text"
-                                  value={editForm.assetText}
-                                  onChange={e => setEditForm(prev => ({ ...prev, assetText: e.target.value }))}
-                                >
-                                  <MenuItem value=""><em>None</em></MenuItem>
-                                  {Array.from(new Set([...editAssetsList, editForm.assetText])).filter(Boolean).map(a => (
-                                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
+                              <SearchableSelect
+                                options={[
+                                  { value: '', label: 'None' },
+                                  ...Array.from(new Set([...editAssetsList, editForm.assetText])).filter(Boolean)
+                                ]}
+                                value={editForm.assetText}
+                                onChange={val => setEditForm(prev => ({ ...prev, assetText: val }))}
+                                label={loadingEditAssets ? 'Loading...' : 'Asset Text'}
+                                disabled={!editForm.bdcConnectionId || loadingEditAssets}
+                              />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 2 }}>
-                              <FormControl size="small" fullWidth disabled={!editForm.bdcConnectionId || loadingEditAssets}>
-                                <InputLabel id="edit-asset-hierarchy-label">
-                                  {loadingEditAssets ? 'Loading...' : 'Asset Hierarchy'}
-                                </InputLabel>
-                                <Select
-                                  labelId="edit-asset-hierarchy-label"
-                                  label="Asset Hierarchy"
-                                  value={editForm.assetHierarchy}
-                                  onChange={e => setEditForm(prev => ({ ...prev, assetHierarchy: e.target.value }))}
-                                >
-                                  <MenuItem value=""><em>None</em></MenuItem>
-                                  {Array.from(new Set([...editAssetsList, editForm.assetHierarchy])).filter(Boolean).map(a => (
-                                    <MenuItem key={a} value={a}>{a}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
+                              <SearchableSelect
+                                options={[
+                                  { value: '', label: 'None' },
+                                  ...Array.from(new Set([...editAssetsList, editForm.assetHierarchy])).filter(Boolean)
+                                ]}
+                                value={editForm.assetHierarchy}
+                                onChange={val => setEditForm(prev => ({ ...prev, assetHierarchy: val }))}
+                                label={loadingEditAssets ? 'Loading...' : 'Asset Hierarchy'}
+                                disabled={!editForm.bdcConnectionId || loadingEditAssets}
+                              />
                             </Grid>
                             <Grid size={{ xs: 12, sm: 2.25 }} sx={{ display: 'flex', alignItems: 'center' }}>
                               <FormControlLabel
