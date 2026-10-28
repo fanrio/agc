@@ -107,7 +107,7 @@ function registerAssignmentHandlers(service, entities, deps) {
       }
 
       // If user has authorization to manage derived roles ONLY, they can only assign derived roles, not parent roles
-      if (!perms.canManageSingleRoles && !perms.canManageOrgRoles) {
+      if (perms.canManageDerivedRoles && !perms.canManageSingleRoles && !perms.canManageOrgRoles) {
         if (req.event === 'CREATE' || req.event === 'UPDATE') {
           if (role && role.type !== 'DERIVED') {
             return req.reject(403, 'Access Denied: You are only authorized to assign derived roles, not parent roles.');

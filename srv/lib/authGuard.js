@@ -178,6 +178,7 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
       if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
         return true;
       }
+      if (permissions.canAssignRoles && !permissions.canManageDerivedRoles) return true;
       return false;
     }
 
@@ -186,6 +187,7 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
       if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
         return true;
       }
+      if (permissions.canAssignRoles && !permissions.canManageDerivedRoles) return true;
       return false;
     }
 

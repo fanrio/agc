@@ -738,6 +738,49 @@ test('Backend Authorization Enforcement Suite', async (t) => {
       () => HanaClient.validateTableName('finance"; DROP TABLE "USERS"; --'),
       /Invalid table name/
     );
+
+    // 5. Multi-role union (USER_ASSIGNMENT_ADMIN + AUDITOR) allows assigning existing SINGLE roles and reading AuditLogs, while blocking role creation
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations } = db.entities;
+    const multiRoleUser = 'multi-role-assign-auditor';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: multiRoleUser }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: multiRoleUser,
+      userName: 'Multi Role Assign + Auditor',
+      isSuperAdmin: false,
+      canManageAppUsers: false,
+      canManageSettings: false,
+      canManageOrgRoles: false,
+      canManageSingleRoles: false,
+      canManageDerivedRoles: false,
+      canAssignRoles: true,
+      canManageReplications: false,
+      canViewAuditLogs: true,
+      allowedEnvironments: 'ALL',
+      allowedAccessDomains: 'ALL',
+      isActive: true
+    }));
+
+    const auditReadRes = await GET('/odata/v4/auth/AuditLogs?$top=1', {
+      headers: { 'x-simulated-user': multiRoleUser }
+    });
+    assert.strictEqual(auditReadRes.status, 200);
+
+    try {
+      await POST('/odata/v4/auth/Roles', {
+        name: 'MULTI_ROLE_UNAUTHORIZED_ROLE',
+        type: 'SINGLE',
+        environment_ID: 'D'
+      }, {
+        headers: { 'x-simulated-user': multiRoleUser }
+      });
+      assert.fail('Expected role creation to fail for USER_ASSIGNMENT_ADMIN + AUDITOR');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: multiRoleUser }));
   });
 
 });
