@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { 
   Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid, Tooltip
@@ -12,7 +12,7 @@ import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInSc
 import { usePermissions } from '../context/PermissionsContext';
 import UserRoleAssignment from './UserRoleAssignment';
 
-export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete = undefined, onRefresh, isSearchActive = false, onError, onSuccess, onAssign = undefined, isCompact, permissions: propPermissions }) {
+export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete = undefined, onRefresh, isSearchActive = false, onError, onSuccess, onAssign = undefined, isCompact, permissions: propPermissions }) {
   const { permissions: contextPermissions } = usePermissions();
   const permissions = propPermissions || contextPermissions;
   if (depth > 10) {
@@ -111,7 +111,7 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
   };
 
   const orgNodeName = role.orgNode ? (role.orgNode.name || role.orgNode.ID) : null;
-  const assignmentsCount = Array.isArray(role.assignments) ? role.assignments.length : 0;
+  const assignmentsCount = role.assignmentsCount !== undefined ? role.assignmentsCount : (Array.isArray(role.assignments) ? role.assignments.length : 0);
 
   // Authorization checks
   const canManageOrgRoles = permissions?.canManageOrgRoles;
@@ -220,8 +220,8 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
             <Box sx={{ flex: '1 1 0', minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
-                <Chip size="small" label={role.type} color="primary" variant="outlined" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />
-                {role.critical && <Chip size="small" label="Critical (Manual)" color="error" sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }} />}
+                <Chip size="small" label={role.type} color={isOrgRole ? 'primary' : isDerived ? 'secondary' : 'default'} />
+                {role.critical && <Chip size="small" label="Critical (Manual)" color="error" />}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>{role.description || 'No description provided.'}</Typography>
             </Box>
@@ -325,55 +325,61 @@ export default function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onD
       </Card>
 
       {/* Confirm Cascading Deletion Dialog */}
-      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AlertTriangle color="#d32f2f" /> Confirm Cascading Deletion
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Are you sure you want to delete the role <strong>{role.name}</strong>?
-          </DialogContentText>
-          {descendants.length > 0 && (
-            <Box sx={{ mb: 2, p: 1.5, bgcolor: 'error.light', color: 'error.main', borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Warning: Cascading derived roles will also be deleted:</Typography>
-              <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-                {descendants.map(d => <li key={d.ID}><strong style={{ color: '#d32f2f' }}>{d.name}</strong></li>)}
-              </ul>
-            </Box>
-          )}
-          {users.length > 0 && (
-            <Box sx={{ p: 1.5, bgcolor: 'warning.light', color: 'warning.main', borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Impact Warning: {users.length} user assignment(s) will be affected:</Typography>
-              <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-                {users.map(u => <li key={u}><strong>{u}</strong></li>)}
-              </ul>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">
-            Cancel
-          </Button>
-          <Button onClick={executeDelete} color="error" variant="contained" autoFocus>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {confirmDeleteOpen && (
+        <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+          <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AlertTriangle color="#ba1a1a" /> Confirm Cascading Deletion
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              Are you sure you want to delete the role <strong>{role.name}</strong>?
+            </DialogContentText>
+            {descendants.length > 0 && (
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: 'error.light', color: 'error.main', borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Warning: Cascading derived roles will also be deleted:</Typography>
+                <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
+                  {descendants.map(d => <li key={d.ID}><strong style={{ color: '#d32f2f' }}>{d.name}</strong></li>)}
+                </ul>
+              </Box>
+            )}
+            {users.length > 0 && (
+              <Box sx={{ p: 1.5, bgcolor: 'warning.light', color: 'warning.main', borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Impact Warning: {users.length} user assignment(s) will be affected:</Typography>
+                <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
+                  {users.map(u => <li key={u}><strong>{u}</strong></li>)}
+                </ul>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">
+              Cancel
+            </Button>
+            <Button onClick={executeDelete} color="error" variant="contained" autoFocus>
+              Delete
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
-      <UserRoleAssignment
-        open={assignDialogOpen}
-        role={role}
-        allRoles={allRoles}
-        onClose={() => setAssignDialogOpen(false)}
-        onSuccess={(msg) => {
-          setAssignDialogOpen(false);
-          if (onSuccess) onSuccess(msg);
-          if (onRefresh) onRefresh();
-        }}
-        onError={(msg) => {
-          if (onError) onError(msg);
-        }}
-      />
+      {assignDialogOpen && (
+        <UserRoleAssignment
+          open={assignDialogOpen}
+          role={role}
+          allRoles={allRoles}
+          onClose={() => setAssignDialogOpen(false)}
+          onSuccess={(msg) => {
+            setAssignDialogOpen(false);
+            if (onSuccess) onSuccess(msg);
+            if (onRefresh) onRefresh();
+          }}
+          onError={(msg) => {
+            if (onError) onError(msg);
+          }}
+        />
+      )}
     </Box>
   );
-}
+});
+
+export default RoleCard;

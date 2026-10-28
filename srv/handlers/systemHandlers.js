@@ -12,6 +12,37 @@ function registerSystemHandlers(service, entities) {
     requirePermission(perms, 'canManageSettings', req);
   });
 
+  // RestrictionFields deletion validation: must not be used in any AccessDomain
+  service.before('DELETE', 'RestrictionFields', async (req) => {
+    const id = req.params?.[0]?.ID ?? req.params?.[0] ?? req.data?.ID;
+    if (!id) return;
+
+    const domainFields = await cds.db.run(
+      SELECT.from('fanrio.auth.AccessDomainFields')
+        .columns('domain_ID')
+        .where({ field_ID: id })
+    );
+
+    if (domainFields && domainFields.length > 0) {
+      const domainIds = Array.from(new Set(domainFields.map(d => d.domain_ID || d.DOMAIN_ID).filter(Boolean)));
+      let domainNames = [];
+      if (domainIds.length > 0) {
+        const domains = await cds.db.run(
+          SELECT.from('fanrio.auth.AccessDomains')
+            .columns('name')
+            .where({ ID: { in: domainIds } })
+        );
+        domainNames = domains.map(d => `"${d.name || d.NAME}"`);
+      }
+      const namesStr = domainNames.slice(0, 5).join(', ');
+      const extra = domainNames.length > 5 ? ` and ${domainNames.length - 5} more` : '';
+      return req.error(
+        400,
+        `Cannot delete Restriction Field: It is currently assigned to ${domainIds.length} Access Domain(s) (${namesStr || domainIds.join(', ')}${extra}). Please remove it from the Access Domain(s) first.`
+      );
+    }
+  });
+
   // Action protections (Settings & Administration)
   service.before('syncDynamicRule', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);

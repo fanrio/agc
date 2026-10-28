@@ -26,8 +26,9 @@
   "cds": {
     "requires": {
       "db": {
-        "[development]": {
-          "kind": "sqlite"
+        "kind": "sqlite",
+        "credentials": {
+          "url": "sqlite.db"
         }
       },
       "html5-repo": true,

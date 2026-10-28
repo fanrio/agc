@@ -12,13 +12,12 @@ import {
   Paper
 } from '@mui/material';
 import AuditHeader from './AuditHeader';
-
-function formatValue(val) {
-  if (val === null || val === undefined) return '—';
-  if (typeof val === 'boolean') return val ? 'True' : 'False';
-  if (typeof val === 'object') return JSON.stringify(val);
-  return String(val);
-}
+import {
+  parseLogDetails,
+  formatAuditValue as formatValue,
+  resolveAccessDomainName,
+  resolveRoleName
+} from './auditUtils';
 
 function formatUserDisplay(a) {
   if (!a) return '—';
@@ -88,7 +87,7 @@ function processRestrictionsDiff(oldList = [], newList = []) {
   return rows;
 }
 
-function processApproversDiff(oldList = [], newList = []) {
+function processUserListDiff(oldList = [], newList = [], addedLabel = 'Added', deletedLabel = 'Deleted') {
   const oldArr = Array.isArray(oldList) ? oldList : [];
   const newArr = Array.isArray(newList) ? newList : [];
   const rows = [];
@@ -99,7 +98,7 @@ function processApproversDiff(oldList = [], newList = []) {
     if (!oldSet.has(a.userId)) {
       rows.push({
         user: formatUserDisplay(a),
-        actionLabel: 'Added',
+        actionLabel: addedLabel,
         actionType: 'Added'
       });
     }
@@ -109,7 +108,7 @@ function processApproversDiff(oldList = [], newList = []) {
     if (!newSet.has(a.userId)) {
       rows.push({
         user: formatUserDisplay(a),
-        actionLabel: 'Deleted',
+        actionLabel: deletedLabel,
         actionType: 'Deleted'
       });
     }
@@ -118,7 +117,7 @@ function processApproversDiff(oldList = [], newList = []) {
   return rows;
 }
 
-function processParentRolesDiff(oldList = [], newList = []) {
+function processParentRolesDiff(oldList = [], newList = [], roles = []) {
   const oldArr = Array.isArray(oldList) ? oldList : [];
   const newArr = Array.isArray(newList) ? newList : [];
   const rows = [];
@@ -129,7 +128,7 @@ function processParentRolesDiff(oldList = [], newList = []) {
     const pid = p.parent_ID || p.parent?.ID;
     if (pid && !oldSet.has(pid)) {
       rows.push({
-        user: pid,
+        user: resolveRoleName(pid, roles, p.parent?.name),
         actionLabel: 'Added',
         actionType: 'Added'
       });
@@ -140,7 +139,7 @@ function processParentRolesDiff(oldList = [], newList = []) {
     const pid = p.parent_ID || p.parent?.ID;
     if (pid && !newSet.has(pid)) {
       rows.push({
-        user: pid,
+        user: resolveRoleName(pid, roles, p.parent?.name),
         actionLabel: 'Deleted',
         actionType: 'Deleted'
       });
@@ -150,44 +149,9 @@ function processParentRolesDiff(oldList = [], newList = []) {
   return rows;
 }
 
-function processAssignmentsDiff(oldList = [], newList = []) {
-  const oldArr = Array.isArray(oldList) ? oldList : [];
-  const newArr = Array.isArray(newList) ? newList : [];
-  const rows = [];
-  const oldSet = new Set(oldArr.map(a => a.userId));
-  const newSet = new Set(newArr.map(a => a.userId));
-
-  newArr.forEach(a => {
-    if (!oldSet.has(a.userId)) {
-      rows.push({
-        user: formatUserDisplay(a),
-        actionLabel: 'Assigned',
-        actionType: 'Added'
-      });
-    }
-  });
-
-  oldArr.forEach(a => {
-    if (!newSet.has(a.userId)) {
-      rows.push({
-        user: formatUserDisplay(a),
-        actionLabel: 'Unassigned',
-        actionType: 'Deleted'
-      });
-    }
-  });
-
-  return rows;
-}
-
-export default function RoleAuditDetails({ log }) {
-  let details = {};
-
-  try {
-    details = typeof log.details === 'string' ? JSON.parse(log.details) : (log.details || {});
-  } catch (e) {
-    details = { raw: log.details };
-  }
+export default function RoleAuditDetails({ log, roles = [], accessDomains = [] }) {
+  const details = parseLogDetails(log);
+  const formatAccessDomain = (domainId) => resolveAccessDomainName(domainId, accessDomains, details);
 
   const action = log.action;
 
@@ -227,15 +191,7 @@ export default function RoleAuditDetails({ log }) {
                     <Chip
                       label={row.actionLabel || 'Modified'}
                       size="small"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: 10,
-                        height: 20,
-                        bgcolor: row.actionType === 'Added' ? 'success.light' : row.actionType === 'Deleted' ? 'error.light' : 'info.light',
-                        color: row.actionType === 'Added' ? 'success.dark' : row.actionType === 'Deleted' ? 'error.dark' : 'info.dark',
-                        border: '1px solid',
-                        borderColor: row.actionType === 'Added' ? 'success.main' : row.actionType === 'Deleted' ? 'error.main' : 'info.main'
-                      }}
+                      color={row.actionType === 'Added' ? 'success' : row.actionType === 'Deleted' ? 'error' : 'info'}
                     />
                   </TableCell>
                   {isDiff ? (
@@ -291,15 +247,7 @@ export default function RoleAuditDetails({ log }) {
                     <Chip
                       label={row.actionLabel || 'Modified'}
                       size="small"
-                      sx={{
-                        fontWeight: 600,
-                        fontSize: 10,
-                        height: 20,
-                        bgcolor: row.actionType === 'Added' ? 'success.light' : row.actionType === 'Deleted' ? 'error.light' : 'info.light',
-                        color: row.actionType === 'Added' ? 'success.dark' : row.actionType === 'Deleted' ? 'error.dark' : 'info.dark',
-                        border: '1px solid',
-                        borderColor: row.actionType === 'Added' ? 'success.main' : row.actionType === 'Deleted' ? 'error.main' : 'info.main'
-                      }}
+                      color={row.actionType === 'Added' ? 'success' : row.actionType === 'Deleted' ? 'error' : 'info'}
                     />
                   </TableCell>
                 </TableRow>
@@ -325,11 +273,11 @@ export default function RoleAuditDetails({ log }) {
       if (key === 'ownRestrictions' || key === 'restrictions') {
         restrictionRows.push(...processRestrictionsDiff(oldVal, newVal));
       } else if (key === 'approvers') {
-        approverRows.push(...processApproversDiff(oldVal, newVal));
+        approverRows.push(...processUserListDiff(oldVal, newVal, 'Added', 'Deleted'));
       } else if (key === 'parentRoles') {
-        parentRoleRows.push(...processParentRolesDiff(oldVal, newVal));
+        parentRoleRows.push(...processParentRolesDiff(oldVal, newVal, roles));
       } else if (key === 'assignments') {
-        assignmentRows.push(...processAssignmentsDiff(oldVal, newVal));
+        assignmentRows.push(...processUserListDiff(oldVal, newVal, 'Assigned', 'Unassigned'));
       } else if (key.startsWith('Restriction')) {
         let actionType = 'Changed';
         if (key.includes('Added')) actionType = 'Added';
@@ -376,12 +324,13 @@ export default function RoleAuditDetails({ log }) {
           actionType
         });
       } else {
+        const isAccessDomainField = key === 'accessDomain_ID' || key === 'Access Domain';
         generalRows.push({
-          label: key,
+          label: key === 'accessDomain_ID' ? 'Access Domain' : key,
           actionLabel: 'Updated',
           actionType: 'Changed',
-          oldVal,
-          newVal
+          oldVal: isAccessDomainField && oldVal !== '—' ? formatAccessDomain(oldVal) : oldVal,
+          newVal: isAccessDomainField && newVal !== '—' ? formatAccessDomain(newVal) : newVal
         });
       }
     }
@@ -408,7 +357,7 @@ export default function RoleAuditDetails({ log }) {
     { label: 'Type', val: details.type },
     { label: 'Description', val: details.description },
     { label: 'Environment', val: details.environment_ID },
-    { label: 'Access Domain', val: details.accessDomain_ID },
+    { label: 'Access Domain', val: formatAccessDomain(details.accessDomain_ID) || details.accessDomain?.name },
     { label: 'Critical', val: details.critical ? 'Yes' : 'No' }
   ].filter(f => f.val !== undefined);
 
@@ -526,13 +475,15 @@ export default function RoleAuditDetails({ log }) {
             <Table size="small">
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Parent Role ID</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Parent Role</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {parentRoles.map((p, idx) => (
                   <TableRow key={idx} hover>
-                    <TableCell sx={{ color: 'text.primary' }}>{p.parent_ID || p.parent?.ID}</TableCell>
+                    <TableCell sx={{ color: 'text.primary' }}>
+                      {resolveRoleName(p.parent_ID || p.parent?.ID, roles, p.parent?.name)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

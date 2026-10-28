@@ -25,7 +25,7 @@ export default function Wizard({ context = {}, onDone, allowFreeNavigation = fal
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 8, animation: 'fadeIn 0.3s' }}>
         <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: 'success.light', border: '2px solid', borderColor: 'success.main', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-          <Check size={28} color="#1b5e20" />
+          <Check size={28} color="#047857" />
         </Box>
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>{state.isEditMode ? 'Role Updated' : 'Role Deployed'}</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>The authorization role has been {state.isEditMode ? 'updated' : 'created'} successfully.</Typography>
@@ -47,7 +47,7 @@ export default function Wizard({ context = {}, onDone, allowFreeNavigation = fal
         onClose={state.handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={state.handleCloseSnackbar} severity={state.snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={state.handleCloseSnackbar} severity={state.snackbar.severity} variant="filled" sx={{ width: '100%' }}>
           {state.snackbar.message}
         </Alert>
       </Snackbar>

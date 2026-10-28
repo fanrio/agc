@@ -15,7 +15,10 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
   // -------------------------------------------------------------------------
   // Roles
   // -------------------------------------------------------------------------
-  entity Roles                  as projection on db.Roles;
+  entity Roles                  as projection on db.Roles {
+    *,
+    virtual null as assignmentsCount : Integer
+  };
   entity Restrictions           as projection on db.Restrictions;
   entity RoleAssignments        as projection on db.RoleAssignments;
   entity RoleInheritance        as projection on db.RoleInheritance;

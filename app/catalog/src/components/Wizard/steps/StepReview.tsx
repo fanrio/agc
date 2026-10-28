@@ -29,14 +29,11 @@ export default function StepReview({
                 label={roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
                 size="small"
                 color={roleType === 'ORG_BASED' ? 'primary' : 'secondary'}
-                variant="outlined"
-                sx={{ height: 20, fontSize: 10 }}
               />
               <Chip
                 label={environments.find(e => e.ID === environmentId)?.name || environmentId}
                 size="small"
                 color={ENV_COLOR[environmentId] || 'default'}
-                sx={{ height: 20, fontSize: 10 }}
               />
             </Box>
           </Box>
@@ -61,50 +58,6 @@ export default function StepReview({
         inherited={inherited}
         showCard={true}
       />
-
-      {/* Access Simulation */}
-      {/* Access Simulation (Hidden)
-      <Card sx={{ p: 3 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>Access Simulation</Typography>
-        <TextField
-          label="Sample Data Rows (JSON Array)"
-          multiline
-          rows={4}
-          fullWidth
-          value={simRows}
-          onChange={e => setSimRows(e.target.value)}
-          sx={{ mb: 2, '& textarea': { fontSize: 13 } }}
-        />
-        <Button variant="outlined" color="primary" onClick={runSimulation} disabled={loading} startIcon={<PlayCircle size={14} />} sx={{ mb: 2 }}>
-          Run Simulation
-        </Button>
-
-        {simResults && (
-          <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell style={{ fontWeight: 600 }}>Row</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Result</TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>Reason</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {simResults.map(r => (
-                  <TableRow key={r.rowIndex} hover>
-                    <TableCell>#{r.rowIndex + 1}</TableCell>
-                    <TableCell sx={{ color: r.passed ? 'success.main' : 'error.main', fontWeight: 600 }}>
-                      {r.passed ? '✓ Pass' : '✗ Fail'}
-                    </TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{r.reason}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Card>
-      */}
 
       {/* Immediate Assignment (Optional) */}
       {!isEditMode && (

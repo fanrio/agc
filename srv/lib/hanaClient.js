@@ -17,6 +17,10 @@ let hanaDriver = require('@sap/hana-client');
 const FLAT_TABLE = 'authorization_flat';
 
 class HanaClient {
+  static get driver() {
+    return hanaDriver;
+  }
+
   /**
    * Set dynamic custom driver mock/spy for testing
    */

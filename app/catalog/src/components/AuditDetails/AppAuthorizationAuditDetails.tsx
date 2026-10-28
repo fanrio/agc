@@ -12,22 +12,10 @@ import {
   Paper 
 } from '@mui/material';
 import AuditHeader from './AuditHeader';
-
-function formatValue(val) {
-  if (val === null || val === undefined) return '—';
-  if (typeof val === 'boolean') return val ? 'True' : 'False';
-  if (typeof val === 'object') return JSON.stringify(val);
-  return String(val);
-}
+import { parseLogDetails, formatAuditValue as formatValue } from './auditUtils';
 
 export default function AppAuthorizationAuditDetails({ log }) {
-  let details = {};
-  try {
-    details = typeof log.details === 'string' ? JSON.parse(log.details) : (log.details || {});
-  } catch (e) {
-    details = { raw: log.details };
-  }
-
+  const details = parseLogDetails(log);
   const action = log.action;
   const targetUser = details.userId || log.targetName || log.recordId;
 
@@ -85,13 +73,7 @@ export default function AppAuthorizationAuditDetails({ log }) {
                           <Chip 
                             label={displayVal ? 'Granted' : 'Revoked'} 
                             size="small"
-                            sx={{
-                              fontWeight: 600,
-                              height: 20,
-                              fontSize: 10,
-                              bgcolor: displayVal ? 'success.light' : 'action.disabledBackground',
-                              color: displayVal ? 'success.dark' : 'text.disabled'
-                            }}
+                            color={displayVal ? 'success' : 'default'}
                           />
                         ) : (
                           formatValue(displayVal)
@@ -103,13 +85,7 @@ export default function AppAuthorizationAuditDetails({ log }) {
                             <Chip 
                               label={newVal ? 'Granted' : 'Revoked'} 
                               size="small"
-                              sx={{
-                                fontWeight: 600,
-                                height: 20,
-                                fontSize: 10,
-                                bgcolor: newVal ? 'success.light' : 'action.disabledBackground',
-                                color: newVal ? 'success.dark' : 'text.disabled'
-                              }}
+                              color={newVal ? 'success' : 'default'}
                             />
                           ) : (
                             formatValue(newVal)

@@ -191,19 +191,7 @@ export default function TemplateNameEditor({
                 label={seg.value}
                 size="small"
                 onDelete={() => handleDeleteChip(idx)}
-                color="secondary"
-                sx={{
-                  height: 24,
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  bgcolor: 'rgba(147, 51, 234, 0.08)',
-                  border: '1px solid rgba(147, 51, 234, 0.3)',
-                  color: '#7e22ce',
-                  '& .MuiChip-deleteIcon': {
-                    color: '#7e22ce',
-                    '&:hover': { color: 'error.main' }
-                  }
-                }}
+                color="primary"
               />
             );
           }
@@ -247,8 +235,9 @@ export default function TemplateNameEditor({
             width: '24ch',
             bgcolor: 'background.paper',
             backgroundImage: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 8px 16px -4px rgba(0,0,0,0.5)',
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow: '0 8px 24px -4px rgba(0, 0, 53, 0.12)',
           }
         }}
       >

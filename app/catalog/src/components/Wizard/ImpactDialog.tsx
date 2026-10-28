@@ -17,7 +17,7 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
       }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
-        <AlertTriangle color="#ed6c02" size={24} />
+        <AlertTriangle color="#d97706" size={24} />
         <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
           Confirm Changes & Analyze Impact
         </Typography>
@@ -32,7 +32,7 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
           <Card variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <GitBranch size={18} color="#0288d1" />
+                <GitBranch size={18} color="#2563eb" />
                 Derived Roles
               </Typography>
               <Chip
@@ -62,7 +62,7 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
           <Card variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Users size={18} color="#2e7d32" />
+                <Users size={18} color="#047857" />
                 Affected Users
               </Typography>
               <Chip

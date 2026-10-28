@@ -208,7 +208,7 @@ export default function EffectiveRestrictions({
             gap: 1
           }}
         >
-          <ShieldCheck size={18} color="#1976d2" />
+          <ShieldCheck size={18} color="#000035" />
           {displayTitle}
         </Typography>
 
@@ -256,7 +256,7 @@ export default function EffectiveRestrictions({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                    <Layers size={16} color={isOwnGroup ? '#1976d2' : '#666'} />
+                    <Layers size={16} color={isOwnGroup ? '#000035' : '#515f74'} />
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       Role: {roleName}
                     </Typography>
@@ -264,8 +264,6 @@ export default function EffectiveRestrictions({
                       label={isOwnGroup ? 'Own Role' : 'Inherited Role'}
                       size="small"
                       color={isOwnGroup ? 'primary' : 'default'}
-                      variant={isOwnGroup ? 'filled' : 'outlined'}
-                      sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
                     />
                     <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
                       {groupItems.length} restriction{groupItems.length > 1 ? 's' : ''}
@@ -322,8 +320,7 @@ export default function EffectiveRestrictions({
                             <Chip
                               label={re.filterType || 'SINGLE_VALUE'}
                               size="small"
-                              variant="outlined"
-                              sx={{ fontWeight: 600, fontSize: 10, height: 20 }}
+                              color="secondary"
                             />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>
@@ -337,7 +334,6 @@ export default function EffectiveRestrictions({
                               label={re.isOwn ? 'Own' : 'Inherited'}
                               size="small"
                               color={re.isOwn ? 'success' : 'info'}
-                              sx={{ fontWeight: 600, fontSize: 10, height: 20 }}
                             />
                           </TableCell>
                         </TableRow>
@@ -355,8 +351,7 @@ export default function EffectiveRestrictions({
                       <Chip
                         label={re.filterType || 'SINGLE_VALUE'}
                         size="small"
-                        variant="outlined"
-                        sx={{ fontWeight: 600, fontSize: 10, height: 20 }}
+                        color="secondary"
                       />
                     </TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>
@@ -370,7 +365,6 @@ export default function EffectiveRestrictions({
                         label={re.isOwn ? 'Own' : 'Inherited'}
                         size="small"
                         color={re.isOwn ? 'success' : 'info'}
-                        sx={{ fontWeight: 600, fontSize: 10, height: 20 }}
                       />
                     </TableCell>
                   </TableRow>

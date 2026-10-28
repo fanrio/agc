@@ -224,8 +224,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   useEffect(() => {
     if (context.roleId) {
       setLoading(true);
-      api.getRoles().then(all => {
-        const role = all.find(r => r.ID === context.roleId);
+      api.getRole(context.roleId).then(role => {
         if (role) {
           try {
             setRoleType(role.type === 'ORG_BASED' ? 'ORG_BASED' : (role.type === 'DRAGE' ? 'DRAGE' : (role.type === 'DERIVED' ? 'DERIVED' : 'SINGLE')));

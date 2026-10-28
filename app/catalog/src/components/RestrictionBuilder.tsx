@@ -610,7 +610,7 @@ export function RestrictionDisplay({ restriction, isOwn = true }) {
       <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: isOwn ? 'primary.main' : 'text.secondary' }}>
         {restriction.field}
       </Typography>
-      <Chip label={label} size="small" color={color} sx={{ fontSize: 9, height: 18 }} />
+      <Chip label={label} size="small" color={color} />
       <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>
         {display}
       </Typography>
@@ -686,7 +686,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>

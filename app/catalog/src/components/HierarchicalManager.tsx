@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip } from '@mui/material';
+import { Box, Card, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
 import * as api from '../api';
 import TemplateNameEditor from './TemplateNameEditor';
@@ -67,9 +67,9 @@ function parseTemplateToChips(templateStr) {
                 height: 18,
                 fontSize: '9px',
                 fontWeight: 600,
-                bgcolor: 'rgba(147, 51, 234, 0.12)',
-                border: '1px solid rgba(147, 51, 234, 0.25)',
-                color: 'secondary.light',
+                bgcolor: 'rgba(0, 0, 53, 0.07)',
+                border: '1px solid rgba(0, 0, 53, 0.22)',
+                color: 'primary.main',
                 px: 0.5
               }}
             />
@@ -273,15 +273,17 @@ function NodeRow({
           alignItems: 'center',
           gap: 1.5,
           p: '10px 14px',
-          bgcolor: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
           borderRadius: 1,
           ml: depth * 3,
           position: 'relative',
           transition: 'all 0.2s',
           '&:hover': {
-            borderColor: 'rgba(59, 130, 246, 0.2)',
-            bgcolor: 'rgba(255, 255, 255, 0.03)',
+            borderColor: 'primary.main',
+            bgcolor: 'action.hover',
           }
         }}>
           <IconButton
@@ -293,7 +295,7 @@ function NodeRow({
             {hasChildren ? (expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <Box sx={{ width: 14 }} />}
           </IconButton>
 
-          <Icon size={16} color="#3b82f6" />
+          <Icon size={16} color="#000035" />
 
           <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
             {editing ? (
@@ -358,8 +360,9 @@ function NodeRow({
                   size="small"
                   onDelete={canManage ? () => handleDeleteAttr(a.ID) : undefined}
                   color="primary"
-                  variant="outlined"
-                  sx={{ height: 20, fontSize: 9 }}
+
+
+
                 />
               ))}
             </Box>
@@ -374,8 +377,8 @@ function NodeRow({
                   size="small"
                   onDelete={canManage ? () => handleDeleteRestrictionField(rf.ID) : undefined}
                   color="secondary"
-                  variant="outlined"
-                  sx={{ height: 20, fontSize: 9 }}
+
+
                 />
               ))}
             </Box>
@@ -446,22 +449,16 @@ function NodeRow({
           <Collapse in={showAddField}>
             <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center' }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>Assign Mandatory Field:</Typography>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id={`add-field-select-${node.ID}`}>Select Field</InputLabel>
-                <Select
-                  labelId={`add-field-select-${node.ID}`}
-                  label="Select Field"
-                  value={selectedFieldId}
-                  onChange={e => setSelectedFieldId(e.target.value)}
-                >
-                  <MenuItem value="" disabled><em>— Choose Field —</em></MenuItem>
-                  {nodeTypes.map(f => (
-                    <MenuItem key={f.ID} value={f.ID}>
-                      {f.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <SearchableSelect
+                options={[
+                  { value: '', label: '— Choose Field —' },
+                  ...nodeTypes.map(f => ({ value: f.ID, label: f.name }))
+                ]}
+                value={selectedFieldId}
+                onChange={val => setSelectedFieldId(val)}
+                label="Select Field"
+                sx={{ minWidth: 200 }}
+              />
               <Button variant="contained" size="small" onClick={handleAddRestrictionField} disabled={loading || !selectedFieldId}>Assign</Button>
               <IconButton size="small" onClick={() => { setShowAddField(false); setSelectedFieldId(''); }}><X size={15} /></IconButton>
             </Card>
@@ -781,7 +778,7 @@ export default function HierarchicalManager({
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>

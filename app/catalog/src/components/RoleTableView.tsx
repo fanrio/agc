@@ -147,15 +147,14 @@ export default function RoleTableView({
                 </TableSortLabel>
               </TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Parent / Org Unit</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} >Restrictions</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} >Direct Users</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="center">Direct Users</TableCell>
               <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {sortedRoots.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                   No roles match the selected filters.
                 </TableCell>
               </TableRow>
@@ -301,9 +300,7 @@ const RoleRow = memo(({
           <Chip
             size="small"
             label={role.type}
-            variant="outlined"
             color={isOrg ? 'primary' : isDerived ? 'secondary' : 'default'}
-            sx={{ fontWeight: 700, height: 20, fontSize: '0.65rem' }}
           />
         </TableCell>
 
@@ -329,15 +326,6 @@ const RoleRow = memo(({
           ) : (
             <Typography variant="caption" color="text.disabled">—</Typography>
           )}
-        </TableCell>
-
-        <TableCell align="center">
-          <Chip
-            size="small"
-            label={`${role.ownRestrictions?.length || 0} fields`}
-            variant="outlined"
-            sx={{ fontSize: '0.7rem' }}
-          />
         </TableCell>
 
         <TableCell align="center">

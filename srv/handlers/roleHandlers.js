@@ -31,20 +31,39 @@ function registerRoleHandlers(service, entities, deps) {
   const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations } = entities;
 
   // -------------------------------------------------------------------------
-  // Roles READ filtering
+  // Roles READ filtering & assignmentsCount CAP CQL aggregation
   // -------------------------------------------------------------------------
   service.on('READ', 'Roles', async (req, next) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     const result = await next();
-    if (perms.isSuperAdmin) return result;
+    if (!result) return result;
 
-    const inheritances = await cds.db.run(SELECT.from(RoleInheritance));
+    let rolesList = Array.isArray(result) ? result : (typeof result === 'object' ? [result] : []);
+    if (!perms.isSuperAdmin && rolesList.length > 0) {
+      const inheritances = await cds.db.run(SELECT.from(RoleInheritance));
+      rolesList = filterRolesByBackendPermissions(rolesList, perms, inheritances);
+    }
+
+    if (rolesList.length > 0) {
+      const roleIds = rolesList.map(r => r.ID).filter(Boolean);
+      if (roleIds.length > 0) {
+        const counts = await cds.db.run(
+          SELECT.from(RoleAssignments)
+            .columns('role_ID', 'count(1) as assignmentsCount')
+            .where({ role_ID: { in: roleIds } })
+            .groupBy('role_ID')
+        );
+        const countMap = new Map(counts.map(c => [c.role_ID, Number(c.assignmentsCount || 0)]));
+        for (const r of rolesList) {
+          r.assignmentsCount = countMap.get(r.ID) || 0;
+        }
+      }
+    }
 
     if (Array.isArray(result)) {
-      return filterRolesByBackendPermissions(result, perms, inheritances);
+      return rolesList;
     } else if (result && typeof result === 'object') {
-      const filtered = filterRolesByBackendPermissions([result], perms, inheritances);
-      return filtered.length > 0 ? result : null;
+      return rolesList.length > 0 ? rolesList[0] : null;
     }
 
     return result;

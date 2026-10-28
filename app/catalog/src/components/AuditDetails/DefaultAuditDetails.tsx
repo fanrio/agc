@@ -12,29 +12,12 @@ import {
   Chip
 } from '@mui/material';
 import AuditHeader from './AuditHeader';
+import { parseLogDetails, formatAuditValue } from './auditUtils';
 
-function formatVal(val) {
-  if (val === null || val === undefined) return '—';
-  if (typeof val === 'boolean') return val ? 'True' : 'False';
-  if (Array.isArray(val)) {
-    if (val.length === 0) return 'None';
-    return val.map(item => typeof item === 'object' ? JSON.stringify(item) : String(item)).join(', ');
-  }
-  if (typeof val === 'object') {
-    return Object.entries(val)
-      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
-      .join('; ');
-  }
-  return String(val);
-}
+const formatVal = (val) => formatAuditValue(val, true);
 
 export default function DefaultAuditDetails({ log }) {
-  let details = {};
-  try {
-    details = typeof log.details === 'string' ? JSON.parse(log.details) : (log.details || {});
-  } catch (e) {
-    details = { raw: log.details };
-  }
+  const details = parseLogDetails(log);
 
   const entries = Object.entries(details);
 

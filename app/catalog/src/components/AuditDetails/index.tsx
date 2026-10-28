@@ -4,12 +4,12 @@ import RoleAssignmentAuditDetails from './RoleAssignmentAuditDetails';
 import AppAuthorizationAuditDetails from './AppAuthorizationAuditDetails';
 import DefaultAuditDetails from './DefaultAuditDetails';
 
-export default function AuditDetailsDispatcher({ log, roles = [] }) {
+export default function AuditDetailsDispatcher({ log, roles = [], accessDomains = [] }) {
   if (!log) return null;
 
   switch (log.entityName) {
     case 'Roles':
-      return <RoleAuditDetails log={log} roles={roles} />;
+      return <RoleAuditDetails log={log} roles={roles} accessDomains={accessDomains} />;
     case 'RoleAssignments':
       return <RoleAssignmentAuditDetails log={log} roles={roles} />;
     case 'AppAuthorizations':

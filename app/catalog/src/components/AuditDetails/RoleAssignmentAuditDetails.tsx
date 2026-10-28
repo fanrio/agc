@@ -12,22 +12,10 @@ import {
   Paper 
 } from '@mui/material';
 import AuditHeader from './AuditHeader';
-
-function formatValue(val) {
-  if (val === null || val === undefined) return '—';
-  if (typeof val === 'boolean') return val ? 'True' : 'False';
-  if (typeof val === 'object') return JSON.stringify(val);
-  return String(val);
-}
+import { parseLogDetails, formatAuditValue as formatValue, resolveRoleName } from './auditUtils';
 
 export default function RoleAssignmentAuditDetails({ log, roles = [] }) {
-  let details = {};
-  try {
-    details = typeof log.details === 'string' ? JSON.parse(log.details) : (log.details || {});
-  } catch (e) {
-    details = { raw: log.details };
-  }
-
+  const details = parseLogDetails(log);
   const action = log.action;
 
   // Determine user ID and user name
@@ -41,15 +29,12 @@ export default function RoleAssignmentAuditDetails({ log, roles = [] }) {
   }
 
   // Determine role name (lookup from roles list if details only has UUID)
-  let roleName = details.roleName || details.role_name || details.role?.name;
   const roleId = details.role_ID || details.roleId;
-
-  if (!roleName && roleId && Array.isArray(roles) && roles.length > 0) {
-    const matchedRole = roles.find(r => r.ID === roleId);
-    if (matchedRole) {
-      roleName = matchedRole.name;
-    }
-  }
+  let roleName = resolveRoleName(
+    roleId,
+    roles,
+    details.roleName || details.role_name || details.role?.name
+  );
 
   if (!roleName && log.targetName && log.targetName !== userName && log.targetName !== userId && !log.targetName.includes('@')) {
     roleName = log.targetName;
@@ -79,13 +64,7 @@ export default function RoleAssignmentAuditDetails({ log, roles = [] }) {
           <Chip 
             label={action === 'CREATE' ? 'Assigned' : action === 'DELETE' ? 'Unassigned' : action}
             size="small"
-            sx={{
-              fontWeight: 600,
-              bgcolor: action === 'CREATE' ? 'success.light' : action === 'DELETE' ? 'error.light' : 'info.light',
-              color: action === 'CREATE' ? 'success.dark' : action === 'DELETE' ? 'error.dark' : 'info.dark',
-              border: '1px solid',
-              borderColor: action === 'CREATE' ? 'success.main' : action === 'DELETE' ? 'error.main' : 'info.main'
-            }}
+            color={action === 'CREATE' ? 'success' : action === 'DELETE' ? 'error' : 'info'}
           />
         </Box>
 

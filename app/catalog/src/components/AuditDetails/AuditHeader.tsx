@@ -31,15 +31,7 @@ export default function AuditHeader({ log, title, subtitle }) {
           <Chip 
             label={action} 
             size="small"
-            sx={{
-              fontWeight: 700,
-              fontSize: 11,
-              height: 22,
-              bgcolor: action === 'CREATE' ? 'success.light' : action === 'DELETE' ? 'error.light' : 'info.light',
-              color: action === 'CREATE' ? 'success.dark' : action === 'DELETE' ? 'error.dark' : 'info.dark',
-              border: '1px solid',
-              borderColor: action === 'CREATE' ? 'success.main' : action === 'DELETE' ? 'error.main' : 'info.main'
-            }}
+            color={action === 'CREATE' ? 'success' : action === 'DELETE' ? 'error' : 'info'}
           />
         </Box>
         {subtitle && (
@@ -51,7 +43,7 @@ export default function AuditHeader({ log, title, subtitle }) {
 
       <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <User size={16} color="#60a5fa" />
+          <User size={16} color="#515f74" />
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
               Performed By
@@ -63,7 +55,7 @@ export default function AuditHeader({ log, title, subtitle }) {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Clock size={16} color="#60a5fa" />
+          <Clock size={16} color="#515f74" />
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
               Timestamp

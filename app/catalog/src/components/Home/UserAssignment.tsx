@@ -13,25 +13,25 @@ export default function UserAssignment({ stats, setActiveNav }) {
     {
       label: 'Unique Users',
       value: stats.userCount,
-      color: '#10b981',
-      bg: 'rgba(16, 185, 129, 0.04)',
-      border: 'rgba(16, 185, 129, 0.15)',
+      color: '#047857',
+      bg: 'rgba(16, 185, 129, 0.05)',
+      border: 'rgba(16, 185, 129, 0.2)',
       icon: Users
     },
     {
       label: 'Direct Assignments',
       value: stats.assignmentCount,
-      color: '#3b82f6',
-      bg: 'rgba(59, 130, 246, 0.04)',
-      border: 'rgba(59, 130, 246, 0.15)',
+      color: '#2563eb',
+      bg: 'rgba(37, 99, 235, 0.05)',
+      border: 'rgba(37, 99, 235, 0.2)',
       icon: UserCheck
     },
     {
       label: 'Users with Critical Roles',
       value: stats.usersWithCritical,
-      color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.04)',
-      border: 'rgba(239, 68, 68, 0.15)',
+      color: '#ba1a1a',
+      bg: 'rgba(186, 26, 26, 0.05)',
+      border: 'rgba(186, 26, 26, 0.2)',
       icon: ShieldAlert
     }
   ];

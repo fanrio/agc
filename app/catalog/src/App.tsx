@@ -11,7 +11,9 @@ import {
   ListItemIcon,
   ListItemText,
   CircularProgress,
-  Button
+  Button,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   Home,
@@ -23,7 +25,10 @@ import {
   History,
   LogOut,
   UserCheck,
-  ShieldCheck
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
@@ -39,7 +44,8 @@ import ReplicationsView from './components/ReplicationsView';
 import UserAuthorizationCardDrawer from './components/UserAuthorizationCard/UserAuthorizationCardDrawer';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
 
-const DRAWER_WIDTH = 240;
+const EXPANDED_DRAWER_WIDTH = 240;
+const COLLAPSED_DRAWER_WIDTH = 68;
 
 const NAV = [
   { id: 'home', label: 'Dashboard', icon: Home },
@@ -64,12 +70,15 @@ function getNavFromHash() {
 
 function AppContent({ simulatedUser, onLogout }) {
   const [activeNav, setActiveNavState] = useState(getNavFromHash);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const [wizardContext, setWizardContext] = useState(null);
   const [rolesFilter, setRolesFilter] = useState(null);
   const [inspectingUserId, setInspectingUserId] = useState(null);
   const isNavigatingRef = useRef(false);
 
   const { permissions, loading } = usePermissions();
+
+  const currentDrawerWidth = drawerOpen ? EXPANDED_DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH;
 
   const setActiveNav = (navId) => {
     isNavigatingRef.current = true;
@@ -132,6 +141,14 @@ function AppContent({ simulatedUser, onLogout }) {
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: 'background.paper', backgroundImage: 'none', borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', minHeight: 64 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <IconButton
+              onClick={() => setDrawerOpen(!drawerOpen)}
+              size="small"
+              sx={{ color: 'text.secondary', mr: 0.5, '&:hover': { bgcolor: 'action.hover' } }}
+              title={drawerOpen ? 'Collapse menu' : 'Expand menu'}
+            >
+              {drawerOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
+            </IconButton>
             <Network size={20} color="var(--accent-primary)" />
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', color: 'primary.main' }}>
               cortex <Box component="span" sx={{ fontWeight: 300, color: 'text.secondary', ml: 0.5 }}>/ BDC Auth Wizard</Box>
@@ -181,53 +198,84 @@ function AppContent({ simulatedUser, onLogout }) {
         </Toolbar>
       </AppBar>
 
-      {/* Sidebar */}
+      {/* Mini Variant Drawer */}
       <Drawer
         variant="permanent"
+        open={drawerOpen}
         sx={{
-          width: DRAWER_WIDTH,
+          width: currentDrawerWidth,
           flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: 'border-box', bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider' },
+          whiteSpace: 'nowrap',
+          boxSizing: 'border-box',
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.standard,
+          }),
+          '& .MuiDrawer-paper': {
+            width: currentDrawerWidth,
+            overflowX: 'hidden',
+            boxSizing: 'border-box',
+            bgcolor: 'background.paper',
+            borderRight: '1px solid',
+            borderColor: 'divider',
+            transition: (theme) => theme.transitions.create('width', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.standard,
+            }),
+          },
         }}
       >
         <Toolbar /> {/* Spacer below topbar */}
-        <Box sx={{ overflow: 'auto', p: 2 }}>
-          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary', fontWeight: 600, display: 'block', mb: 2, px: 1 }}>
-            Navigation
-          </Typography>
+        <Box sx={{ overflowY: 'auto', overflowX: 'hidden', p: 1.5 }}>
           <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, p: 0 }}>
             {filteredNav.map(item => {
               const isActive = activeNav === item.id;
               return (
-                <ListItem key={item.id} disablePadding>
-                  <ListItemButton
-                    onClick={() => { setActiveNav(item.id); if (item.id !== 'wizard') setWizardContext(null); }}
-                    sx={{
-                      borderRadius: 1,
-                      py: 1,
-                      px: 1.5,
-                      bgcolor: isActive ? '#f2f4f6' : 'transparent',
-                      border: '1px solid',
-                      borderColor: isActive ? 'divider' : 'transparent',
-                      color: isActive ? 'primary.main' : 'text.secondary',
-                      transition: 'all 0.15s ease-in-out',
-                      '&:hover': {
-                        bgcolor: isActive ? '#eceef0' : 'rgba(0, 0, 0, 0.04)',
-                        color: isActive ? 'primary.main' : 'text.primary',
-                      }
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 32, color: 'inherit' }}>
-                      <item.icon size={18} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ fontSize: '0.875rem', fontWeight: isActive ? 600 : 500 }}>
-                          {item.label}
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
+                <ListItem key={item.id} disablePadding sx={{ display: 'block' }}>
+                  <Tooltip title={!drawerOpen ? item.label : ''} placement="right" arrow>
+                    <ListItemButton
+                      onClick={() => { setActiveNav(item.id); if (item.id !== 'wizard') setWizardContext(null); }}
+                      sx={{
+                        minHeight: 44,
+                        borderRadius: 1.5,
+                        px: drawerOpen ? 1.5 : 1.25,
+                        justifyContent: drawerOpen ? 'initial' : 'center',
+                        bgcolor: isActive ? '#f2f4f6' : 'transparent',
+                        border: '1px solid',
+                        borderColor: isActive ? 'divider' : 'transparent',
+                        color: isActive ? 'primary.main' : 'text.secondary',
+                        transition: 'all 0.15s ease-in-out',
+                        '&:hover': {
+                          bgcolor: isActive ? '#eceef0' : 'rgba(0, 0, 0, 0.04)',
+                          color: isActive ? 'primary.main' : 'text.primary',
+                        }
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          mr: drawerOpen ? 1.5 : 'auto',
+                          justifyContent: 'center',
+                          color: 'inherit'
+                        }}
+                      >
+                        <item.icon size={19} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.label}
+                        primaryTypographyProps={{
+                          fontSize: '0.875rem',
+                          fontWeight: isActive ? 600 : 500,
+                          noWrap: true
+                        }}
+                        sx={{
+                          opacity: drawerOpen ? 1 : 0,
+                          display: drawerOpen ? 'block' : 'none',
+                          transition: 'opacity 0.2s'
+                        }}
+                      />
+                    </ListItemButton>
+                  </Tooltip>
                 </ListItem>
               );
             })}
@@ -236,7 +284,19 @@ function AppContent({ simulatedUser, onLogout }) {
       </Drawer>
 
       {/* Main Content */}
-      <Box component="main" sx={{ flexGrow: 1, p: 4, width: `calc(100% - ${DRAWER_WIDTH}px)`, mt: 8 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          p: 4,
+          width: `calc(100% - ${currentDrawerWidth}px)`,
+          mt: 8,
+          transition: (theme) => theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.standard,
+          }),
+        }}
+      >
         {activeNav === 'home' && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
         {activeNav === 'org' && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
         {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}

@@ -27,10 +27,10 @@ export default function RecentlyCreatedRoles({ stats, setActiveNav }) {
         <Box sx={{ 
           p: 1, 
           borderRadius: 2, 
-          bgcolor: 'rgba(167, 139, 250, 0.1)', 
-          border: '1px solid rgba(167, 139, 250, 0.2)' 
+          bgcolor: 'rgba(0, 0, 53, 0.06)', 
+          border: '1px solid rgba(0, 0, 53, 0.15)' 
         }}>
-          <Sparkles size={18} color="#a78bfa" />
+          <Sparkles size={18} color="#000035" />
         </Box>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Recently Deployed Roles</Typography>
@@ -43,7 +43,7 @@ export default function RecentlyCreatedRoles({ stats, setActiveNav }) {
           {stats.recentRoles.map(role => {
             const isOrg = role.type === 'ORG_BASED';
             const isDerived = role.parentRoles && role.parentRoles.length > 0;
-            const shieldColor = isOrg ? '#3b82f6' : isDerived ? '#a78bfa' : '#10b981';
+            const shieldColor = isOrg ? '#2563eb' : isDerived ? '#515f74' : '#047857';
 
             return (
               <ListItem
@@ -52,13 +52,14 @@ export default function RecentlyCreatedRoles({ stats, setActiveNav }) {
                 sx={{
                   p: 2,
                   borderRadius: 2,
-                  bgcolor: 'rgba(255,255,255,0.01)',
-                  border: '1px solid rgba(255,255,255,0.04)',
+                  bgcolor: 'background.default',
+                  border: '1px solid',
+                  borderColor: 'divider',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease-in-out',
                   '&:hover': {
-                    borderColor: `${shieldColor}40`,
-                    bgcolor: 'rgba(255,255,255,0.02)',
+                    borderColor: 'primary.main',
+                    bgcolor: 'action.hover',
                     transform: 'translateX(4px)'
                   }
                 }}
@@ -78,7 +79,7 @@ export default function RecentlyCreatedRoles({ stats, setActiveNav }) {
                     </Typography>
                   }
                 />
-                <ChevronRight size={15} color="rgba(255,255,255,0.25)" />
+                <ChevronRight size={15} color="#515f74" />
               </ListItem>
             );
           })}

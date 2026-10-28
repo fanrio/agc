@@ -66,11 +66,12 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
       <Card 
         sx={{
           p: 4,
-          background: 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(167,139,250,0.06) 100%)',
-          border: '1px solid rgba(255,255,255,0.05)',
+          background: 'linear-gradient(135deg, rgba(0, 0, 53, 0.04) 0%, rgba(37, 99, 235, 0.05) 100%)',
+          border: '1px solid',
+          borderColor: 'divider',
           position: 'relative',
           overflow: 'hidden',
-          borderRadius: 4
+          borderRadius: 3
         }}
       >
         <Box sx={{ position: 'relative', zIndex: 2 }}>
@@ -81,22 +82,10 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
             Manage role-based permissions, inheritances, and organizational restrictions dynamically. Create org nodes, map custom restriction fields, and simulate data access configurations.
           </Typography>
         </Box>
-        {/* Decorative background element */}
-        <Box sx={{
-          position: 'absolute',
-          right: -50,
-          bottom: -50,
-          width: 250,
-          height: 250,
-          borderRadius: '50%',
-          bgcolor: 'rgba(59,130,246,0.03)',
-          filter: 'blur(50px)',
-          zIndex: 1
-        }} />
       </Card>
 
       {error && (
-        <Alert severity="error" onClose={loadStats} sx={{ border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+        <Alert severity="error" onClose={loadStats}>
           {error}
         </Alert>
       )}

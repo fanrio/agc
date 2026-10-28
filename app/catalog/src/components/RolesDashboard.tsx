@@ -32,6 +32,7 @@ function getEffectiveRestrictionsFlat(role, allRoles) {
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }) {
   const { permissions } = usePermissions();
   const [roles, setRoles] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [orgNodes, setOrgNodes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -86,17 +87,40 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   async function load() {
     setLoading(true);
     try {
-      const [rolesData, nodesData] = await Promise.all([
-        api.getRoles(),
+      const params: api.GetRolesParams = {
+        top: rowsPerPage,
+        skip: page * rowsPerPage,
+        count: true,
+        search: searchQuery,
+        envFilter,
+        typeFilter,
+        healthFilter
+      };
+
+      const [rolesRes, nodesData] = await Promise.all([
+        api.getRoles(params),
         api.getAllOrgNodesFlat()
       ]);
-      setRoles(rolesData);
-      setOrgNodes(nodesData);
-    } catch (e) { console.error(e); }
-    setLoading(false);
+
+      if (rolesRes && typeof rolesRes === 'object' && 'value' in rolesRes) {
+        setRoles(rolesRes.value || []);
+        setTotalCount(rolesRes.count ?? (rolesRes.value ? rolesRes.value.length : 0));
+      } else if (Array.isArray(rolesRes)) {
+        setRoles(rolesRes);
+        setTotalCount(rolesRes.length);
+      }
+
+      setOrgNodes(nodesData || []);
+    } catch (e) {
+      console.error('Failed to load roles from OData service:', e);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, [page, rowsPerPage, searchQuery, envFilter, typeFilter, healthFilter]);
 
   const parseEnvironments = (val) => {
     if (!val || val === 'ALL' || val === '*') return 'ALL';
@@ -110,56 +134,17 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   };
 
   const visibleRoles = roles;
-
-  // Apply environment & type filters
-  const envFilteredRoles = visibleRoles.filter(role => {
-    if (envFilter.length > 0 && !envFilter.includes(role.environment_ID)) return false;
-    if (typeFilter !== 'ALL' && role.type !== typeFilter) return false;
-    return true;
-  });
-
-  // Apply health filters
-  const healthFilteredRoles = envFilteredRoles.filter(role => {
-    if (!healthFilter) return true;
-    if (healthFilter === 'unrestricted') {
-      return !role.ownRestrictions || role.ownRestrictions.length === 0;
-    }
-    if (healthFilter === 'no-users') {
-      return !role.assignments || role.assignments.length === 0;
-    }
-    if (healthFilter === 'no-approver') {
-      return !role.approvers || role.approvers.length === 0;
-    }
-    if (healthFilter === 'critical') {
-      return !!role.critical;
-    }
-    return true;
-  });
-
-  // Filter roles based on name, description, and restrictions
-  const filteredRoles = healthFilteredRoles.filter(role => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    const nameMatch = role.name.toLowerCase().includes(q);
-    const descMatch = role.description && role.description.toLowerCase().includes(q);
-    const restMatch = role.ownRestrictions && role.ownRestrictions.some(r =>
-      r.field.toLowerCase().includes(q) ||
-      r.value.toLowerCase().includes(q)
-    );
-    return nameMatch || descMatch || restMatch;
-  });
-
-  // Find top-level root roles among filteredRoles
-  const rootRoles = filteredRoles.filter(r => {
+  const filteredRoles = roles;
+  const rootRoles = roles.filter(r => {
     if (!r.parentRoles || r.parentRoles.length === 0) return true;
     return !r.parentRoles.some(pr => {
       const parentId = pr.parent_ID || pr.parent?.ID;
-      return filteredRoles.some(vr => vr.ID === parentId);
+      return roles.some(vr => vr.ID === parentId);
     });
   });
 
-  const paginatedRoots = rootRoles.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  const paginatedFilteredRoles = filteredRoles.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginatedRoots = (viewMode === 'table' || viewMode === 'tree') ? rootRoles : roles;
+  const paginatedFilteredRoles = roles;
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
@@ -170,7 +155,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     setPage(0);
   };
 
-  const paginationCount = (viewMode === 'table' || viewMode === 'tree') ? rootRoles.length : filteredRoles.length;
+  const paginationCount = totalCount;
 
   const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL');
 
@@ -279,7 +264,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         )}
 
         <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 600 }}>
-          Showing {filteredRoles.length} of {visibleRoles.length} roles
+          Showing {roles.length} of {totalCount} roles
         </Typography>
       </Card>
 
@@ -289,7 +274,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>

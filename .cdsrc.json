@@ -1,5 +1,5 @@
 {
   "watch": {
-    "ignore": ["app/**", "node_modules/**", "*.log", "cap_debug.txt", "gen/**"]
+    "exclude": ["app", ".agents", "scratch", "stitch", "datasphere", "mta_archives"]
   }
 }

@@ -102,7 +102,7 @@ export default function ReplicationsView() {
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
@@ -181,7 +181,6 @@ export default function ReplicationsView() {
                             label={envLabels[item.environment_ID] || item.environment_ID}
                             size="small"
                             color={envColors[item.environment_ID] || 'default'}
-                            sx={{ height: 20, fontSize: 11, fontWeight: 500 }}
                           />
                         ) : '—'}
                       </TableCell>

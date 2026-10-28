@@ -14,19 +14,19 @@ export default function GlobalParameters({ stats, setActiveNav }) {
       label: 'Access Domains',
       value: stats.accessDomainCount || 0,
       icon: Network,
-      color: '#3b82f6'
+      color: '#2563eb'
     },
     {
       label: 'Restriction Fields',
       value: stats.fieldCount || 0,
       icon: Sliders,
-      color: '#a78bfa'
+      color: '#515f74'
     },
     {
       label: 'BDC System Connections',
       value: stats.bdcCount || 0,
       icon: Cloud,
-      color: '#10b981'
+      color: '#047857'
     }
   ];
 
@@ -48,10 +48,10 @@ export default function GlobalParameters({ stats, setActiveNav }) {
         <Box sx={{ 
           p: 1, 
           borderRadius: 2, 
-          bgcolor: 'rgba(59, 130, 246, 0.1)', 
-          border: '1px solid rgba(59, 130, 246, 0.2)' 
+          bgcolor: 'info.light', 
+          border: '1px solid rgba(37, 99, 235, 0.2)' 
         }}>
-          <Settings size={18} color="#3b82f6" />
+          <Settings size={18} color="#2563eb" />
         </Box>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Global Parameters</Typography>
@@ -71,15 +71,16 @@ export default function GlobalParameters({ stats, setActiveNav }) {
                 alignItems: 'center',
                 p: 1.5,
                 borderRadius: 2,
-                bgcolor: 'rgba(255,255,255,0.01)',
-                border: '1px solid rgba(255,255,255,0.04)'
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider'
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box sx={{ 
                   p: 0.75, 
                   borderRadius: 1, 
-                  bgcolor: `${param.color}10` 
+                  bgcolor: `${param.color}14` 
                 }}>
                   <Icon size={14} color={param.color} />
                 </Box>
@@ -97,18 +98,11 @@ export default function GlobalParameters({ stats, setActiveNav }) {
 
       <Button
         variant="outlined"
-        color="inherit"
+        color="primary"
         fullWidth
         onClick={() => setActiveNav('admin')}
         startIcon={<Settings size={14} />}
-        sx={{ 
-          mt: 'auto', 
-          borderColor: 'rgba(255,255,255,0.12)', 
-          '&:hover': {
-            borderColor: 'text.secondary',
-            bgcolor: 'rgba(255,255,255,0.02)'
-          }
-        }}
+        sx={{ mt: 'auto' }}
       >
         Configure Settings
       </Button>

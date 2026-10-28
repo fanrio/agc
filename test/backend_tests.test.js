@@ -1342,5 +1342,103 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     assert.ok(Array.isArray(parsed.domains), 'domains must be an array');
   });
 
+  await t.test('Deletion Validation: AccessDomains cannot be deleted if used in Roles or DynamicGenerationRules', async () => {
+    // 1. Create a dedicated test Access Domain
+    const domainId = `AD_VAL_${Date.now()}`.substring(0, 10);
+    const domainRes = await POST('/odata/v4/auth/AccessDomains', {
+      ID: domainId,
+      name: domainId,
+      description: 'Validation Test Domain',
+      roleTemplateName: 'ROLE_{Plant}'
+    });
+    assert.strictEqual(domainRes.status, 201);
+
+    // 2. Create a Role linked to this Access Domain
+    const roleRes = await POST('/odata/v4/auth/Roles', {
+      name: `ROLE_AD_TEST_${Date.now()}`,
+      type: 'SINGLE',
+      environment_ID: 'D',
+      accessDomain_ID: domainId
+    });
+    assert.strictEqual(roleRes.status, 201);
+    const testRoleId = roleRes.data.ID;
+
+    // 3. Attempt to delete the Access Domain -> must fail with 400
+    try {
+      await DELETE(`/odata/v4/auth/AccessDomains('${domainId}')`);
+      assert.fail('Expected DELETE AccessDomains to fail when assigned to a Role');
+    } catch (err) {
+      assert.strictEqual(err.status, 400);
+      assert.ok(err.message.includes('assigned to 1 role(s)'), `Error message should mention role assignment: ${err.message}`);
+    }
+
+    // 4. Remove the role
+    await DELETE(`/odata/v4/auth/Roles('${testRoleId}')`);
+
+    // 5. Create a DynamicGenerationRule using this Access Domain
+    const ruleRes = await POST('/odata/v4/auth/DynamicGenerationRules', {
+      code: `RULE_AD_${Date.now()}`.substring(0, 30),
+      description: 'Rule for AD validation test',
+      sourceType: 'LOCAL_DB',
+      sourceEntity: 'fanrio.auth.Customers',
+      sourceResponsibleField: 'responsibleUser',
+      generationMode: 'USER_CONSOLIDATED_ROLE',
+      accessDomain_ID: domainId,
+      environment_ID: 'D'
+    });
+    assert.strictEqual(ruleRes.status, 201);
+    const testRuleId = ruleRes.data.ID;
+
+    // 6. Attempt to delete the Access Domain -> must fail with 400
+    try {
+      await DELETE(`/odata/v4/auth/AccessDomains('${domainId}')`);
+      assert.fail('Expected DELETE AccessDomains to fail when assigned to a DynamicGenerationRule');
+    } catch (err) {
+      assert.strictEqual(err.status, 400);
+      assert.ok(err.message.includes('dynamic generation rule(s)'), `Error message should mention dynamic rule: ${err.message}`);
+    }
+
+    // 7. Remove the dynamic rule
+    await DELETE(`/odata/v4/auth/DynamicGenerationRules('${testRuleId}')`);
+
+    // 8. Now deletion of the Access Domain should succeed
+    const deleteRes = await DELETE(`/odata/v4/auth/AccessDomains('${domainId}')`);
+    assert.strictEqual(deleteRes.status, 204);
+  });
+
+  await t.test('Deletion Validation: RestrictionFields cannot be deleted if used in an AccessDomain', async () => {
+    // 1. Create a dedicated RestrictionField
+    const fieldName = `F_${Date.now()}`.substring(0, 15);
+    const fieldRes = await POST('/odata/v4/auth/RestrictionFields', {
+      name: fieldName
+    });
+    assert.strictEqual(fieldRes.status, 201);
+    const fieldId = fieldRes.data.ID;
+
+    // 2. Link the field to an existing Access Domain (e.g. app-finance)
+    const linkRes = await POST('/odata/v4/auth/AccessDomainFields', {
+      domain_ID: 'app-finance',
+      field_ID: fieldId
+    });
+    assert.strictEqual(linkRes.status, 201);
+    const linkId = linkRes.data.ID;
+
+    // 3. Attempt to delete the RestrictionField -> must fail with 400
+    try {
+      await DELETE(`/odata/v4/auth/RestrictionFields('${fieldId}')`);
+      assert.fail('Expected DELETE RestrictionFields to fail when assigned to an AccessDomain');
+    } catch (err) {
+      assert.strictEqual(err.status, 400);
+      assert.ok(err.message.includes('Access Domain(s)'), `Error message should mention Access Domain: ${err.message}`);
+    }
+
+    // 4. Remove the field from the Access Domain
+    await DELETE(`/odata/v4/auth/AccessDomainFields('${linkId}')`);
+
+    // 5. Now deleting the RestrictionField should succeed
+    const delFieldRes = await DELETE(`/odata/v4/auth/RestrictionFields('${fieldId}')`);
+    assert.strictEqual(delFieldRes.status, 204);
+  });
+
 });
 

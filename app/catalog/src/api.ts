@@ -24,6 +24,9 @@ async function request(method: string, path: string, body?: any): Promise<any> {
   }
   if (res.status === 204) return null;
   const data = await res.json();
+  if (data && '@odata.count' !== undefined && '@odata.count' in data) {
+    return { value: data.value, count: Number(data['@odata.count']) };
+  }
   return data.value !== undefined ? data.value : data;
 }
 
@@ -39,7 +42,76 @@ export const createOrgAttr = (body: any) => request('POST', '/OrgNodeAttributes'
 export const deleteOrgAttr = (id: string | number) => request('DELETE', `/OrgNodeAttributes(${id})`);
 
 // Roles
-export const getRoles = () => request('GET', '/Roles?$expand=ownRestrictions,assignments,orgNode,parentRoles($expand=parent),approvers,environment');
+export interface GetRolesParams {
+  top?: number;
+  skip?: number;
+  count?: boolean;
+  filter?: string;
+  search?: string;
+  envFilter?: string[];
+  typeFilter?: string;
+  healthFilter?: string | null;
+}
+
+export const getRoles = (params?: GetRolesParams) => {
+  if (!params) {
+    return request('GET', '/Roles?$expand=orgNode,parentRoles($expand=parent),approvers,environment');
+  }
+
+  const queryParams: string[] = [
+    '$expand=orgNode,parentRoles($expand=parent),approvers,environment'
+  ];
+
+  if (params.count) {
+    queryParams.push('$count=true');
+  }
+  if (params.top !== undefined) {
+    queryParams.push(`$top=${params.top}`);
+  }
+  if (params.skip !== undefined) {
+    queryParams.push(`$skip=${params.skip}`);
+  }
+
+  const filters: string[] = [];
+
+  if (params.filter) {
+    filters.push(params.filter);
+  }
+
+  if (params.typeFilter && params.typeFilter !== 'ALL') {
+    filters.push(`type eq '${params.typeFilter}'`);
+  }
+
+  if (params.envFilter && params.envFilter.length > 0) {
+    const envConds = params.envFilter.map(e => `environment_ID eq '${e.replace(/'/g, "''")}'`).join(' or ');
+    filters.push(`(${envConds})`);
+  }
+
+  if (params.search && params.search.trim()) {
+    const q = params.search.trim().replace(/'/g, "''").toLowerCase();
+    filters.push(`(contains(tolower(name), '${q}') or (description ne null and contains(tolower(description), '${q}')))`);
+  }
+
+  if (params.healthFilter) {
+    if (params.healthFilter === 'unrestricted') {
+      filters.push('not ownRestrictions/any()');
+    } else if (params.healthFilter === 'no-users') {
+      filters.push('not assignments/any()');
+    } else if (params.healthFilter === 'no-approver') {
+      filters.push('not approvers/any()');
+    } else if (params.healthFilter === 'critical') {
+      filters.push('critical eq true');
+    }
+  }
+
+  if (filters.length > 0) {
+    queryParams.push(`$filter=${filters.join(' and ')}`);
+  }
+
+  return request('GET', `/Roles?${queryParams.join('&')}`);
+};
+
+export const getRole = (id: string) => request('GET', `/Roles('${id}')?$expand=ownRestrictions,orgNode,parentRoles($expand=parent),approvers,environment`);
 export const createRole = (body: any) => request('POST', '/Roles', body);
 export const updateRole = (id: string, body: any) => request('PATCH', `/Roles('${id}')`, body);
 export const deleteRole = (id: string) => request('DELETE', `/Roles('${id}')`);

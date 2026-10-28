@@ -29,8 +29,8 @@ export default function OrganizationalNodes({ stats, setActiveNav }) {
         transition: 'all 0.25s ease-in-out',
         '&:hover': {
           transform: 'translateY(-4px)',
-          borderColor: 'rgba(167, 139, 250, 0.4)',
-          boxShadow: '0 8px 30px rgba(167, 139, 250, 0.04)'
+          borderColor: 'primary.main',
+          boxShadow: '0 8px 24px rgba(0, 0, 53, 0.06)'
         }
       }}
     >
@@ -39,10 +39,10 @@ export default function OrganizationalNodes({ stats, setActiveNav }) {
           <Box sx={{ 
             p: 1, 
             borderRadius: 2, 
-            bgcolor: 'rgba(167, 139, 250, 0.1)', 
-            border: '1px solid rgba(167, 139, 250, 0.2)' 
+            bgcolor: 'rgba(81, 95, 116, 0.1)', 
+            border: '1px solid rgba(81, 95, 116, 0.2)' 
           }}>
-            <Building2 size={18} color="#a78bfa" />
+            <Building2 size={18} color="#515f74" />
           </Box>
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Organizational Structure</Typography>
@@ -68,16 +68,7 @@ export default function OrganizationalNodes({ stats, setActiveNav }) {
                 key={type}
                 label={`${type}: ${count}`}
                 size="small"
-                sx={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  height: 22,
-                  bgcolor: 'rgba(167, 139, 250, 0.05)',
-                  border: '1px solid rgba(167, 139, 250, 0.15)',
-                  color: '#a78bfa',
-                  px: 0.5,
-                  borderRadius: 1.5
-                }}
+                color="secondary"
               />
             ))
           ) : (
