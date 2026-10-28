@@ -4,12 +4,54 @@ const cds = require('@sap/cds');
 const { getSessionPermissions, requirePermission } = require('../lib/authGuard');
 
 function registerSystemHandlers(service, entities) {
-  const { AppAuthorizations, BdcSettings, RestrictionFields, Replications } = entities;
+  const { AppAuthorizations } = entities;
 
-  // Settings CRUD protection
-  service.before(['CREATE', 'UPDATE', 'DELETE'], ['BdcSettings', 'RestrictionFields'], async (req) => {
+  // Settings & Master Data CRUD protection
+  service.before(
+    ['CREATE', 'UPDATE', 'DELETE'],
+    [
+      'BdcSettings',
+      'RestrictionFields',
+      'DynamicGenerationRules',
+      'DynamicRuleFieldMappings',
+      'GeneratedResourceMap',
+      'Customers',
+      'Environments'
+    ],
+    async (req) => {
+      const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+      requirePermission(perms, 'canManageSettings', req);
+    }
+  );
+
+  // Direct READ on BdcSettings requires settings management permission
+  service.before('READ', 'BdcSettings', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageSettings', req);
+  });
+
+  // Strip sensitive credentials from expanded bdcConnection on RestrictionFields READ
+  service.after('READ', 'RestrictionFields', (data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    for (const row of rows) {
+      if (row && row.bdcConnection && typeof row.bdcConnection === 'object') {
+        delete row.bdcConnection.password;
+        delete row.bdcConnection.clientSecret;
+        delete row.bdcConnection.apiToken;
+      }
+    }
+  });
+
+  // Org Structure CRUD & Generation Actions protection
+  service.before(['CREATE', 'UPDATE', 'DELETE'], ['OrgNodes', 'OrgNodeAttributes'], async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    if (perms.isSuperAdmin || perms.canManageOrgRoles || perms.canManageSettings) return;
+    requirePermission(perms, 'canManageOrgRoles', req);
+  });
+
+  service.before(['generateOrgRole', 'generateAllOrgRoles'], async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(perms, 'canManageOrgRoles', req);
   });
 
   // RestrictionFields deletion validation: must not be used in any AccessDomain
@@ -51,12 +93,27 @@ function registerSystemHandlers(service, entities) {
 
   service.before([
     'testBdcConnection', 'fetchBdcSpaces', 'fetchBdcAssets',
-    'fetchBdcRelationalValues', 'fetchBdcAssetColumns', 'fetchBdcAssetKeyColumns', 'fetchRawBdcSpaces',
+    'fetchBdcAssetColumns', 'fetchBdcAssetKeyColumns', 'fetchRawBdcSpaces',
     'fetchRawBdcAssets', 'fetchRawBdcRelationalValues', 'fetchRawBdcAssetColumns',
-    'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
+    'fetchRawBdcUsers', 'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
     'fetchRawHanaViews'
   ], async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    requirePermission(perms, 'canManageSettings', req);
+  });
+
+  // fetchBdcRelationalValues is used both in Admin settings and in the Role Wizard by role managers
+  service.before('fetchBdcRelationalValues', async (req) => {
+    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
+    if (
+      perms.isSuperAdmin ||
+      perms.canManageSettings ||
+      perms.canManageSingleRoles ||
+      perms.canManageDerivedRoles ||
+      perms.canManageOrgRoles
+    ) {
+      return;
+    }
     requirePermission(perms, 'canManageSettings', req);
   });
 

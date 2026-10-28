@@ -22,10 +22,14 @@ function registerAppAuthorizationsHandlers(service, entities) {
     }
   });
 
-  // AuditLogs protection
+  // AuditLogs protection: READ requires canViewAuditLogs; external mutations are strictly forbidden
   service.before('READ', 'AuditLogs', async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canViewAuditLogs', req);
+  });
+
+  service.before(['CREATE', 'UPDATE', 'DELETE'], 'AuditLogs', (req) => {
+    req.reject(403, 'Access Denied: Audit logs are immutable system records and cannot be modified via API.');
   });
 
   // Audit Logs for AppAuthorizations changes

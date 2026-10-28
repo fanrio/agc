@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * authGuard.js - Backend authorization helper
  */
@@ -10,7 +12,7 @@ function getUserId(req) {
 
   // Use simulated user header if present in non-production or test environment
   if (process.env.NODE_ENV !== 'production' || isTest) {
-    const simUser = req.headers['x-simulated-user'] || req.headers['X-Simulated-User'];
+    const simUser = req.headers?.['x-simulated-user'] || req.headers?.['X-Simulated-User'];
     if (simUser) {
       req.user = new cds.User({ id: simUser, roles: ['authenticated-user'] });
       return simUser;
@@ -57,7 +59,7 @@ function requireEnvironment(permissions, envId, req) {
     if (Array.isArray(envs) && envs.includes(envId)) return;
   } catch (e) {
     // Fallback: comma separated list
-    const envs = allowed.split(',').map(s => s.trim().toUpperCase());
+    const envs = String(allowed).split(',').map(s => s.trim().toUpperCase());
     if (envs.includes(String(envId).toUpperCase())) return;
   }
 
@@ -66,10 +68,17 @@ function requireEnvironment(permissions, envId, req) {
 
 
 const parseAccessDomains = (val) => {
-  const parsed = JSON.parse(val);
-  return parsed.lenght === 0 ? 'ALL' : parsed;
-
+  if (!val || val === 'ALL' || val === '*') return [];
+  if (Array.isArray(val)) return val;
+  try {
+    const parsed = JSON.parse(val);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (e) {
+    return String(val).split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return [];
 };
+
 function requireAccessDomain(permissions, accessDomainId, req) {
   if (permissions.isSuperAdmin) return; // SuperAdmin bypasses all checks
 
@@ -77,14 +86,7 @@ function requireAccessDomain(permissions, accessDomainId, req) {
 
   if (allowedAccessDomains.length === 0) return;
 
-  try {
-
-    if (allowedAccessDomains.includes(accessDomainId)) return;
-  } catch (e) {
-    // Fallback: comma separated list
-    const domains = allowed.split(',').map(s => s.trim());
-    if (domains.includes(String(accessDomainId).trim())) return;
-  }
+  if (allowedAccessDomains.includes(accessDomainId)) return;
 
   req.reject(403, `Access Denied: You are not authorized to manage roles in access domain ${accessDomainId || 'unspecified'}.`);
 }
@@ -106,7 +108,7 @@ function parseRoleScope(scope) {
       });
     }
   } catch (e) {
-    return scope.split(',').map(s => s.trim());
+    return String(scope).split(',').map(s => s.trim());
   }
   return [String(scope).trim()];
 }
@@ -120,11 +122,8 @@ function isRoleInScope(roleId, roleName, scope) {
   const parsedScope = parseRoleScope(scope);
   if (parsedScope.includes('*')) return true;
   const lowerId = String(roleId || '').toLowerCase();
-  const lowerName = String(roleName || '').toLowerCase();
   return parsedScope.some(s => {
     const lowerS = s.toLowerCase();
-
-
     return lowerId === lowerS;
   });
 }
@@ -135,15 +134,9 @@ function isRoleInScope(roleId, roleName, scope) {
  * and also see DERIVED children inheriting from those parent roles.
  */
 function filterRolesByBackendPermissions(roles, permissions, inheritances = []) {
-
-
-
-  // roles = roles.filter(role => role.name === 'ZCON_ES01_ALL_CENT_CONT_CUSTOM');
-
   if (!roles || !Array.isArray(roles)) return [];
   if (!permissions) return roles;
   if (permissions.isSuperAdmin) return roles;
-
 
   const parseEnvs = (val) => {
     if (!val || val === 'ALL' || val === '*') return 'ALL';
@@ -151,18 +144,16 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
       const parsed = JSON.parse(val);
       if (Array.isArray(parsed)) return parsed;
     } catch (e) {
-      return val.split(',').map(s => s.trim().toUpperCase());
+      return String(val).split(',').map(s => s.trim().toUpperCase());
     }
     return [];
   };
   const allowedEnvs = parseEnvs(permissions.allowedEnvironments);
 
   // Access Domain scoping
-
   const allowedAccessDomains = parseAccessDomains(permissions.allowedAccessDomains);
 
-  filteredRoles = roles.filter(role => {
-
+  const filteredRoles = roles.filter(role => {
     if (role.approvers?.some(a => String(a.userId).toLowerCase() === permissions.userId?.toLowerCase())) {
       return true;
     }
@@ -172,15 +163,12 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
       const roleEnv = (role.environment_ID || '').toUpperCase();
       if (!allowedEnvs.includes(roleEnv)) return false;
     }
+
     // Access Domain check
-
-
-
     if (allowedAccessDomains.length !== 0) {
       const roleAccessDomain = role.accessDomain_ID;
       if (!allowedAccessDomains.includes(roleAccessDomain)) return false;
     }
-
 
     // DRAGE internal generated roles only visible to superadmins
     if (role.type === 'DRAGE') return false;
@@ -207,7 +195,7 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
       if (isRoleInScope(role.ID, role.name, scope)) return true;
 
       // Check if any parent role ID/name is in scope
-      let parentIds = [];
+      const parentIds = [];
       if (Array.isArray(role.parentRoles)) {
         role.parentRoles.forEach(pr => {
           if (pr.parent_ID) parentIds.push(pr.parent_ID);
@@ -229,9 +217,7 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
     return false;
   });
 
-
   return filteredRoles;
-
 }
 
 /**
@@ -239,14 +225,8 @@ function filterRolesByBackendPermissions(roles, permissions, inheritances = []) 
  * If user has canManageDerivedRoles ONLY (and single/org flags false), they can ONLY assign DERIVED roles to users.
  */
 function filterAssignableRolesByBackendPermissions(roles, permissions, inheritances = []) {
-
-  console.log("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
   const visibleRoles = filterRolesByBackendPermissions(roles, permissions, inheritances);
-
   if (!permissions || permissions.isSuperAdmin) return visibleRoles;
-
-
-
   return visibleRoles;
 }
 

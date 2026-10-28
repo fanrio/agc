@@ -11,6 +11,28 @@ export default defineConfig({
         zip.writeZip('dist/catalog.zip')
       }
   }],
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@mui/x-date-pickers') || id.includes('dayjs')) {
+              return 'vendor-date-pickers'
+            }
+            if (id.includes('@mui/material') || id.includes('@mui/system') || id.includes('@emotion')) {
+              return 'vendor-mui'
+            }
+            if (id.includes('lucide-react') || id.includes('@mui/icons-material')) {
+              return 'vendor-icons'
+            }
+            if (id.includes('react-dom') || id.includes('react/')) {
+              return 'vendor-react'
+            }
+          }
+        }
+      }
+    }
+  },
   test: {
     environment: 'jsdom',
     globals: true,

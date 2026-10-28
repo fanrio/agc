@@ -694,6 +694,52 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(AuditLogs).where({ recordId: assignId }));
   });
 
+  await t.test('Security Hardening: AuditLogs immutability, BdcSettings protection, SQL table validation, and Security Headers', async () => {
+    // 1. AuditLogs cannot be forged or deleted via OData API even by admin
+    try {
+      await POST('/odata/v4/auth/AuditLogs', {
+        entityName: 'Roles',
+        action: 'CREATE',
+        recordId: 'forged-id',
+        targetName: 'Forged Role'
+      });
+      assert.fail('Expected POST /AuditLogs to fail with 403');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // 2. Non-admin cannot read BdcSettings directly
+    try {
+      await GET('/odata/v4/auth/BdcSettings', {
+        headers: { 'x-simulated-user': 'anonymous' }
+      });
+      assert.fail('Expected GET /BdcSettings for anonymous to fail with 403');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // 3. Expanded bdcConnection on RestrictionFields strips sensitive secrets
+    const rfRes = await GET('/odata/v4/auth/RestrictionFields?$expand=bdcConnection');
+    assert.strictEqual(rfRes.status, 200);
+    assert.strictEqual(rfRes.headers['x-content-type-options'], 'nosniff');
+    assert.strictEqual(rfRes.headers['x-frame-options'], 'DENY');
+    assert.ok(rfRes.headers['content-security-policy'], 'CSP header must be present');
+
+    for (const field of rfRes.data.value || []) {
+      if (field.bdcConnection) {
+        assert.strictEqual(field.bdcConnection.password, undefined, 'password must be stripped from expanded bdcConnection');
+        assert.strictEqual(field.bdcConnection.clientSecret, undefined, 'clientSecret must be stripped from expanded bdcConnection');
+        assert.strictEqual(field.bdcConnection.apiToken, undefined, 'apiToken must be stripped from expanded bdcConnection');
+      }
+    }
+
+    // 4. HanaClient.validateTableName blocks SQL injection attempts
+    assert.throws(
+      () => HanaClient.validateTableName('finance"; DROP TABLE "USERS"; --'),
+      /Invalid table name/
+    );
+  });
+
 });
 
 

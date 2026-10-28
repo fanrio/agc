@@ -41,6 +41,14 @@ class HanaClient {
     };
   }
 
+  static validateTableName(tableName) {
+    const trimmed = (tableName || '').trim();
+    if (!trimmed || !/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      throw new Error(`Invalid table name: [${tableName}] - potential SQL injection blocked`);
+    }
+    return trimmed;
+  }
+
   static validateUsername(username) {
     // Trim whitespace first (guards against accidental trailing spaces stored in DB)
     const trimmed = (username || '').trim();
@@ -110,6 +118,7 @@ class HanaClient {
    * Schema matches the SAP Datasphere Hierarchy with Directory DAC permissions entity.
    */
   static async createCustomHierTable(setting, tableName) {
+    this.validateTableName(tableName);
     const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
@@ -178,6 +187,7 @@ class HanaClient {
    * Dynamically creates a custom flat authorization table in HANA.
    */
   static async createCustomFlatTable(setting, tableName) {
+    this.validateTableName(tableName);
     const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
@@ -323,6 +333,7 @@ class HanaClient {
    * Performs flat table synchronization for a role assignment in a custom application context flat table.
    */
   static async syncCustomAssignment(setting, tableName, assignmentId, isDelete, restrictions, originalRoleName) {
+    this.validateTableName(tableName);
     const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);
@@ -430,6 +441,7 @@ class HanaClient {
    * @param {object[]} hierEntries   - hier row objects
    */
   static async syncCustomHierAssignment(setting, tableName, assignmentId, isDelete, hierEntries) {
+    this.validateTableName(tableName);
     const schemaName = this.validateUsername(setting.username);
     const conn = hanaDriver.createConnection();
     const connParams = this.getParams(setting);

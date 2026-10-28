@@ -1,13 +1,14 @@
-import { useState } from 'react';
-import { Box, Typography, Tabs, Tab } from '@mui/material';
+import { useState, lazy, Suspense } from 'react';
+import { Box, Typography, Tabs, Tab, CircularProgress } from '@mui/material';
 import { Settings, Network, Cloud, Terminal, GitFork, Database } from 'lucide-react';
-import RestrictionFieldsView from './RestrictionFieldsView';
-import AccessDomainsView from './AccessDomainsView';
-import BdcSettingsView from './BdcSettingsView';
-import BdcApiTesterView from './BdcApiTesterView';
-import DynamicRulesView from './DynamicRulesView';
-import MasterDataEditorView from './MasterDataEditorView';
 import { usePermissions } from '../context/PermissionsContext';
+
+const RestrictionFieldsView = lazy(() => import('./RestrictionFieldsView'));
+const AccessDomainsView = lazy(() => import('./AccessDomainsView'));
+const BdcSettingsView = lazy(() => import('./BdcSettingsView'));
+const BdcApiTesterView = lazy(() => import('./BdcApiTesterView'));
+const DynamicRulesView = lazy(() => import('./DynamicRulesView'));
+const MasterDataEditorView = lazy(() => import('./MasterDataEditorView'));
 
 export default function SystemView() {
   const { permissions } = usePermissions();
@@ -107,7 +108,9 @@ export default function SystemView() {
 
       {/* Content panel */}
       <Box>
-        {currentTab.component}
+        <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress size={32} /></Box>}>
+          {currentTab.component}
+        </Suspense>
       </Box>
     </Box>
   );

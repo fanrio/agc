@@ -535,7 +535,7 @@ class BdcClient {
    */
   static async searchScimUsers(url, tokenUrl, clientId, clientSecret, query) {
     const accessToken = await this.getAccessToken(tokenUrl, clientId, clientSecret);
-    const q = query ? query.trim() : '';
+    const q = query ? query.trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"') : '';
     const filter = q 
       ? `userName co "${q}" or emails.value co "${q}" or name.givenName co "${q}" or name.familyName co "${q}"`
       : '';

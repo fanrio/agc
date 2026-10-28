@@ -50,19 +50,19 @@ export function resolveRoleName(
 }
 
 export function consolidateAuditLogs(rawLogs: any[] = []): any[] {
-  const consolidated: any[] = [];
-  const sorted = [...rawLogs].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const withTs = rawLogs.map(log => ({
+    log,
+    ts: new Date(log.createdAt).getTime()
+  }));
+  withTs.sort((a, b) => b.ts - a.ts);
 
-  for (const log of sorted) {
-    const match = consolidated.find(
-      c =>
-        c.recordId === log.recordId &&
-        c.action === log.action &&
-        c.createdBy === log.createdBy &&
-        Math.abs(new Date(c.createdAt).getTime() - new Date(log.createdAt).getTime()) < 5000
-    );
+  const consolidated: any[] = [];
+  const latestByGroupKey = new Map<string, { entry: any; ts: number }>();
+
+  for (const { log, ts } of withTs) {
+    const groupKey = `${log.recordId}|${log.action}|${log.createdBy}`;
+    const candidate = latestByGroupKey.get(groupKey);
+    const match = candidate && Math.abs(candidate.ts - ts) < 5000 ? candidate.entry : null;
 
     if (match) {
       try {
@@ -83,10 +83,14 @@ export function consolidateAuditLogs(rawLogs: any[] = []): any[] {
         match.details = JSON.stringify(merged);
       } catch (e: any) {
         console.warn('[AuditLogsView] Failed to merge duplicate log details:', e?.message);
-        consolidated.push({ ...log });
+        const copy = { ...log };
+        consolidated.push(copy);
+        latestByGroupKey.set(groupKey, { entry: copy, ts });
       }
     } else {
-      consolidated.push({ ...log });
+      const copy = { ...log };
+      consolidated.push(copy);
+      latestByGroupKey.set(groupKey, { entry: copy, ts });
     }
   }
 
@@ -167,7 +171,7 @@ function matchesDateRange(createdAt: string, dateFilter: string, startDate: any,
   return true;
 }
 
-function isCriticalAuditLog(log: any, roles: any[]): boolean {
+function isCriticalAuditLog(log: any, criticalRoleIds: Set<string>): boolean {
   let roleId: string | null = null;
   if (log.entityName === 'Roles') {
     roleId = log.recordId;
@@ -176,8 +180,7 @@ function isCriticalAuditLog(log: any, roles: any[]): boolean {
     roleId = parsed.role_ID?.new || parsed.role_ID?.old || parsed.role_ID || parsed.role?.ID || null;
   }
   if (!roleId) return false;
-  const role = roles.find(r => r.ID === roleId);
-  return Boolean(role?.critical);
+  return criticalRoleIds.has(roleId);
 }
 
 export interface AuditLogFilters {
@@ -193,6 +196,10 @@ export interface AuditLogFilters {
 
 export function filterAuditLogs(logs: any[], filters: AuditLogFilters, roles: any[] = []): any[] {
   const query = filters.search.toLowerCase();
+  const criticalRoleIds = filters.criticalFilter
+    ? new Set(roles.filter(r => r.critical).map(r => r.ID))
+    : null;
+
   return logs.filter(log => {
     const matchesSearch =
       !query ||
@@ -205,7 +212,7 @@ export function filterAuditLogs(logs: any[], filters: AuditLogFilters, roles: an
     const matchesEntity = filters.entityFilter === 'ALL' || log.entityName === filters.entityFilter;
     const matchesActor = filters.actorFilter === 'ALL' || log.createdBy === filters.actorFilter;
     const matchesDate = matchesDateRange(log.createdAt, filters.dateFilter, filters.startDate, filters.endDate);
-    const matchesCritical = !filters.criticalFilter || isCriticalAuditLog(log, roles);
+    const matchesCritical = !criticalRoleIds || isCriticalAuditLog(log, criticalRoleIds);
 
     return matchesSearch && matchesAction && matchesEntity && matchesActor && matchesDate && matchesCritical;
   });

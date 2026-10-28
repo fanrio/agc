@@ -25,7 +25,11 @@ async function syncDynamicRule(ruleId, cds) {
   let masterRecords = [];
   let bdcConnection = null;
   if (rule.sourceType === 'LOCAL_DB') {
-    masterRecords = await db.run(SELECT.from(rule.sourceEntity));
+    const rawEntity = String(rule.sourceEntity || '').trim();
+    if (!/^[a-zA-Z0-9_.]+$/.test(rawEntity) || /(AppAuthorizations|BdcSettings|AuditLogs)$/i.test(rawEntity)) {
+      throw new Error(`Invalid or restricted LOCAL_DB sourceEntity: ${rawEntity}`);
+    }
+    masterRecords = await db.run(SELECT.from(rawEntity));
   } else {
     // Fetch BDC connection details
     bdcConnection = await db.run(SELECT.one.from(BdcSettings).where({ ID: rule.bdcConnection_ID }));

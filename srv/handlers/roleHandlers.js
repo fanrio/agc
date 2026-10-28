@@ -40,7 +40,7 @@ function registerRoleHandlers(service, entities, deps) {
 
     let rolesList = Array.isArray(result) ? result : (typeof result === 'object' ? [result] : []);
     if (!perms.isSuperAdmin && rolesList.length > 0) {
-      const inheritances = await cds.db.run(SELECT.from(RoleInheritance));
+      const inheritances = await cds.db.run(SELECT.from(RoleInheritance).columns('role_ID', 'parent_ID'));
       rolesList = filterRolesByBackendPermissions(rolesList, perms, inheritances);
     }
 
@@ -93,7 +93,8 @@ function registerRoleHandlers(service, entities, deps) {
 
     if (req.event === 'UPDATE' || req.event === 'DELETE') {
       if (roleId) {
-        const existing = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+        const existing = await cds.db.run(SELECT.one.from(Roles).columns('ID', 'name', 'type', 'environment_ID', 'accessDomain_ID').where({ ID: roleId }));
+        req.context = req.context || {}; req.context.existingRole = existing;
         if (existing) {
           if (!roleType) roleType = existing.type;
           if (!envId) envId = existing.environment_ID;
@@ -109,12 +110,13 @@ function registerRoleHandlers(service, entities, deps) {
         });
       }
       if (parentIds.length === 0 && roleId) {
-        const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
+        const inherits = await cds.db.run(SELECT.from(RoleInheritance).columns('parent_ID').where({ role_ID: roleId }));
+        req.context = req.context || {}; if (!req.context.resolvedParentIds && inherits) req.context.resolvedParentIds = inherits.map(i => i.parent_ID);
         parentIds = inherits.map(i => i.parent_ID);
       }
 
       if (parentIds.length > 0) {
-        const parents = await cds.db.run(SELECT.from(Roles).where({ ID: { in: parentIds } }));
+        const parents = await cds.db.run(SELECT.from(Roles).columns('ID', 'accessDomain_ID').where({ ID: { in: parentIds } }));
         if (parents.length > 0) {
           const firstParentDomain = parents[0].accessDomain_ID;
           const differentDomain = parents.some(p => p.accessDomain_ID !== firstParentDomain);
@@ -134,7 +136,7 @@ function registerRoleHandlers(service, entities, deps) {
     // Access Domain-based role management scoping
     let accessDomainId = req.data.accessDomain_ID;
     if (!accessDomainId && (req.event === 'UPDATE' || req.event === 'DELETE') && roleId) {
-      const existingForStream = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
+      const existingForStream = req.context?.existingRole || await cds.db.run(SELECT.one.from(Roles).columns('ID', 'accessDomain_ID').where({ ID: roleId }));
       if (existingForStream) accessDomainId = existingForStream.accessDomain_ID;
     }
     if (accessDomainId) {
@@ -165,8 +167,9 @@ function registerRoleHandlers(service, entities, deps) {
           });
         }
         if (parentIds.length === 0 && roleId) {
-          const inherits = await cds.db.run(SELECT.from(RoleInheritance).where({ role_ID: roleId }));
-          parentIds = inherits.map(i => i.parent_ID);
+          const inherits = req.context?.resolvedParentIds ? null : await cds.db.run(SELECT.from(RoleInheritance).columns('parent_ID').where({ role_ID: roleId }));
+        req.context = req.context || {}; if (!req.context.resolvedParentIds && inherits) req.context.resolvedParentIds = inherits.map(i => i.parent_ID);
+          parentIds = req.context?.resolvedParentIds || (inherits ? inherits.map(i => i.parent_ID) : []);
         }
 
         if (parentIds.length > 0) {
@@ -262,7 +265,7 @@ function registerRoleHandlers(service, entities, deps) {
         id = typeof p === 'object' ? p.ID : p;
       }
       if (id) {
-        const current = await cds.db.run(SELECT.one.from(Roles).where({ ID: id }));
+        const current = req.context?.existingRole || await cds.db.run(SELECT.one.from(Roles).columns('ID', 'name').where({ ID: id }));
         if (current && current.name === name) return; // name unchanged
         const existing = await cds.db.run(SELECT.one.from(Roles).where({ name }).and({ ID: { '!=': id } }));
         if (existing) return req.error(400, `A role with name "${name}" already exists.`);

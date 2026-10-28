@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
   Box,
   AppBar,
@@ -32,17 +32,18 @@ import {
 } from 'lucide-react';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
-import OrgStructureView from './components/OrgStructureView';
-import RolesDashboard from './components/RolesDashboard';
-import Wizard from './components/Wizard';
-import RoleAssignmentsView from './components/RoleAssignmentsView';
-import SystemView from './components/SystemView';
-import UsersView from './components/UsersView';
-import AppAuthorizationsView from './components/AppAuthorizationsView';
-import AuditLogsView from './components/AuditLogsView';
-import ReplicationsView from './components/ReplicationsView';
-import UserAuthorizationCardDrawer from './components/UserAuthorizationCard/UserAuthorizationCardDrawer';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
+
+const OrgStructureView = lazy(() => import('./components/OrgStructureView'));
+const RolesDashboard = lazy(() => import('./components/RolesDashboard'));
+const Wizard = lazy(() => import('./components/Wizard'));
+const RoleAssignmentsView = lazy(() => import('./components/RoleAssignmentsView'));
+const SystemView = lazy(() => import('./components/SystemView'));
+const UsersView = lazy(() => import('./components/UsersView'));
+const AppAuthorizationsView = lazy(() => import('./components/AppAuthorizationsView'));
+const AuditLogsView = lazy(() => import('./components/AuditLogsView'));
+const ReplicationsView = lazy(() => import('./components/ReplicationsView'));
+const UserAuthorizationCardDrawer = lazy(() => import('./components/UserAuthorizationCard/UserAuthorizationCardDrawer'));
 
 const EXPANDED_DRAWER_WIDTH = 240;
 const COLLAPSED_DRAWER_WIDTH = 68;
@@ -297,23 +298,35 @@ function AppContent({ simulatedUser, onLogout }) {
           }),
         }}
       >
-        {activeNav === 'home' && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
-        {activeNav === 'org' && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
-        {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
-        {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
-        {activeNav === 'assignments' && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
-        {activeNav === 'replications' && <ReplicationsView />}
-        {activeNav === 'audit' && <AuditLogsView />}
-        {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
-        {activeNav === 'users' && <AppAuthorizationsView />}
-        {activeNav === 'system' && <SystemView />}
+        <Suspense
+          fallback={
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+              <CircularProgress size={36} />
+            </Box>
+          }
+        >
+          {activeNav === 'home' && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
+          {activeNav === 'org' && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
+          {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
+          {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
+          {activeNav === 'assignments' && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+          {activeNav === 'replications' && <ReplicationsView />}
+          {activeNav === 'audit' && <AuditLogsView />}
+          {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+          {activeNav === 'users' && <AppAuthorizationsView />}
+          {activeNav === 'system' && <SystemView />}
+        </Suspense>
       </Box>
 
       {/* Global User Authorization Card Drawer */}
-      <UserAuthorizationCardDrawer
-        userId={inspectingUserId}
-        onClose={() => setInspectingUserId(null)}
-      />
+      {inspectingUserId && (
+        <Suspense fallback={null}>
+          <UserAuthorizationCardDrawer
+            userId={inspectingUserId}
+            onClose={() => setInspectingUserId(null)}
+          />
+        </Suspense>
+      )}
     </Box>
   );
 }

@@ -77,7 +77,7 @@ module.exports = cds.service.impl(async function () {
     }
   });
 
-  const { getSessionPermissions } = require('./lib/authGuard');
+  const { getUserId, getSessionPermissions } = require('./lib/authGuard');
 
   // Action: getCurrentUserPermissions
   this.on('getCurrentUserPermissions', async (req) => {
@@ -94,11 +94,17 @@ module.exports = cds.service.impl(async function () {
   // Function: getDashboardKpis
   this.on('getDashboardKpis', async (req) => {
     try {
+      await getSessionPermissions(req, cds.db, AppAuthorizations);
       const kpis = await getDashboardKpis(req, cds);
       return JSON.stringify(kpis);
     } catch (e) {
       return req.reject(e.status || 500, e.message);
     }
+  });
+
+  // Require active session permissions for access resolution & simulation actions
+  this.before(['resolveEffectiveRestrictions', 'simulateAccess'], async (req) => {
+    await getSessionPermissions(req, cds.db, AppAuthorizations);
   });
 
   // Seed / Bootstrap Super Admin on startup
@@ -236,11 +242,25 @@ module.exports = cds.service.impl(async function () {
   // Function: getUserEffectiveAuthorizations
   this.on('getUserEffectiveAuthorizations', async (req) => {
     try {
+      const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
       const { userId } = req.data;
+      const currentUserId = getUserId(req);
+      const isSelf = userId && String(userId).toLowerCase() === String(currentUserId).toLowerCase();
+      if (
+        !isSelf &&
+        !perms.isSuperAdmin &&
+        !perms.canManageAppUsers &&
+        !perms.canAssignRoles &&
+        !perms.canManageSingleRoles &&
+        !perms.canManageDerivedRoles &&
+        !perms.canManageOrgRoles
+      ) {
+        return req.reject(403, 'Access Denied: You do not have permission to view other users\' effective authorizations.');
+      }
       const res = await getUserEffectiveAuthorizations(userId, cds, entities);
       return JSON.stringify(res);
     } catch (e) {
-      return req.reject(400, e.message);
+      return req.reject(e.status || 400, e.message);
     }
   });
 });

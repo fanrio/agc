@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -88,24 +88,34 @@ export default function AuditLogsView() {
     setPage(0);
   };
 
-  const actorsList = [...new Set(logs.map(log => log.createdBy).filter(Boolean))].sort();
-
-  const filteredLogs = filterAuditLogs(
-    logs,
-    {
-      search,
-      actionFilter,
-      entityFilter,
-      actorFilter,
-      dateFilter,
-      startDate,
-      endDate,
-      criticalFilter
-    },
-    roles
+  const actorsList = useMemo(
+    () => [...new Set(logs.map(log => log.createdBy).filter(Boolean))].sort(),
+    [logs]
   );
 
-  const paginatedLogs = filteredLogs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const filteredLogs = useMemo(
+    () =>
+      filterAuditLogs(
+        logs,
+        {
+          search,
+          actionFilter,
+          entityFilter,
+          actorFilter,
+          dateFilter,
+          startDate,
+          endDate,
+          criticalFilter
+        },
+        roles
+      ),
+    [logs, search, actionFilter, entityFilter, actorFilter, dateFilter, startDate, endDate, criticalFilter, roles]
+  );
+
+  const paginatedLogs = useMemo(
+    () => filteredLogs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filteredLogs, page, rowsPerPage]
+  );
 
   const getActionChip = (action) => {
     switch (action) {
