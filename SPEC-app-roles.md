@@ -156,7 +156,7 @@ export function inferAppRolesFromFlags(auth: Record<string, any>): AppRoleId[] {
   - Use unified MUI theme tokens and `AppToast` for notifications.
   - Run `npm run build --prefix app/catalog` and `npm run test` before completion.
 - **Ask first:**
-  - Any change to `db/schema.cds` or `srv/authorization-service.cds`.
+  - Any change to `db/schema.cds` or `srv/cortex_service.cds`.
   - Adding or removing any of the 6 fixed roles.
 - **Never do:**
   - Touch `sqlite.db`, `gen/`, or `node_modules/` directly.
@@ -170,16 +170,17 @@ export function inferAppRolesFromFlags(auth: Record<string, any>): AppRoleId[] {
    - `User ID`
    - `User Name`
    - `Active` (toggle)
-   - `Application Roles` (inline multi-select `Autocomplete` / role `Chip`s allowing admins to view, add, and remove one or more fixed roles per user)
-   - `Derived Role Scope` (editable `ScopeSelector` when `DERIVED_ROLE_MANAGER` is assigned without `AUTHORIZATION_ARCHITECT` or `SUPER_ADMIN`; otherwise displays `All Roles` or `—`)
-   - `Environments` (editable `EnvironmentSelection` for scoped roles; `ALL` chip for `SUPER_ADMIN`)
-   - `Access Domains` (editable `AccessDomainCell` when any selected role supports Access Domain scoping and `SUPER_ADMIN` is not selected; otherwise `All Access Domains` chip)
-   - `Actions` (`Delete` user button)
-2. **Multi-Role "Add User" Dialog:**
-   - Admin selects a SCIM user via `UserSelection`.
+   - `Application Roles` (colored role `Chip`s with tooltips; clicking the role chips or the `Edit` action button opens the unified Add/Edit dialog)
+   - `Derived Role Scope` (summary chips of permitted parent roles when `DERIVED_ROLE_MANAGER` is assigned without `AUTHORIZATION_ARCHITECT` or `SUPER_ADMIN`; otherwise `All Roles` or `—`)
+   - `Environments` (summary chips of allowed environments, or `ALL`)
+   - `Access Domains` (summary chips of allowed access domains, or `All Access Domains`)
+   - `Actions` (`Edit` button to open the unified role/scope dialog + `Delete` button)
+2. **Unified Multi-Role "Add / Edit Application User" Dialog:**
+   - Both creating a new user (`Add Application User`) and modifying an existing user (`Edit Application User`) use the **exact same dialog view**.
+   - In Add mode, admin selects a SCIM user via `UserSelection`; in Edit mode, the user identity is pre-filled and read-only.
    - Admin selects **one or more of the 6 Fixed Application Roles** (interactive multi-select cards/checkboxes with clear title + one-line description of what each role can do; selecting `SUPER_ADMIN` toggles exclusive full access).
    - Scoping controls (*Allowed Environments*, *Allowed Access Domains*, and *Derived Role Scope*) dynamically appear based on the union of the selected roles.
-   - Clicking **Add** persists the unioned boolean flags (`rolesToFlags(selectedRoles)`) and scoping fields via `api.createAppAuthorization(...)`.
+   - Clicking **Add** or **Save Changes** persists the unioned boolean flags (`rolesToFlags(selectedRoles)`) and scoping fields via `api.createAppAuthorization(...)` or `api.updateAppAuthorization(...)`.
 3. **Zero Regressions:** `npm run build --prefix app/catalog` compiles with 0 errors and `npm run test` passes all 60 tests.
 
 ---

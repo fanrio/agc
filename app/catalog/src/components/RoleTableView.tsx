@@ -1,9 +1,31 @@
-import { useState, memo } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Chip, IconButton, Tooltip, Typography, Box, TableSortLabel, Button
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  IconButton,
+  Typography,
+  Box,
+  TableSortLabel,
+  Button
 } from '@mui/material';
-import { Shield, GitBranch, Edit3, Trash2, Users, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Eye } from 'lucide-react';
+import {
+  Shield,
+  GitBranch,
+  Edit3,
+  Trash2,
+  Users,
+  ChevronRight,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronsDownUp,
+  Eye
+} from 'lucide-react';
 import { ENV_LABEL, ENV_COLOR, canDeriveFromRole, isRoleInScope } from '../utils/helpers';
 
 export default function RoleTableView({
@@ -13,70 +35,79 @@ export default function RoleTableView({
   onDerive,
   onEdit,
   onDelete,
-  onRefresh,
-  onError,
-  onSuccess,
   permissions
-}) {
+}: any) {
   const [orderBy, setOrderBy] = useState('name');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
-  const [expandedMap, setExpandedMap] = useState({});
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
 
-  const toggleExpand = (roleId) => {
-    setExpandedMap(prev => ({ ...prev, [roleId]: !prev[roleId] }));
-  };
+  const toggleExpand = useCallback((roleId: string) => {
+    setExpandedMap((prev) => ({ ...prev, [roleId]: !prev[roleId] }));
+  }, []);
 
-  const handleExpandAll = () => {
-    const nextMap = {};
-    roles.forEach(r => { nextMap[r.ID] = true; });
+  const handleExpandAll = useCallback(() => {
+    const nextMap: Record<string, boolean> = {};
+    for (let i = 0; i < allRoles.length; i++) {
+      nextMap[allRoles[i].ID] = true;
+    }
     setExpandedMap(nextMap);
-  };
+  }, [allRoles]);
 
-  const handleCollapseAll = () => {
+  const handleCollapseAll = useCallback(() => {
     setExpandedMap({});
-  };
+  }, []);
 
-  const handleSort = (property) => {
+  const handleSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
-  const getOrgNodeName = (orgNodeId) => {
-    if (!orgNodeId) return null;
-    const node = orgNodes.find(n => n.ID === orgNodeId);
-    return node ? node.name : orgNodeId;
-  };
+  // Precompute O(1) lookup maps once per allRoles/orgNodes change
+  const { roleById, childrenByParentId, orgNodeById } = useMemo(() => {
+    const rMap = new Map<string, any>();
+    const cMap = new Map<string, any[]>();
+    const oMap = new Map<string, any>();
 
-  const getParentRoleName = (role) => {
-    if (!role.parentRoles || role.parentRoles.length === 0) return null;
-    const parentObj = role.parentRoles[0].parent;
-    if (parentObj && parentObj.name) {
-      return parentObj.name;
+    for (let i = 0; i < orgNodes.length; i++) {
+      const n = orgNodes[i];
+      if (n?.ID) oMap.set(n.ID, n);
     }
-    const parentId = role.parentRoles[0].parent_ID || parentObj?.ID;
-    if (!parentId) return null;
-    const parent = allRoles.find(r => r.ID === parentId);
-    return parent ? parent.name : parentId;
-  };
 
-  const getChildRoles = (parentId) => {
-    return allRoles.filter(r =>
-      r.parentRoles && r.parentRoles.some(pr => (pr.parent_ID || pr.parent?.ID) === parentId)
-    );
-  };
+    for (let i = 0; i < allRoles.length; i++) {
+      const r = allRoles[i];
+      if (!r?.ID) continue;
+      rMap.set(r.ID, r);
+      if (Array.isArray(r.parentRoles)) {
+        for (let j = 0; j < r.parentRoles.length; j++) {
+          const pr = r.parentRoles[j];
+          const pid = pr?.parent_ID || pr?.parent?.ID;
+          if (pid) {
+            const list = cMap.get(pid);
+            if (list) list.push(r);
+            else cMap.set(pid, [r]);
+          }
+        }
+      }
+    }
 
-  // Top-level root roles (or all roles if a filter/search is active)
-  const rootRoles = roles.filter(r => {
-    if (!r.parentRoles || r.parentRoles.length === 0) return true;
-    return !r.parentRoles.some(pr => {
-      const parentId = pr.parent_ID || pr.parent?.ID;
-      return roles.some(vr => vr.ID === parentId);
+    return { roleById: rMap, childrenByParentId: cMap, orgNodeById: oMap };
+  }, [allRoles, orgNodes]);
+
+  const sortedRoots = useMemo(() => {
+    const roleIdSet = new Set<string>();
+    for (let i = 0; i < roles.length; i++) {
+      roleIdSet.add(roles[i].ID);
+    }
+    const rootRoles = roles.filter((r: any) => {
+      if (!r.parentRoles || r.parentRoles.length === 0) return true;
+      return !r.parentRoles.some((pr: any) => {
+        const parentId = pr.parent_ID || pr.parent?.ID;
+        return parentId && roleIdSet.has(parentId);
+      });
     });
-  });
 
-  const sortRolesList = (list) => {
-    return [...list].sort((a, b) => {
+    return [...rootRoles].sort((a, b) => {
       let aVal = a[orderBy] || '';
       let bVal = b[orderBy] || '';
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
@@ -86,9 +117,7 @@ export default function RoleTableView({
       if (aVal > bVal) return order === 'asc' ? 1 : -1;
       return 0;
     });
-  };
-
-  const sortedRoots = sortRolesList(rootRoles);
+  }, [roles, orderBy, order]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -128,7 +157,7 @@ export default function RoleTableView({
                   Role Name
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} >
+              <TableCell sx={{ fontWeight: 700 }}>
                 <TableSortLabel
                   active={orderBy === 'type'}
                   direction={orderBy === 'type' ? order : 'asc'}
@@ -137,7 +166,7 @@ export default function RoleTableView({
                   Type
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ fontWeight: 700 }} >
+              <TableCell sx={{ fontWeight: 700 }}>
                 <TableSortLabel
                   active={orderBy === 'environment_ID'}
                   direction={orderBy === 'environment_ID' ? order : 'asc'}
@@ -164,8 +193,9 @@ export default function RoleTableView({
                   key={role.ID}
                   role={role}
                   depth={0}
-                  allRoles={allRoles}
-                  orgNodes={orgNodes}
+                  roleById={roleById}
+                  childrenByParentId={childrenByParentId}
+                  orgNodeById={orgNodeById}
                   expandedMap={expandedMap}
                   toggleExpand={toggleExpand}
                   onDerive={onDerive}
@@ -184,11 +214,12 @@ export default function RoleTableView({
   );
 }
 
-const RoleRow = memo(({
+const RoleRow = memo(function RoleRow({
   role,
   depth = 0,
-  allRoles,
-  orgNodes,
+  roleById,
+  childrenByParentId,
+  orgNodeById,
   expandedMap,
   toggleExpand,
   onDerive,
@@ -197,18 +228,12 @@ const RoleRow = memo(({
   permissions,
   orderBy,
   order
-}) => {
-  const children = allRoles.filter(r =>
-    r.parentRoles && r.parentRoles.some(pr => (pr.parent_ID || pr.parent?.ID) === role.ID)
-  );
+}: any) {
+  const children = childrenByParentId.get(role.ID) || [];
   const hasChildren = children.length > 0;
-  const isExpanded = !!expandedMap[role.ID];
-  
-  const orgName = (() => {
-    if (!role.orgNode_ID) return null;
-    const node = orgNodes.find(n => n.ID === role.orgNode_ID);
-    return node ? node.name : role.orgNode_ID;
-  })();
+  const isExpanded = Boolean(expandedMap[role.ID]);
+
+  const orgName = role.orgNode?.name || (role.orgNode_ID ? (orgNodeById.get(role.orgNode_ID)?.name || role.orgNode_ID) : null);
 
   const parentName = (() => {
     if (!role.parentRoles || role.parentRoles.length === 0) return null;
@@ -218,24 +243,24 @@ const RoleRow = memo(({
     }
     const parentId = role.parentRoles[0].parent_ID || parentObj?.ID;
     if (!parentId) return null;
-    const parent = allRoles.find(r => r.ID === parentId);
+    const parent = roleById.get(parentId);
     return parent ? parent.name : parentId;
   })();
 
   const isDerived = role.type === 'DERIVED';
   const isOrg = role.type === 'ORG_BASED';
 
-  const canManageThisDerivedRole = (r) => {
+  const canManageThisDerivedRole = (r: any) => {
     if (permissions?.isSuperAdmin) return true;
     if (!permissions?.canManageDerivedRoles) return false;
     if (r.type !== 'DERIVED') return false;
     if (!r.parentRoles || r.parentRoles.length === 0) return false;
-    return r.parentRoles.every(pr => {
+    return r.parentRoles.every((pr: any) => {
       const parentId = pr.parent_ID || pr.parent?.ID;
       if (!parentId) return false;
-      const parent = allRoles.find(item => item.ID === parentId);
+      const parent = pr.parent || roleById.get(parentId);
       if (!parent) return false;
-      return isRoleInScope(parent.ID, parent.name, permissions?.managedDerivedRolesScope);
+      return isRoleInScope(parent.ID || parentId, parent.name, permissions?.managedDerivedRolesScope);
     });
   };
 
@@ -249,17 +274,21 @@ const RoleRow = memo(({
 
   const disableDelete = disableEdit;
   const disableDerive = permissions?.isSuperAdmin ? false : !canDeriveFromRole(role, permissions);
+  const directUsersCount = role.assignmentsCount ?? role.assignments?.length ?? 0;
 
-  const sortedChildren = [...children].sort((a, b) => {
-    let aVal = a[orderBy] || '';
-    let bVal = b[orderBy] || '';
-    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+  const sortedChildren = useMemo(() => {
+    if (!hasChildren || !isExpanded) return [];
+    return [...children].sort((a, b) => {
+      let aVal = a[orderBy] || '';
+      let bVal = b[orderBy] || '';
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
 
-    if (aVal < bVal) return order === 'asc' ? -1 : 1;
-    if (aVal > bVal) return order === 'asc' ? 1 : -1;
-    return 0;
-  });
+      if (aVal < bVal) return order === 'asc' ? -1 : 1;
+      if (aVal > bVal) return order === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [children, hasChildren, isExpanded, orderBy, order]);
 
   return (
     <>
@@ -267,16 +296,15 @@ const RoleRow = memo(({
         <TableCell sx={{ pl: depth * 3.5 + 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {hasChildren ? (
-              <Tooltip title={isExpanded ? 'Collapse' : 'Expand'}>
-                <IconButton
-                  size="small"
-                  onClick={() => toggleExpand(role.ID)}
-                  aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                  sx={{ p: 0.25 }}
-                >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </IconButton>
-              </Tooltip>
+              <IconButton
+                size="small"
+                onClick={() => toggleExpand(role.ID)}
+                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                title={isExpanded ? 'Collapse' : 'Expand'}
+                sx={{ p: 0.25 }}
+              >
+                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </IconButton>
             ) : (
               <Box sx={{ width: 22 }} />
             )}
@@ -332,7 +360,7 @@ const RoleRow = memo(({
           <Chip
             size="small"
             icon={<Users size={12} />}
-            label={role.assignments?.length || 0}
+            label={directUsersCount}
             variant="outlined"
             sx={{ fontSize: '0.7rem' }}
           />
@@ -340,57 +368,49 @@ const RoleRow = memo(({
 
         <TableCell align="right">
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-            <Tooltip title={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}>
-              <span>
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={() => onEdit && onEdit(role)}
-                  aria-label={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
-                >
-                  {disableEdit ? <Eye size={15} /> : <Edit3 size={15} />}
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={disableDerive ? 'Cannot derive role' : 'Derive Child Role'}>
-              <span>
-                <IconButton
-                  size="small"
-                  color="secondary"
-                  onClick={() => onDerive && onDerive(role)}
-                  disabled={disableDerive}
-                  aria-label="Derive Child Role"
-                >
-                  <GitBranch size={15} />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => onEdit && onEdit(role)}
+              aria-label={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
+              title={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
+            >
+              {disableEdit ? <Eye size={15} /> : <Edit3 size={15} />}
+            </IconButton>
+            <IconButton
+              size="small"
+              color="secondary"
+              onClick={() => onDerive && onDerive(role)}
+              disabled={disableDerive}
+              aria-label="Derive Child Role"
+              title={disableDerive ? 'Cannot derive role' : 'Derive Child Role'}
+            >
+              <GitBranch size={15} />
+            </IconButton>
             {onDelete && (
-              <Tooltip title={disableDelete ? 'Cannot delete role' : 'Delete Role'}>
-                <span>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => onDelete && onDelete(role)}
-                    disabled={disableDelete}
-                    aria-label="Delete Role"
-                  >
-                    <Trash2 size={15} />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => onDelete(role)}
+                disabled={disableDelete}
+                aria-label="Delete Role"
+                title={disableDelete ? 'Cannot delete role' : 'Delete Role'}
+              >
+                <Trash2 size={15} />
+              </IconButton>
             )}
           </Box>
         </TableCell>
       </TableRow>
 
-      {hasChildren && isExpanded && sortedChildren.map(child => (
+      {hasChildren && isExpanded && sortedChildren.map((child) => (
         <RoleRow
           key={child.ID}
           role={child}
           depth={depth + 1}
-          allRoles={allRoles}
-          orgNodes={orgNodes}
+          roleById={roleById}
+          childrenByParentId={childrenByParentId}
+          orgNodeById={orgNodeById}
           expandedMap={expandedMap}
           toggleExpand={toggleExpand}
           onDerive={onDerive}

@@ -1,20 +1,77 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Card, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, IconButton, Chip, CircularProgress, Collapse, Alert, Snackbar, Tooltip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { Plus, Trash2, ChevronRight, ChevronDown, Zap, Edit3, X, Check, MoveRight, HelpCircle, Building2, Sliders } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import {
+  Box,
+  Card,
+  Typography,
+  Button,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  IconButton,
+  Chip,
+  CircularProgress,
+  Alert,
+  Snackbar
+} from '@mui/material';
+import {
+  Plus,
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  Zap,
+  Edit3,
+  X,
+  Check,
+  MoveRight,
+  HelpCircle,
+  Building2,
+  Sliders
+} from 'lucide-react';
 import * as api from '../api';
 import TemplateNameEditor from './TemplateNameEditor';
 import SearchableSelect from './SearchableSelect';
 
-// ─── Move Dialog ──────────────────────────────────────────────────────────────
-function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
+// ─── Move Dialog (O(N) descendant lookup via parent->children Map) ───────────
+function MoveDialog({ node, allNodes, onConfirm, onClose, open }: {
+  node: any;
+  allNodes: any[];
+  onConfirm: (parentId: string | null) => void;
+  onClose: () => void;
+  open: boolean;
+}) {
   const [selectedParentId, setSelectedParentId] = useState('');
 
-  function getDescendantIds(id, nodes) {
-    const children = nodes.filter(n => n.parent_ID === id);
-    return children.flatMap(c => [c.ID, ...getDescendantIds(c.ID, nodes)]);
-  }
-  const forbidden = new Set([node.ID, ...getDescendantIds(node.ID, allNodes)]);
-  const validParents = allNodes.filter(n => !forbidden.has(n.ID));
+  const validParentOptions = useMemo(() => {
+    const childrenByParent = new Map<string, string[]>();
+    for (const n of allNodes) {
+      if (n.parent_ID) {
+        const list = childrenByParent.get(n.parent_ID);
+        if (list) list.push(n.ID);
+        else childrenByParent.set(n.parent_ID, [n.ID]);
+      }
+    }
+    const forbidden = new Set<string>([node.ID]);
+    const queue = [node.ID];
+    while (queue.length > 0) {
+      const curr = queue.pop()!;
+      const kids = childrenByParent.get(curr);
+      if (kids) {
+        for (const k of kids) {
+          if (!forbidden.has(k)) {
+            forbidden.add(k);
+            queue.push(k);
+          }
+        }
+      }
+    }
+    return [
+      { value: '', label: '— Make root node (no parent) —' },
+      ...allNodes.filter((n) => !forbidden.has(n.ID)).map((n) => ({ value: n.ID, label: n.name }))
+    ];
+  }, [node.ID, allNodes]);
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
@@ -29,12 +86,9 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         <SearchableSelect
-          options={[
-            { value: '', label: '— Make root node (no parent) —' },
-            ...validParents.map(n => ({ value: n.ID, label: n.name }))
-          ]}
+          options={validParentOptions}
           value={selectedParentId}
-          onChange={val => setSelectedParentId(val)}
+          onChange={(val) => setSelectedParentId(val)}
           label="New Parent Node"
         />
       </DialogContent>
@@ -49,7 +103,7 @@ function MoveDialog({ node, allNodes, onConfirm, onClose, open }) {
 }
 
 // Helper to parse "ROLE_{CostCenter}_CUSTOM" into a readable flex-row with purple chips
-function parseTemplateToChips(templateStr) {
+function parseTemplateToChips(templateStr: string) {
   if (!templateStr) return null;
   const regex = /(\{[a-zA-Z0-9_]+\})/g;
   const parts = templateStr.split(regex);
@@ -85,12 +139,14 @@ function parseTemplateToChips(templateStr) {
   );
 }
 
-// ─── Node Row Component ───────────────────────────────────────────────────────
-function NodeRow({
+// ─── Memoized Node Row Component ─────────────────────────────────────────────
+const NodeRow = memo(function NodeRow({
   node,
   depth = 0,
   allNodes,
   nodeTypes = [],
+  typeOptionsWithNone,
+  typeOptionsOnly,
   createNode,
   updateNode,
   deleteNode,
@@ -109,26 +165,26 @@ function NodeRow({
   createRestrictionField,
   deleteRestrictionField,
   showRoleTemplateName = false,
-}) {
-  const [expanded, setExpanded]       = useState(depth < 2);
+}: any) {
+  const [expanded, setExpanded]         = useState(depth < 2);
   const [showAddChild, setShowAddChild] = useState(false);
-  const [showAddAttr, setShowAddAttr]  = useState(false);
-  const [showMove, setShowMove]        = useState(false);
-  const [editing, setEditing]          = useState(false);
-  const [editName, setEditName]        = useState(node.name);
-  const [editDesc, setEditDesc]        = useState(node.description || '');
+  const [showAddAttr, setShowAddAttr]   = useState(false);
+  const [showMove, setShowMove]         = useState(false);
+  const [editing, setEditing]           = useState(false);
+  const [editName, setEditName]         = useState(node.name);
+  const [editDesc, setEditDesc]         = useState(node.description || '');
   const [editTemplate, setEditTemplate] = useState(node.roleTemplateName || '');
-  const [newChild, setNewChild]        = useState({ name: '', description: '', type: '' });
+  const [newChild, setNewChild]         = useState({ name: '', description: '', type: '' });
   const [newChildTemplate, setNewChildTemplate] = useState('');
-  const [newAttr, setNewAttr]          = useState({ field: '', value: '' });
-  const [newChildFields, setNewChildFields] = useState([]);
-  const [loading, setLoading]          = useState(false);
+  const [newAttr, setNewAttr]           = useState({ field: '', value: '' });
+  const [newChildFields, setNewChildFields] = useState<string[]>([]);
+  const [loading, setLoading]           = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
   const [selectedFieldId, setSelectedFieldId] = useState('');
 
   const Icon = (node.type && typeIcons[node.type.name]) || DefaultIcon;
-  const hasChildren = node.children && node.children.length > 0;
+  const hasChildren = Boolean(node.children && node.children.length > 0);
 
   async function handleAddChild() {
     if (!newChild.name.trim()) return;
@@ -149,21 +205,22 @@ function NodeRow({
         payload.roleTemplateName = newChildTemplate;
       }
       const created = await createNode(payload);
-      // Immediately attach selected restriction fields
       if (showRestrictionFields && newChildFields.length > 0 && createRestrictionField && created?.ID) {
-        await Promise.all(newChildFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
+        await Promise.all(newChildFields.map((fId) => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewChild({ name: '', description: '', type: '' });
       setNewChildTemplate('');
       setNewChildFields([]);
       setShowAddChild(false);
-      await onRefresh();
+      await onRefresh(true);
       setExpanded(true);
-    } catch (e) { onError(e.message); }
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (hasChildren) {
       onError(`Cannot delete "${node.name}" — it still has child nodes. Remove all children first.`);
       return;
@@ -176,8 +233,10 @@ function NodeRow({
     setLoading(true);
     try {
       await deleteNode(node.ID);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
@@ -198,8 +257,10 @@ function NodeRow({
       }
       await updateNode(node.ID, payload);
       setEditing(false);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
@@ -210,27 +271,33 @@ function NodeRow({
       await createAttribute({ node_ID: node.ID, field: newAttr.field, value: newAttr.value });
       setNewAttr({ field: '', value: '' });
       setShowAddAttr(false);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
-  async function handleDeleteAttr(attrId) {
+  async function handleDeleteAttr(attrId: string | number) {
     setLoading(true);
     try {
       await deleteAttribute(attrId);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
-  async function handleMove(newParentId) {
+  async function handleMove(newParentId: string | null) {
     setLoading(true);
     try {
       await updateNode(node.ID, { parent_ID: newParentId });
       setShowMove(false);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
@@ -241,17 +308,21 @@ function NodeRow({
       await createRestrictionField({ domain_ID: node.ID, field_ID: selectedFieldId });
       setSelectedFieldId('');
       setShowAddField(false);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
-  async function handleDeleteRestrictionField(mappingId) {
+  async function handleDeleteRestrictionField(mappingId: string) {
     setLoading(true);
     try {
       await deleteRestrictionField(mappingId);
-      await onRefresh();
-    } catch (e) { onError(e.message); }
+      await onRefresh(true);
+    } catch (e: any) {
+      onError(e.message);
+    }
     setLoading(false);
   }
 
@@ -268,29 +339,31 @@ function NodeRow({
       )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          p: '10px 14px',
-          bgcolor: 'background.paper',
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          borderRadius: 1,
-          ml: depth * 3,
-          position: 'relative',
-          transition: 'all 0.2s',
-          '&:hover': {
-            borderColor: 'primary.main',
-            bgcolor: 'action.hover',
-          }
-        }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            p: '10px 14px',
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            ml: depth * 3,
+            position: 'relative',
+            transition: 'border-color 0.15s, background-color 0.15s',
+            '&:hover': {
+              borderColor: 'primary.main',
+              bgcolor: 'action.hover',
+            }
+          }}
+        >
           <IconButton
-            onClick={() => setExpanded(e => !e)}
+            onClick={() => setExpanded((e) => !e)}
             disabled={!hasChildren}
             size="small"
             sx={{ p: 0, color: 'text.secondary', opacity: hasChildren ? 1 : 0.3 }}
+            aria-label={expanded ? 'Collapse node' : 'Expand node'}
           >
             {hasChildren ? (expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <Box sx={{ width: 14 }} />}
           </IconButton>
@@ -303,7 +376,7 @@ function NodeRow({
                 <TextField
                   size="small"
                   value={editName}
-                  onChange={e => setEditName(e.target.value.slice(0, maxNameLength))}
+                  onChange={(e) => setEditName(e.target.value.slice(0, maxNameLength))}
                   inputProps={{ maxLength: maxNameLength }}
                   sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 }, width: 120 }}
                 />
@@ -312,7 +385,7 @@ function NodeRow({
                     size="small"
                     placeholder="Description"
                     value={editDesc}
-                    onChange={e => setEditDesc(e.target.value.slice(0, 200))}
+                    onChange={(e) => setEditDesc(e.target.value.slice(0, 200))}
                     inputProps={{ maxLength: 200 }}
                     sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 }, width: 220 }}
                   />
@@ -323,12 +396,16 @@ function NodeRow({
                     <TemplateNameEditor
                       value={editTemplate}
                       onChange={setEditTemplate}
-                      availableFields={node.restrictionFields?.map(rf => rf.field?.name || rf.field_ID).filter(Boolean) || []}
+                      availableFields={node.restrictionFields?.map((rf: any) => rf.field?.name || rf.field_ID).filter(Boolean) || []}
                     />
                   </Box>
                 )}
-                <IconButton color="primary" onClick={handleRename} disabled={loading} size="small" aria-label="Save rename"><Check size={14} /></IconButton>
-                <IconButton onClick={() => setEditing(false)} size="small" aria-label="Cancel edit"><X size={14} /></IconButton>
+                <IconButton color="primary" onClick={handleRename} disabled={loading} size="small" aria-label="Save rename" title="Save">
+                  <Check size={14} />
+                </IconButton>
+                <IconButton onClick={() => setEditing(false)} size="small" aria-label="Cancel edit" title="Cancel">
+                  <X size={14} />
+                </IconButton>
               </Box>
             ) : (
               <>
@@ -340,7 +417,9 @@ function NodeRow({
                     </Box>
                   )}
                 </Typography>
-                {showTypeSelector && <Typography variant="caption" color="text.secondary">{node.type?.name || ''}</Typography>}
+                {showTypeSelector && node.type?.name && (
+                  <Typography variant="caption" color="text.secondary">{node.type.name}</Typography>
+                )}
                 {showRoleTemplateName && node.roleTemplateName && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.85 }}>
                     <Typography variant="caption" color="text.secondary">Template:</Typography>
@@ -353,16 +432,13 @@ function NodeRow({
 
           {node.attributes && node.attributes.length > 0 && (
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {node.attributes.map(a => (
+              {node.attributes.map((a: any) => (
                 <Chip
                   key={a.ID}
                   label={`${a.field}: ${a.value}`}
                   size="small"
                   onDelete={canManage ? () => handleDeleteAttr(a.ID) : undefined}
                   color="primary"
-
-
-
                 />
               ))}
             </Box>
@@ -370,15 +446,13 @@ function NodeRow({
 
           {showRestrictionFields && node.restrictionFields && node.restrictionFields.length > 0 && (
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {node.restrictionFields.map(rf => (
+              {node.restrictionFields.map((rf: any) => (
                 <Chip
                   key={rf.ID}
                   label={rf.field?.name || rf.field_ID}
                   size="small"
                   onDelete={canManage ? () => handleDeleteRestrictionField(rf.ID) : undefined}
                   color="secondary"
-
-
                 />
               ))}
             </Box>
@@ -386,11 +460,11 @@ function NodeRow({
 
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             {onGenerate && (
-              <Button 
-                size="small" 
-                variant="text" 
-                color="primary" 
-                onClick={() => onGenerate(node.ID)} 
+              <Button
+                size="small"
+                variant="text"
+                color="primary"
+                onClick={() => onGenerate(node.ID)}
                 disabled={!canManage}
                 startIcon={<Zap size={12} />}
               >
@@ -398,80 +472,102 @@ function NodeRow({
               </Button>
             )}
             {showRestrictionFields && (
-              <Tooltip title="Define Mandatory Fields">
-                <span>
-                  <IconButton size="small" onClick={() => setShowAddField(s => !s)} disabled={!canManage} aria-label="Define Mandatory Fields">
-                    <Sliders size={13} />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              <IconButton
+                size="small"
+                onClick={() => setShowAddField((s) => !s)}
+                disabled={!canManage}
+                aria-label="Define Mandatory Fields"
+                title="Define Mandatory Fields"
+              >
+                <Sliders size={13} />
+              </IconButton>
             )}
-            <Tooltip title="Add Attribute">
-              <span>
-                <IconButton size="small" onClick={() => setShowAddAttr(s => !s)} disabled={!canManage} aria-label="Add Attribute"><Plus size={13} /></IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Rename / Edit">
-              <span>
-                <IconButton size="small" onClick={() => { setEditing(true); setEditName(node.name); setEditDesc(node.description || ''); setEditTemplate(node.roleTemplateName || ''); }} disabled={!canManage} aria-label="Rename / Edit"><Edit3 size={13} /></IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Add Child Node">
-              <span>
-                <IconButton size="small" onClick={() => setShowAddChild(s => !s)} disabled={!canManage} aria-label="Add Child Node"><Building2 size={13} /></IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Move Node">
-              <span>
-                <IconButton size="small" onClick={() => setShowMove(true)} aria-label="Move Node" disabled={loading || !canManage}>
-                  <MoveRight size={13} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={hasChildren ? 'Remove all children first' : 'Delete node'}>
-              <span>
-                <IconButton size="small" color="error" onClick={handleDelete} disabled={loading || hasChildren || !canManage} aria-label={hasChildren ? 'Remove all children first' : 'Delete node'}><Trash2 size={13} /></IconButton>
-              </span>
-            </Tooltip>
+            <IconButton
+              size="small"
+              onClick={() => setShowAddAttr((s) => !s)}
+              disabled={!canManage}
+              aria-label="Add Attribute"
+              title="Add Attribute"
+            >
+              <Plus size={13} />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setEditing(true);
+                setEditName(node.name);
+                setEditDesc(node.description || '');
+                setEditTemplate(node.roleTemplateName || '');
+              }}
+              disabled={!canManage}
+              aria-label="Rename / Edit"
+              title="Rename / Edit"
+            >
+              <Edit3 size={13} />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setShowAddChild((s) => !s)}
+              disabled={!canManage}
+              aria-label="Add Child Node"
+              title="Add Child Node"
+            >
+              <Building2 size={13} />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setShowMove(true)}
+              aria-label="Move Node"
+              title="Move Node"
+              disabled={loading || !canManage}
+            >
+              <MoveRight size={13} />
+            </IconButton>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={handleDelete}
+              disabled={loading || hasChildren || !canManage}
+              aria-label={hasChildren ? 'Remove all children first' : 'Delete node'}
+              title={hasChildren ? 'Remove all children first' : 'Delete node'}
+            >
+              <Trash2 size={13} />
+            </IconButton>
           </Box>
         </Box>
 
-        <Collapse in={showAddAttr}>
+        {/* Lazy-mounted inline forms: only mounted when toggled open */}
+        {showAddAttr && (
           <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}>
-            <TextField size="small" label="Field (e.g. Country)" value={newAttr.field} onChange={e => setNewAttr(a => ({ ...a, field: e.target.value }))} sx={{ flex: 1 }} />
-            <TextField size="small" label="Value (e.g. Germany)" value={newAttr.value} onChange={e => setNewAttr(a => ({ ...a, value: e.target.value }))} sx={{ flex: 1 }} />
+            <TextField size="small" label="Field (e.g. Country)" value={newAttr.field} onChange={(e) => setNewAttr((a) => ({ ...a, field: e.target.value }))} sx={{ flex: 1 }} />
+            <TextField size="small" label="Value (e.g. Germany)" value={newAttr.value} onChange={(e) => setNewAttr((a) => ({ ...a, value: e.target.value }))} sx={{ flex: 1 }} />
             <Button variant="contained" size="small" onClick={handleAddAttr} disabled={loading}>Add</Button>
             <IconButton size="small" onClick={() => setShowAddAttr(false)}><X size={15} /></IconButton>
           </Card>
-        </Collapse>
-
-        {showRestrictionFields && (
-          <Collapse in={showAddField}>
-            <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center' }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>Assign Mandatory Field:</Typography>
-              <SearchableSelect
-                options={[
-                  { value: '', label: '— Choose Field —' },
-                  ...nodeTypes.map(f => ({ value: f.ID, label: f.name }))
-                ]}
-                value={selectedFieldId}
-                onChange={val => setSelectedFieldId(val)}
-                label="Select Field"
-                sx={{ minWidth: 200 }}
-              />
-              <Button variant="contained" size="small" onClick={handleAddRestrictionField} disabled={loading || !selectedFieldId}>Assign</Button>
-              <IconButton size="small" onClick={() => { setShowAddField(false); setSelectedFieldId(''); }}><X size={15} /></IconButton>
-            </Card>
-          </Collapse>
         )}
 
-        <Collapse in={showAddChild}>
+        {showRestrictionFields && showAddField && (
+          <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Assign Mandatory Field:</Typography>
+            <SearchableSelect
+              options={typeOptionsWithNone}
+              value={selectedFieldId}
+              onChange={(val) => setSelectedFieldId(val)}
+              label="Select Field"
+              sx={{ minWidth: 200 }}
+            />
+            <Button variant="contained" size="small" onClick={handleAddRestrictionField} disabled={loading || !selectedFieldId}>Assign</Button>
+            <IconButton size="small" onClick={() => { setShowAddField(false); setSelectedFieldId(''); }}><X size={15} /></IconButton>
+          </Card>
+        )}
+
+        {showAddChild && (
           <Card sx={{ ml: depth * 3 + 1, mt: 0.5, p: 1.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
               size="small"
               label="Node Name"
               value={newChild.name}
-              onChange={e => setNewChild(c => ({ ...c, name: e.target.value.slice(0, maxNameLength) }))}
+              onChange={(e) => setNewChild((c) => ({ ...c, name: e.target.value.slice(0, maxNameLength) }))}
               inputProps={{ maxLength: maxNameLength }}
               sx={{ flex: 1, minWidth: 120 }}
             />
@@ -480,32 +576,29 @@ function NodeRow({
                 size="small"
                 label="Description"
                 value={newChild.description || ''}
-                onChange={e => setNewChild(c => ({ ...c, description: e.target.value.slice(0, 200) }))}
+                onChange={(e) => setNewChild((c) => ({ ...c, description: e.target.value.slice(0, 200) }))}
                 inputProps={{ maxLength: 200 }}
                 sx={{ flex: 2, minWidth: 200 }}
               />
             )}
             {showTypeSelector && (
-                <SearchableSelect
-                  options={[
-                    { value: '', label: 'None' },
-                    ...nodeTypes.map(t => ({ value: t.ID, label: t.name }))
-                  ]}
-                  value={newChild.type || ''}
-                  onChange={val => setNewChild(c => ({ ...c, type: val }))}
-                  label="Type"
-                  sx={{ width: 140 }}
-                />
-              )}
-              {showRestrictionFields && nodeTypes.length > 0 && (
-                <SearchableSelect
-                  options={nodeTypes.map(f => ({ value: f.ID, label: f.name }))}
-                  value={newChildFields}
-                  onChange={vals => setNewChildFields(vals)}
-                  label="Restriction Fields"
-                  multiple
-                  sx={{ minWidth: 180 }}
-                />
+              <SearchableSelect
+                options={typeOptionsWithNone}
+                value={newChild.type || ''}
+                onChange={(val) => setNewChild((c) => ({ ...c, type: val }))}
+                label="Type"
+                sx={{ width: 140 }}
+              />
+            )}
+            {showRestrictionFields && nodeTypes.length > 0 && (
+              <SearchableSelect
+                options={typeOptionsOnly}
+                value={newChildFields}
+                onChange={(vals) => setNewChildFields(vals)}
+                label="Restriction Fields"
+                multiple
+                sx={{ minWidth: 180 }}
+              />
             )}
             {showRoleTemplateName && (
               <Box sx={{ width: '100%', mt: 1.5, mb: 1 }}>
@@ -513,22 +606,24 @@ function NodeRow({
                 <TemplateNameEditor
                   value={newChildTemplate}
                   onChange={setNewChildTemplate}
-                  availableFields={newChildFields.map(id => nodeTypes.find(f => f.ID === id)?.name).filter(Boolean)}
+                  availableFields={newChildFields.map((id) => nodeTypes.find((f: any) => f.ID === id)?.name).filter(Boolean)}
                 />
               </Box>
             )}
             <Button variant="contained" size="small" onClick={handleAddChild} disabled={loading}>Add</Button>
             <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); setNewChildTemplate(''); }}><X size={15} /></IconButton>
           </Card>
-        </Collapse>
+        )}
 
-        {expanded && hasChildren && node.children.map(child => (
+        {expanded && hasChildren && node.children.map((child: any) => (
           <NodeRow
             key={child.ID}
             node={child}
             depth={depth + 1}
             allNodes={allNodes}
             nodeTypes={nodeTypes}
+            typeOptionsWithNone={typeOptionsWithNone}
+            typeOptionsOnly={typeOptionsOnly}
             createNode={createNode}
             updateNode={updateNode}
             deleteNode={deleteNode}
@@ -550,42 +645,46 @@ function NodeRow({
           />
         ))}
 
-        <Dialog
-          open={confirmDeleteOpen}
-          onClose={() => setConfirmDeleteOpen(false)}
-        >
-          <DialogTitle>Delete Node</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Delete node "{node.name}"? This cannot be undone.
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">Cancel</Button>
-            <Button onClick={executeDelete} color="error" variant="contained" autoFocus>Delete</Button>
-          </DialogActions>
-        </Dialog>
+        {confirmDeleteOpen && (
+          <Dialog
+            open={confirmDeleteOpen}
+            onClose={() => setConfirmDeleteOpen(false)}
+          >
+            <DialogTitle>Delete Node</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Delete node "{node.name}"? This cannot be undone.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmDeleteOpen(false)} color="inherit">Cancel</Button>
+              <Button onClick={executeDelete} color="error" variant="contained" autoFocus>Delete</Button>
+            </DialogActions>
+          </Dialog>
+        )}
       </Box>
     </Box>
   );
-}
+});
 
 // Tree Builder helper
-function buildTree(flatNodes) {
-  const map = {};
-  flatNodes.forEach(node => {
+function buildTree(flatNodes: any[]) {
+  const map: Record<string, any> = {};
+  for (let i = 0; i < flatNodes.length; i++) {
+    const node = flatNodes[i];
     map[node.ID] = { ...node, children: [] };
-  });
+  }
 
-  const roots = [];
-  flatNodes.forEach(node => {
+  const roots: any[] = [];
+  for (let i = 0; i < flatNodes.length; i++) {
+    const node = flatNodes[i];
     const mappedNode = map[node.ID];
     if (node.parent_ID && map[node.parent_ID]) {
       map[node.parent_ID].children.push(mappedNode);
     } else {
       roots.push(mappedNode);
     }
-  });
+  }
   return roots;
 }
 
@@ -633,7 +732,7 @@ export default function HierarchicalManager({
   emptyTitle,
   emptySubtitle,
   addNodePlaceholder,
-  
+
   // API calls
   fetchNodesFlat,
   createNode,
@@ -641,16 +740,16 @@ export default function HierarchicalManager({
   deleteNode,
   createAttribute,
   deleteAttribute,
-  
+
   // Styling
   typeIcons,
   defaultIcon,
-  
+
   // Actions
   onGenerateNode,
   onGenerateAll,
   generateAllText,
-  
+
   // Permissions
   canManage,
 
@@ -663,10 +762,18 @@ export default function HierarchicalManager({
   deleteRestrictionField,
   showRoleTemplateName = false,
 }: HierarchicalManagerProps) {
-  const [allNodes, setAllNodes]   = useState<any[]>([]);
-  const [roots, setRoots]         = useState<any[]>([]);
-  const [nodeTypes, setNodeTypes] = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const initialCachePath = fetchNodesFlat === api.getAllOrgNodesFlat
+    ? api.ORG_NODES_FLAT_PATH
+    : '/AccessDomains?$expand=attributes,type,restrictionFields($expand=field)';
+  const [allNodes, setAllNodes]   = useState<any[]>(() => {
+    const cached = api.peekCachedGet(initialCachePath);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [nodeTypes, setNodeTypes] = useState<any[]>(() => {
+    const cached = api.peekCachedGet(api.RESTRICTION_FIELDS_PATH);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [loading, setLoading]     = useState<boolean>(() => !Array.isArray(api.peekCachedGet(initialCachePath)));
   const [showAdd, setShowAdd]     = useState(false);
   const [newRoot, setNewRoot]     = useState({ name: '', description: '', type: '' });
   const [newRootTemplate, setNewRootTemplate] = useState('');
@@ -677,29 +784,54 @@ export default function HierarchicalManager({
     severity: 'success' | 'info' | 'warning' | 'error';
   }>({ open: false, message: '', severity: 'error' });
 
-  const handleCloseSnackbar = (event?: React.SyntheticEvent | Event, reason?: string) => {
+  const handleCloseSnackbar = (_event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  async function load() {
-    setLoading(true);
+  const handleError = useCallback((msg: string) => {
+    setSnackbar({ open: true, message: msg, severity: 'error' });
+  }, []);
+
+  // silent=true refreshes node tree in place without unmounting existing expanded rows
+  const load = useCallback(async (silent = false) => {
+    if (!silent && !Array.isArray(api.peekCachedGet(initialCachePath))) {
+      setLoading(true);
+    }
     try {
-      const [flatData, fieldsData] = await Promise.all([
-        fetchNodesFlat(),
-        api.getRestrictionFields()
-      ]);
-      setAllNodes(flatData);
-      setRoots(buildTree(flatData));
-      setNodeTypes(fieldsData);
-    } catch (e) {
+      if (silent) {
+        const flatData = await fetchNodesFlat();
+        setAllNodes(flatData || []);
+      } else {
+        const [flatData, fieldsData] = await Promise.all([
+          fetchNodesFlat(),
+          api.getRestrictionFields()
+        ]);
+        setAllNodes(flatData || []);
+        setNodeTypes(fieldsData || []);
+      }
+    } catch (e: any) {
       console.error(e);
       setSnackbar({ open: true, message: `Failed to load data: ${e.message}`, severity: 'error' });
     }
     setLoading(false);
-  }
+  }, [fetchNodesFlat, initialCachePath]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load(false);
+  }, [load]);
+
+  const roots = useMemo(() => buildTree(allNodes), [allNodes]);
+
+  const typeOptionsOnly = useMemo(
+    () => nodeTypes.map((t: any) => ({ value: t.ID, label: t.name })),
+    [nodeTypes]
+  );
+
+  const typeOptionsWithNone = useMemo(
+    () => [{ value: '', label: 'None' }, ...typeOptionsOnly],
+    [typeOptionsOnly]
+  );
 
   async function handleAddRoot() {
     if (!newRoot.name.trim()) return;
@@ -719,25 +851,41 @@ export default function HierarchicalManager({
         payload.roleTemplateName = newRootTemplate;
       }
       const created = await createNode(payload);
-      // Immediately attach selected restriction fields
       if (showRestrictionFields && newRootFields.length > 0 && createRestrictionField && created?.ID) {
-        await Promise.all(newRootFields.map(fId => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
+        await Promise.all(newRootFields.map((fId) => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewRoot({ name: '', description: '', type: '' });
       setNewRootTemplate('');
       setNewRootFields([]);
       setShowAdd(false);
-      await load();
-    } catch (e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
+      await load(true);
+    } catch (e: any) {
+      setSnackbar({ open: true, message: e.message, severity: 'error' });
+    }
   }
 
   async function handleGenerateAll() {
+    if (!onGenerateAll) return;
     setLoading(true);
     try {
       const res = await onGenerateAll();
-      setSnackbar({ open: true, message: `Successfully generated roles for ${res.count} organizational nodes!`, severity: 'success' });
-      await load();
-    } catch (e) { setSnackbar({ open: true, message: e.message, severity: 'error' }); }
+      if (!res || !res.count) {
+        setSnackbar({
+          open: true,
+          message: 'No roles could be generated: no Access Domain having matching restriction fields could be found.',
+          severity: 'warning',
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: `Successfully generated roles for ${res.count} organizational nodes!`,
+          severity: 'success',
+        });
+        await load(true);
+      }
+    } catch (e: any) {
+      setSnackbar({ open: true, message: e.message, severity: 'error' });
+    }
     setLoading(false);
   }
 
@@ -750,20 +898,23 @@ export default function HierarchicalManager({
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
           {onGenerateAll && (
-            <Button 
-              variant="outlined" 
-              color="primary" 
-              onClick={handleGenerateAll} 
-              disabled={loading || !canManage} 
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleGenerateAll}
+              disabled={loading || !canManage}
               startIcon={<Zap size={15} />}
             >
               {generateAllText || 'Generate All'}
             </Button>
           )}
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={() => { setShowAdd(s => !s); setSnackbar({ open: false, message: '', severity: 'error' }); }} 
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => {
+              setShowAdd((s) => !s);
+              setSnackbar({ open: false, message: '', severity: 'error' });
+            }}
             disabled={!canManage}
             startIcon={<Plus size={15} />}
           >
@@ -783,13 +934,13 @@ export default function HierarchicalManager({
         </Alert>
       </Snackbar>
 
-      <Collapse in={showAdd}>
+      {showAdd && (
         <Card sx={{ p: 2, mb: 3, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField
             size="small"
-            placeholder={addNodePlaceholder || "Node name..."}
+            placeholder={addNodePlaceholder || 'Node name...'}
             value={newRoot.name}
-            onChange={e => setNewRoot(r => ({ ...r, name: e.target.value.slice(0, maxNameLength) }))}
+            onChange={(e) => setNewRoot((r) => ({ ...r, name: e.target.value.slice(0, maxNameLength) }))}
             inputProps={{ maxLength: maxNameLength }}
             sx={{ flex: 1, minWidth: 120 }}
           />
@@ -798,28 +949,25 @@ export default function HierarchicalManager({
               size="small"
               placeholder="Description (max 200 chars)..."
               value={newRoot.description || ''}
-              onChange={e => setNewRoot(r => ({ ...r, description: e.target.value.slice(0, 200) }))}
+              onChange={(e) => setNewRoot((r) => ({ ...r, description: e.target.value.slice(0, 200) }))}
               inputProps={{ maxLength: 200 }}
               sx={{ flex: 2, minWidth: 200 }}
             />
           )}
           {showTypeSelector && (
             <SearchableSelect
-              options={[
-                { value: '', label: 'None' },
-                ...nodeTypes.map(t => ({ value: t.ID, label: t.name }))
-              ]}
+              options={typeOptionsWithNone}
               value={newRoot.type || ''}
-              onChange={val => setNewRoot(r => ({ ...r, type: val }))}
+              onChange={(val) => setNewRoot((r) => ({ ...r, type: val }))}
               label="Type"
               sx={{ width: 160 }}
             />
           )}
           {showRestrictionFields && nodeTypes.length > 0 && (
             <SearchableSelect
-              options={nodeTypes.map(f => ({ value: f.ID, label: f.name }))}
+              options={typeOptionsOnly}
               value={newRootFields}
-              onChange={vals => setNewRootFields(vals)}
+              onChange={(vals) => setNewRootFields(vals)}
               label="Restriction Fields"
               multiple
               sx={{ minWidth: 200 }}
@@ -831,14 +979,14 @@ export default function HierarchicalManager({
               <TemplateNameEditor
                 value={newRootTemplate}
                 onChange={setNewRootTemplate}
-                availableFields={newRootFields.map(id => nodeTypes.find(f => f.ID === id)?.name).filter(Boolean)}
+                availableFields={newRootFields.map((id) => nodeTypes.find((f: any) => f.ID === id)?.name).filter(Boolean)}
               />
             </Box>
           )}
           <Button variant="contained" onClick={handleAddRoot}>Add</Button>
           <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); setNewRootTemplate(''); }} size="small"><X size={16} /></IconButton>
         </Card>
-      </Collapse>
+      )}
 
       <Card sx={{ p: 2 }}>
         {loading ? (
@@ -851,13 +999,15 @@ export default function HierarchicalManager({
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {roots.map(n => (
+            {roots.map((n) => (
               <NodeRow
                 key={n.ID}
                 node={n}
                 depth={0}
                 allNodes={allNodes}
                 nodeTypes={nodeTypes}
+                typeOptionsWithNone={typeOptionsWithNone}
+                typeOptionsOnly={typeOptionsOnly}
                 createNode={createNode}
                 updateNode={updateNode}
                 deleteNode={deleteNode}
@@ -867,7 +1017,7 @@ export default function HierarchicalManager({
                 defaultIcon={defaultIcon}
                 onGenerate={onGenerateNode}
                 onRefresh={load}
-                onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
+                onError={handleError}
                 canManage={canManage}
                 showTypeSelector={showTypeSelector}
                 showDescriptionField={showDescriptionField}

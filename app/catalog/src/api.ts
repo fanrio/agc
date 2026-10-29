@@ -5,10 +5,21 @@ let activeSimulatedUser = (typeof localStorage !== 'undefined' && typeof localSt
   : 'tim.waecken@cimt-ag.de';
 
 export function setSimulatedUser(userId: string): void {
-  activeSimulatedUser = userId;
+  if (activeSimulatedUser !== userId) {
+    activeSimulatedUser = userId;
+    getResponseCache.clear();
+  }
 }
 
-async function request(method: string, path: string, body?: any): Promise<any> {
+const inflightGetRequests = new Map<string, Promise<any>>();
+const getResponseCache = new Map<string, any>();
+
+export function peekCachedGet(path: string): any | undefined {
+  const cacheKey = `${activeSimulatedUser || ''}::${path}`;
+  return getResponseCache.get(cacheKey);
+}
+
+async function executeRequest(method: string, path: string, body?: any): Promise<any> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (activeSimulatedUser) {
     headers['x-simulated-user'] = activeSimulatedUser;
@@ -29,6 +40,30 @@ async function request(method: string, path: string, body?: any): Promise<any> {
   }
   return data.value !== undefined ? data.value : data;
 }
+
+async function request(method: string, path: string, body?: any): Promise<any> {
+  if (method === 'GET') {
+    const cacheKey = `${activeSimulatedUser || ''}::${path}`;
+    const existing = inflightGetRequests.get(cacheKey);
+    if (existing) return existing;
+    const promise = executeRequest(method, path, body)
+      .then((res) => {
+        getResponseCache.set(cacheKey, res);
+        return res;
+      })
+      .finally(() => {
+        inflightGetRequests.delete(cacheKey);
+      });
+    inflightGetRequests.set(cacheKey, promise);
+    return promise;
+  }
+  getResponseCache.clear();
+  return executeRequest(method, path, body);
+}
+
+export const ROLES_EXPAND_PATH = '/Roles?$expand=ownRestrictions,orgNode,parentRoles($expand=parent),approvers';
+export const ORG_NODES_FLAT_PATH = '/OrgNodes?$expand=attributes,type';
+export const RESTRICTION_FIELDS_PATH = '/RestrictionFields?$expand=bdcConnection';
 
 export const getCurrentUserPermissions = () => request('GET', '/getCurrentUserPermissions()');
 
@@ -55,11 +90,11 @@ export interface GetRolesParams {
 
 export const getRoles = (params?: GetRolesParams) => {
   if (!params) {
-    return request('GET', '/Roles?$expand=orgNode,parentRoles($expand=parent),approvers,environment');
+    return request('GET', ROLES_EXPAND_PATH);
   }
 
   const queryParams: string[] = [
-    '$expand=orgNode,parentRoles($expand=parent),approvers,environment'
+    '$expand=orgNode,parentRoles($expand=parent),approvers'
   ];
 
   if (params.count) {

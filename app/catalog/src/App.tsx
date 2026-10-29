@@ -30,12 +30,13 @@ import {
   ChevronRight,
   Menu
 } from 'lucide-react';
+import * as api from './api';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
+import OrgStructureView from './components/OrgStructureView';
+import RolesDashboard from './components/RolesDashboard';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
 
-const OrgStructureView = lazy(() => import('./components/OrgStructureView'));
-const RolesDashboard = lazy(() => import('./components/RolesDashboard'));
 const Wizard = lazy(() => import('./components/Wizard'));
 const RoleAssignmentsView = lazy(() => import('./components/RoleAssignmentsView'));
 const SystemView = lazy(() => import('./components/SystemView'));
@@ -78,6 +79,17 @@ function AppContent({ simulatedUser, onLogout }) {
   const isNavigatingRef = useRef(false);
 
   const { permissions, loading } = usePermissions();
+
+  useEffect(() => {
+    if (!loading && permissions) {
+      Promise.allSettled([
+        api.getRoles(),
+        api.getAllOrgNodesFlat(),
+        api.getRestrictionFields(),
+        api.getEnvironments()
+      ]);
+    }
+  }, [loading, permissions]);
 
   const currentDrawerWidth = drawerOpen ? EXPANDED_DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH;
 

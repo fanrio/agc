@@ -49,9 +49,9 @@
 ┌────────────────────────────▼─────────────────────────────┐
 │  CAP Backend (@ http://localhost:4004)                   │
 │                                                          │
-│  srv/authorization-service.cds   (entity projections +  │
+│  srv/cortex_service.cds   (entity projections +  │
 │                                   action signatures)     │
-│  srv/authorization-service.js    (thin wiring layer)     │
+│  srv/cortex_service.js    (thin wiring layer)     │
 │                                                          │
 │  srv/handlers/           (CAP event hooks per entity)    │
 │  srv/services/           (domain business logic)         │
@@ -75,13 +75,13 @@
 
 ## 4. Backend Layer Breakdown
 
-### `srv/authorization-service.cds`
+### `srv/cortex_service.cds`
 Defines the OData service contract:
 - Entity projections (what DB entities are exposed through OData)
 - OData action and function signatures
 - Path: `/odata/v4/auth`
 
-### `srv/authorization-service.js`
+### `srv/cortex_service.js`
 **Thin wiring layer only.** Imports all handlers and services and registers them with the CAP service instance. Contains no business logic itself.
 
 ### `srv/handlers/`

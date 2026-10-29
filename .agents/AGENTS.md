@@ -36,7 +36,7 @@
 > [!CAUTION]
 > **NEVER rename a CDS entity without updating ALL of the following in one atomic change:**
 > - `db/schema.cds` (entity definition)
-> - `srv/authorization-service.cds` (OData projection)
+> - `srv/cortex_service.cds` (OData projection)
 > - Every CSV seed file in `db/data/` whose name references the entity (pattern: `fanrio.auth-<EntityName>.csv`)
 > - Every `require`/import in `srv/` that references the old entity name
 > - Every call in `app/catalog/src/api.js` that references the old OData path
@@ -58,7 +58,7 @@
 > **ALWAYS run `npm run build --prefix app/catalog` after significant frontend changes** to verify the production bundle compiles without TypeScript/Vite errors. Do not assume dev-mode success equals prod success.
 
 > [!WARNING]
-> **NEVER add a new handler file to `srv/handlers/` without also importing and calling its `registerXxx` function inside `srv/authorization-service.js`.** Handler files that are not wired in are silently ignored by CAP.
+> **NEVER add a new handler file to `srv/handlers/` without also importing and calling its `registerXxx` function inside `srv/cortex_service.js`.** Handler files that are not wired in are silently ignored by CAP.
 
 > [!WARNING]
 > **NEVER add a new frontend API function in a component file.** All OData calls MUST live exclusively in `app/catalog/src/api.js`. Components call these exported functions; they do not call `fetch` directly.
@@ -80,12 +80,12 @@ fanrio-auth/
 │                               # Must be kept in sync with schema.cds entity names.
 │
 ├── srv/
-│   ├── authorization-service.cds  # OData service definition.
+│   ├── cortex_service.cds  # OData service definition.
 │   │                              # Contains entity projections (what is exposed via OData)
 │   │                              # and action/function signatures. Edit here to add/remove
 │   │                              # endpoints or change exposed fields.
 │   │
-│   ├── authorization-service.js   # THIN WIRING LAYER — do not put business logic here.
+│   ├── cortex_service.js   # THIN WIRING LAYER — do not put business logic here.
 │   │                              # Imports all handler modules and calls registerXxx().
 │   │                              # Also imports and wires service-level dependencies
 │   │                              # (queueReplication, syncAssignmentToHana, etc.).
@@ -314,7 +314,7 @@ fanrio-auth/
 | What you need | Where to look |
 |---|---|
 | OData endpoint base | `/odata/v4/auth/` |
-| Entity projections exposed via OData | `srv/authorization-service.cds` |
+| Entity projections exposed via OData | `srv/cortex_service.cds` |
 | DB entity definitions (fields, keys, associations) | `db/schema.cds` |
 | All frontend OData/API calls | `app/catalog/src/api.js` |
 | Permission flag definitions and enforcement | `AppAuthorizations` entity + `srv/lib/authGuard.js` |
@@ -325,7 +325,7 @@ fanrio-auth/
 | Replication queue status values | `replicationQueueService.js` → `REPLICATION_STATUS` constant |
 | DRAGE sync entry point | `srv/services/dynamicSyncService.js` → `syncDynamicRule()` |
 | Entity CRUD event hooks | `srv/handlers/<entityName>Handlers.js` |
-| CAP handler wiring | `srv/authorization-service.js` |
+| CAP handler wiring | `srv/cortex_service.js` |
 | Audit log writes | Each handler's `after CREATE/UPDATE/DELETE` using the `AuditLogs` entity |
 
 ---
@@ -335,7 +335,7 @@ fanrio-auth/
 ### Adding a new OData entity
 
 1. Add entity definition to `db/schema.cds`.
-2. Add projection to `srv/authorization-service.cds`.
+2. Add projection to `srv/cortex_service.cds`.
 3. Create seed file `db/data/fanrio.auth-<EntityName>.csv` (can be empty header-only).
 4. Run `npx cds deploy`.
 5. Add CRUD functions to `app/catalog/src/api.js`.
@@ -344,8 +344,8 @@ fanrio-auth/
 
 1. Create `srv/handlers/<entityName>Handlers.js`.
 2. Export `registerXxxHandlers(service, entities, deps)`.
-3. Open `srv/authorization-service.js`, import the new file, and call `registerXxxHandlers(...)` inside the service init block.
-4. Do NOT put business logic directly in `authorization-service.js`.
+3. Open `srv/cortex_service.js`, import the new file, and call `registerXxxHandlers(...)` inside the service init block.
+4. Do NOT put business logic directly in `cortex_service.js`.
 
 ### Adding a new service module
 
@@ -396,7 +396,7 @@ fanrio-auth/
 
 | Pitfall | Why it happens | How to avoid |
 |---|---|---|
-| Handler not firing | Registered in handler file but not wired in `authorization-service.js` | Always call `registerXxx()` in the service init block |
+| Handler not firing | Registered in handler file but not wired in `cortex_service.js` | Always call `registerXxx()` in the service init block |
 | Schema out of sync | `db/schema.cds` edited but `npx cds deploy` not run | Run deploy immediately after every schema change |
 | CSV seed not loading | File not named exactly `fanrio.auth-<EntityName>.csv` | Match entity name exactly, including capitalisation |
 | 400 on assignment create | Role has no restrictions — `assignmentHandlers.js` rejects it | Add at least one restriction to the role first |

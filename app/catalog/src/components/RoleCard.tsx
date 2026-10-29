@@ -1,18 +1,47 @@
 import { useState, useMemo, memo } from 'react';
-import { 
-  Box, Card, Typography, Button, IconButton, TextField, Collapse, Chip, 
-  CircularProgress, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Grid, Tooltip
+import {
+  Box,
+  Card,
+  Typography,
+  Button,
+  IconButton,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Alert,
+  Grid
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import PrivateConnectivityIcon from '@mui/icons-material/PrivateConnectivity';
-import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, Plus, AlertTriangle } from 'lucide-react';
+import { Shield, GitBranch, Users, Trash2, ChevronRight, ChevronDown, Eye, Edit3, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import { RestrictionDisplay } from './RestrictionBuilder';
 import { ENV_LABEL, ENV_COLOR, formatDateTime, isCriticalRestriction, isRoleInScope } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionsContext';
 import UserRoleAssignment from './UserRoleAssignment';
 
-export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], depth = 0, onDerive, onEdit, onDelete = undefined, onRefresh, isSearchActive = false, onError, onSuccess, onAssign = undefined, isCompact, permissions: propPermissions }) {
+export const RoleCard = memo(function RoleCard({
+  role,
+  allRoles = [],
+  roleById,
+  childrenByParentId,
+  orgNodes = [],
+  depth = 0,
+  onDerive,
+  onEdit,
+  onDelete = undefined,
+  onRefresh,
+  isSearchActive = false,
+  onError,
+  onSuccess,
+  onAssign = undefined,
+  isCompact,
+  permissions: propPermissions
+}: any) {
   const { permissions: contextPermissions } = usePermissions();
   const permissions = propPermissions || contextPermissions;
   if (depth > 10) {
@@ -26,18 +55,20 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
   }
   const [expanded, setExpanded] = useState(depth < 1);
   const [showEffective, setShowEffective] = useState(false);
-  const [effective, setEffective] = useState(null);
+  const [effective, setEffective] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
 
-  const getDescendantsAndUsers = (roleId, rolesList) => {
-    const descendantRoles = [];
+  const getDescendantsAndUsers = (roleId: string, rolesList: any[]) => {
+    const descendantRoles: any[] = [];
     const queue = [roleId];
     const visited = new Set([roleId]);
     while (queue.length > 0) {
-      const currId = queue.shift();
-      const children = rolesList.filter(r => r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === currId));
+      const currId = queue.shift()!;
+      const children = childrenByParentId
+        ? (childrenByParentId.get(currId) || [])
+        : rolesList.filter((r) => r.parentRoles && r.parentRoles.some((pr: any) => (pr.parent_ID || pr.parent?.ID) === currId));
       for (const child of children) {
         if (!visited.has(child.ID)) {
           visited.add(child.ID);
@@ -47,13 +78,13 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
       }
     }
 
-    const allRoleIds = [roleId, ...descendantRoles.map(r => r.ID)];
-    const affectedUsers = [];
-    const userVisited = new Set();
+    const allRoleIds = new Set([roleId, ...descendantRoles.map((r) => r.ID)]);
+    const affectedUsers: string[] = [];
+    const userVisited = new Set<string>();
 
-    rolesList.forEach(r => {
-      if (allRoleIds.includes(r.ID) && Array.isArray(r.assignments)) {
-        r.assignments.forEach(a => {
+    rolesList.forEach((r) => {
+      if (allRoleIds.has(r.ID) && Array.isArray(r.assignments)) {
+        r.assignments.forEach((a: any) => {
           if (!userVisited.has(a.userId)) {
             userVisited.add(a.userId);
             affectedUsers.push(a.userId);
@@ -68,10 +99,6 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
     };
   };
 
-  const getRoleDirectChildren = (roleId, rolesList) => {
-    return rolesList.filter(r => r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === roleId));
-  };
-
   const fetchEffective = async () => {
     if (showEffective) {
       setShowEffective(false);
@@ -82,22 +109,27 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
       const data = await api.resolveEffective(role.ID);
       setEffective(data || []);
       setShowEffective(true);
-    } catch (err) {
+    } catch (err: any) {
       if (onError) onError(err.message);
     }
     setLoading(false);
   };
 
-  const childrenRoles = useMemo(() => getRoleDirectChildren(role.ID, allRoles), [role.ID, allRoles]);
+  const childrenRoles = useMemo(() => {
+    if (childrenByParentId) {
+      return childrenByParentId.get(role.ID) || [];
+    }
+    return allRoles.filter((r: any) => r.parentRoles && r.parentRoles.some((pr: any) => (pr.parent_ID || pr.parent?.ID) === role.ID));
+  }, [role.ID, allRoles, childrenByParentId]);
+
   const { descendants, users } = useMemo(() => {
     if (!confirmDeleteOpen) return { descendants: [], users: [] };
     return getDescendantsAndUsers(role.ID, allRoles);
   }, [confirmDeleteOpen, role.ID, allRoles]);
 
-  // Check if role is critical
   const isCritical = useMemo(() => {
-    const directCritical = Array.isArray(role.ownRestrictions) && role.ownRestrictions.some(r => isCriticalRestriction(r, orgNodes));
-    return role.critical || directCritical;
+    if (role.critical) return true;
+    return Array.isArray(role.ownRestrictions) && role.ownRestrictions.some((r: any) => isCriticalRestriction(r, orgNodes));
   }, [role.critical, role.ownRestrictions, orgNodes]);
 
   const executeDelete = async () => {
@@ -105,7 +137,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
       await api.deleteRole(role.ID);
       setConfirmDeleteOpen(false);
       if (onRefresh) onRefresh();
-    } catch (err) {
+    } catch (err: any) {
       if (onError) onError(err.message);
     }
   };
@@ -123,29 +155,28 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
   const isDerived = role.type === 'DERIVED';
   const isDrageRole = role.type === 'DRAGE';
 
-  // Wizard derive scopes checks
-  const canDeriveFromRole = (role) => {
+  const canDeriveFromRole = (r: any) => {
     if (permissions?.isSuperAdmin) return true;
     if (!canManageDerivedRoles) return false;
-    return isRoleInScope(role.ID, role.name, permissions?.managedDerivedRolesScope);
+    return isRoleInScope(r.ID, r.name, permissions?.managedDerivedRolesScope);
   };
 
-  const canManageThisDerivedRole = (role) => {
+  const canManageThisDerivedRole = (r: any) => {
     if (permissions?.isSuperAdmin) return true;
     if (!canManageDerivedRoles) return false;
-    if (role.type !== 'DERIVED') return false;
-    
-    if (!role.parentRoles || role.parentRoles.length === 0) return false;
-    return role.parentRoles.every(pr => {
+    if (r.type !== 'DERIVED') return false;
+
+    if (!r.parentRoles || r.parentRoles.length === 0) return false;
+    return r.parentRoles.every((pr: any) => {
       const parentId = pr.parent_ID || pr.parent?.ID;
       if (!parentId) return false;
-      const parent = allRoles.find(r => r.ID === parentId);
+      const parent = pr.parent || (roleById ? roleById.get(parentId) : allRoles.find((item: any) => item.ID === parentId));
       if (!parent) return false;
-      return isRoleInScope(parent.ID, parent.name, permissions?.managedDerivedRolesScope);
+      return isRoleInScope(parent.ID || parentId, parent.name, permissions?.managedDerivedRolesScope);
     });
   };
 
-  const isUserApprover = Array.isArray(role.approvers) && role.approvers.some(a => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
+  const isUserApprover = Array.isArray(role.approvers) && role.approvers.some((a: any) => String(a.userId).toLowerCase() === permissions?.userId?.toLowerCase());
   const disableEdit = (() => {
     if (permissions?.isSuperAdmin) return false;
     if (isDrageRole) return true;
@@ -159,6 +190,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
     if (permissions?.isSuperAdmin) return false;
     if (isUserApprover) return false;
     if (canAssignRoles) {
+      if (!canManageSingleRoles && !canManageOrgRoles && !canManageDerivedRoles) return false;
       if (isOrgRole) return !canManageOrgRoles;
       if (isDerived) return !canManageThisDerivedRole(role);
       return !canManageSingleRoles;
@@ -174,12 +206,16 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
       <Box sx={{ pl: depth * 3, mb: 1 }}>
         <Card variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 2, borderColor: isCritical ? 'error.light' : 'divider' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Tooltip title={expanded ? "Collapse child roles" : "Expand child roles"}>
-              <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0} aria-label={expanded ? "Collapse child roles" : "Expand child roles"}>
-                {childrenRoles.length > 0 ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <Box sx={{ width: 28 }} />}
-              </IconButton>
-            </Tooltip>
-            <Shield size={16} color={isCritical ? 'error.main' : 'primary.main'} />
+            <IconButton
+              size="small"
+              onClick={() => setExpanded(!expanded)}
+              disabled={childrenRoles.length === 0}
+              aria-label={expanded ? 'Collapse child roles' : 'Expand child roles'}
+              title={expanded ? 'Collapse child roles' : 'Expand child roles'}
+            >
+              {childrenRoles.length > 0 ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <Box sx={{ width: 28 }} />}
+            </IconButton>
+            <Shield size={16} color={isCritical ? '#ba1a1a' : '#000035'} />
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: isCritical ? 'error.main' : 'text.primary' }}>{role.name}</Typography>
               <Typography variant="caption" color="text.secondary">{role.description || 'No description'}</Typography>
@@ -190,8 +226,26 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
             {isCritical && <Chip size="small" icon={<AlertTriangle size={12} />} label="Critical" color="error" />}
           </Box>
         </Card>
-        {expanded && childrenRoles.map(child => (
-          <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onSuccess={onSuccess} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
+        {expanded && childrenRoles.map((child: any) => (
+          <RoleCard
+            key={child.ID}
+            role={child}
+            allRoles={allRoles}
+            roleById={roleById}
+            childrenByParentId={childrenByParentId}
+            orgNodes={orgNodes}
+            depth={depth + 1}
+            onDerive={onDerive}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onRefresh={onRefresh}
+            isSearchActive={isSearchActive}
+            onError={onError}
+            onSuccess={onSuccess}
+            onAssign={onAssign}
+            isCompact={isCompact}
+            permissions={permissions}
+          />
         ))}
       </Box>
     );
@@ -203,20 +257,25 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
         <Box sx={{ p: 2.5 }}>
           {/* Card header row — full-width flex */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-
             {/* Collapse toggle */}
-            <Tooltip title={expanded ? "Collapse role" : "Expand role"}>
-              <IconButton size="small" onClick={() => setExpanded(!expanded)} disabled={childrenRoles.length === 0 && !isSearchActive} color="primary" sx={{ flexShrink: 0 }} aria-label={expanded ? "Collapse role" : "Expand role"}>
-                {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-              </IconButton>
-            </Tooltip>
+            <IconButton
+              size="small"
+              onClick={() => setExpanded(!expanded)}
+              disabled={childrenRoles.length === 0 && !isSearchActive}
+              color="primary"
+              sx={{ flexShrink: 0 }}
+              aria-label={expanded ? 'Collapse role' : 'Expand role'}
+              title={expanded ? 'Collapse role' : 'Expand role'}
+            >
+              {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+            </IconButton>
 
             {/* Shield icon */}
             <Box sx={{ flexShrink: 0, p: 1.2, borderRadius: 2, bgcolor: (t) => isCritical ? 'error.light' : alpha(t.palette.primary.main, 0.08), color: isCritical ? 'error.main' : 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Shield size={22} />
             </Box>
 
-            {/* Name + description — grows to fill space */}
+            {/* Name + description */}
             <Box sx={{ flex: '1 1 0', minWidth: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
@@ -226,7 +285,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>{role.description || 'No description provided.'}</Typography>
             </Box>
 
-            {/* Context details — fixed width */}
+            {/* Context details */}
             <Box sx={{ flexShrink: 0, width: 200, display: { xs: 'none', md: 'flex' }, flexDirection: 'column', gap: 0.5 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <strong>Env:</strong> {ENV_LABEL[role.environment_ID] || role.environment_ID}
@@ -246,30 +305,43 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
               </Typography>
             </Box>
 
-            {/* Metrics chips — fixed width */}
+            {/* Metrics chips */}
             <Box sx={{ flexShrink: 0, display: { xs: 'none', sm: 'flex' }, gap: 0.8, flexWrap: 'wrap', width: 140, justifyContent: 'flex-start' }}>
               <Chip size="small" icon={<Users size={12} />} label={`${assignmentsCount} Direct`} variant="outlined" sx={{ borderRadius: 1.5 }} />
               {childrenRoles.length > 0 && <Chip size="small" icon={<GitBranch size={12} />} label={`${childrenRoles.length} Children`} variant="outlined" sx={{ borderRadius: 1.5 }} />}
             </Box>
 
-            {/* Actions — fixed width, right-aligned */}
+            {/* Actions */}
             <Box sx={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Tooltip title="View Effective Access">
-                  <IconButton size="small" onClick={fetchEffective} color="info" aria-label="View Effective Access">
-                    {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={disableEdit ? "View Role Settings" : "Edit Role Settings"}>
-                  <IconButton size="small" onClick={() => onEdit(role)} color="primary" aria-label={disableEdit ? "View Role Settings" : "Edit Role Settings"}>
-                    {disableEdit ? <Eye size={16} /> : <Edit3 size={16} />}
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete Role">
-                  <IconButton size="small" onClick={() => setConfirmDeleteOpen(true)} disabled={disableDelete} color="error" aria-label="Delete Role">
-                    <Trash2 size={16} />
-                  </IconButton>
-                </Tooltip>
+                <IconButton
+                  size="small"
+                  onClick={fetchEffective}
+                  color="info"
+                  aria-label="View Effective Access"
+                  title="View Effective Access"
+                >
+                  {loading ? <CircularProgress size={16} /> : <PrivateConnectivityIcon style={{ fontSize: 18 }} />}
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => onEdit(role)}
+                  color="primary"
+                  aria-label={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
+                  title={disableEdit ? 'View Role Settings' : 'Edit Role Settings'}
+                >
+                  {disableEdit ? <Eye size={16} /> : <Edit3 size={16} />}
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={disableDelete}
+                  color="error"
+                  aria-label="Delete Role"
+                  title="Delete Role"
+                >
+                  <Trash2 size={16} />
+                </IconButton>
               </Box>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Button size="small" variant="outlined" startIcon={<GitBranch size={12} />} onClick={() => onDerive(role)} disabled={disableDerive} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
@@ -280,17 +352,33 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
                 </Button>
               </Box>
             </Box>
-
           </Box>
-
         </Box>
 
         {/* Expandable Children Roles Section */}
         {expanded && childrenRoles.length > 0 && (
           <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover', p: 2, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Child Derived Roles ({childrenRoles.length})</Typography>
-            {childrenRoles.map(child => (
-              <RoleCard key={child.ID} role={child} allRoles={allRoles} orgNodes={orgNodes} depth={depth + 1} onDerive={onDerive} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} isSearchActive={isSearchActive} onError={onError} onSuccess={onSuccess} onAssign={onAssign} isCompact={isCompact} permissions={permissions} />
+            {childrenRoles.map((child: any) => (
+              <RoleCard
+                key={child.ID}
+                role={child}
+                allRoles={allRoles}
+                roleById={roleById}
+                childrenByParentId={childrenByParentId}
+                orgNodes={orgNodes}
+                depth={depth + 1}
+                onDerive={onDerive}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onRefresh={onRefresh}
+                isSearchActive={isSearchActive}
+                onError={onError}
+                onSuccess={onSuccess}
+                onAssign={onAssign}
+                isCompact={isCompact}
+                permissions={permissions}
+              />
             ))}
           </Box>
         )}
@@ -308,7 +396,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
               <Typography variant="body2" color="text.secondary">No active restriction values found.</Typography>
             ) : (
               <Grid container spacing={2}>
-                {effective && effective.map((eff, index) => (
+                {effective && effective.map((eff: any, index: number) => (
                   <Grid size={{ xs: 12, sm: 4 }} key={index}>
                     <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>Field: {eff.field}</Typography>
@@ -338,7 +426,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
               <Box sx={{ mb: 2, p: 1.5, bgcolor: 'error.light', color: 'error.main', borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Warning: Cascading derived roles will also be deleted:</Typography>
                 <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-                  {descendants.map(d => <li key={d.ID}><strong style={{ color: '#d32f2f' }}>{d.name}</strong></li>)}
+                  {descendants.map((d: any) => <li key={d.ID}><strong style={{ color: '#d32f2f' }}>{d.name}</strong></li>)}
                 </ul>
               </Box>
             )}
@@ -346,7 +434,7 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
               <Box sx={{ p: 1.5, bgcolor: 'warning.light', color: 'warning.main', borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Impact Warning: {users.length} user assignment(s) will be affected:</Typography>
                 <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-                  {users.map(u => <li key={u}><strong>{u}</strong></li>)}
+                  {users.map((u: string) => <li key={u}><strong>{u}</strong></li>)}
                 </ul>
               </Box>
             )}
@@ -368,12 +456,12 @@ export const RoleCard = memo(function RoleCard({ role, allRoles, orgNodes = [], 
           role={role}
           allRoles={allRoles}
           onClose={() => setAssignDialogOpen(false)}
-          onSuccess={(msg) => {
+          onSuccess={(msg: string) => {
             setAssignDialogOpen(false);
             if (onSuccess) onSuccess(msg);
             if (onRefresh) onRefresh();
           }}
-          onError={(msg) => {
+          onError={(msg: string) => {
             if (onError) onError(msg);
           }}
         />

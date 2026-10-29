@@ -39,10 +39,19 @@ export const ENV_COLOR: Record<string, 'error' | 'warning' | 'info' | 'default'>
   D: 'info'
 };
 
+const sharedDateTimeFormatter =
+  typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function'
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' })
+    : null;
+
 // Helper to format ISO datetime strings
 export function formatDateTime(isoString?: string | null): string {
   if (!isoString) return '—';
   const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  if (sharedDateTimeFormatter) {
+    return sharedDateTimeFormatter.format(date);
+  }
   return date.toLocaleString(undefined, {
     dateStyle: 'short',
     timeStyle: 'short'
@@ -78,26 +87,44 @@ export function isCriticalRestriction(r: Restriction, orgNodes: OrgNode[] = []):
   return false;
 }
 
+const scopeParseCache = new Map<string, { isJson: boolean; set: Set<string> }>();
+
 /**
  * Helper to check if a specific role ID/name is within the permitted scope.
  * Handles both JSON arrays and comma-separated string fallbacks.
  */
 export function isRoleInScope(roleId: string, roleName: string | undefined, scope: string | undefined): boolean {
-
   if (!scope || scope.trim() === '' || scope.trim().toUpperCase() === 'ALL' || scope.trim() === '*') {
     return true;
   }
 
-  try {
-    const scopeList = JSON.parse(scope);
-    if (Array.isArray(scopeList)) {
-      return scopeList.some(s => s.roleId === roleId || (roleName && s.roleId === roleName));
+  let parsed = scopeParseCache.get(scope);
+  if (!parsed) {
+    try {
+      const scopeList = JSON.parse(scope);
+      if (Array.isArray(scopeList)) {
+        parsed = {
+          isJson: true,
+          set: new Set(scopeList.map((s) => String(s?.roleId || '')).filter(Boolean))
+        };
+      }
+    } catch (_e) {
+      // Fallback below
     }
-  } catch (e) {
-    const terms = scope.split(',').map(s => s.trim().toLowerCase());
-    return terms.includes((roleId || '').toLowerCase()) || terms.includes((roleName || '').toLowerCase());
+    if (!parsed) {
+      parsed = {
+        isJson: false,
+        set: new Set(scope.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean))
+      };
+    }
+    if (scopeParseCache.size > 100) scopeParseCache.clear();
+    scopeParseCache.set(scope, parsed);
   }
-  return false;
+
+  if (parsed.isJson) {
+    return parsed.set.has(roleId) || Boolean(roleName && parsed.set.has(roleName));
+  }
+  return parsed.set.has((roleId || '').toLowerCase()) || parsed.set.has((roleName || '').toLowerCase());
 }
 
 

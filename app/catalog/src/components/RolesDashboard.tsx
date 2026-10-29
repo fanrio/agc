@@ -1,5 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Box, Typography, Button, TextField, Alert, Snackbar, ToggleButton, ToggleButtonGroup, Card, Skeleton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TablePagination } from '@mui/material';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  TextField,
+  Alert,
+  Snackbar,
+  ToggleButton,
+  ToggleButtonGroup,
+  Card,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TablePagination
+} from '@mui/material';
 import { Shield, Plus, GitBranch, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import * as api from '../api';
 import RoleCard from './RoleCard';
@@ -9,158 +25,164 @@ import { usePermissions } from '../context/PermissionsContext';
 import EnvironmentSelection from './EnvironmentSelection';
 import SearchableSelect from './SearchableSelect';
 
-// Helper recursively collecting all restrictions for a role
-function getEffectiveRestrictionsFlat(role, allRoles) {
-  let list = [];
-  if (role.ownRestrictions && role.ownRestrictions.length > 0) {
-    list.push(...role.ownRestrictions);
-  }
-  if (role.parentRoles && role.parentRoles.length > 0) {
-    for (const pr of role.parentRoles) {
-      const parentId = pr.parent_ID || (pr.parent && pr.parent.ID);
-      if (parentId) {
-        const parent = allRoles.find(r => r.ID === parentId);
-        if (parent) {
-          list.push(...getEffectiveRestrictionsFlat(parent, allRoles));
-        }
-      }
-    }
-  }
-  return list;
-}
+const ROLE_TYPE_OPTIONS = [
+  { value: 'ALL', label: 'All Types' },
+  { value: 'SINGLE', label: 'Single Role' },
+  { value: 'DERIVED', label: 'Derived Role' },
+  { value: 'ORG_BASED', label: 'Org-Based Role' }
+];
 
-export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }) {
+export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }: any) {
   const { permissions } = usePermissions();
-  const [roles, setRoles] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [orgNodes, setOrgNodes] = useState([]);
+  const [allRoles, setAllRoles] = useState<any[]>(() => {
+    const cached = api.peekCachedGet(api.ROLES_EXPAND_PATH);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [hasLoaded, setHasLoaded] = useState<boolean>(() => Array.isArray(api.peekCachedGet(api.ROLES_EXPAND_PATH)));
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [healthFilter, setHealthFilter] = useState(initialFilter || null);
-  const [envFilter, setEnvFilter] = useState([]);
+  const [healthFilter, setHealthFilter] = useState<string | null>(initialFilter || null);
+  const [envFilter, setEnvFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
-    setPage(0);
-  }, [searchQuery, envFilter, typeFilter, healthFilter]);
-
-  useEffect(() => {
     if (initialFilter) {
       setHealthFilter(initialFilter);
+      setPage(0);
     }
   }, [initialFilter]);
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'info' | 'warning' | 'error';
   }>({ open: false, message: '', severity: 'error' });
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, role: null });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; role: any }>({ open: false, role: null });
 
   // Toggle representation states ('tree', 'grid', 'table')
-  const [viewMode, setViewMode] = useState('table');
+  const [viewMode, setViewMode] = useState<'tree' | 'grid' | 'table'>('table');
 
-  const handleDeleteClick = (role) => {
+  const handleDeleteClick = useCallback((role: any) => {
     setDeleteConfirm({ open: true, role });
+  }, []);
+
+  const handleError = useCallback((msg: string) => {
+    setSnackbar({ open: true, message: msg, severity: 'error' });
+  }, []);
+
+  const handleSuccess = useCallback((msg: string) => {
+    setSnackbar({ open: true, message: msg, severity: 'success' });
+  }, []);
+
+  const handleCloseSnackbar = (_event?: any, reason?: string) => {
+    if (reason === 'clickaway') return;
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
+
+  const load = useCallback(async () => {
+    try {
+      const rolesRes = await api.getRoles();
+      if (Array.isArray(rolesRes)) {
+        setAllRoles(rolesRes);
+      } else if (rolesRes && typeof rolesRes === 'object' && 'value' in rolesRes) {
+        setAllRoles(rolesRes.value || []);
+      }
+    } catch (e) {
+      console.error('Failed to load roles from OData service:', e);
+    } finally {
+      setHasLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleDeleteConfirm = async () => {
     const roleId = deleteConfirm.role?.ID;
     if (!roleId) return;
     try {
       await api.deleteRole(roleId);
+      setAllRoles((prev) => prev.filter((r) => r.ID !== roleId));
       setSnackbar({ open: true, message: 'Role deleted successfully', severity: 'success' });
       load();
-    } catch (e) {
+    } catch (e: any) {
       setSnackbar({ open: true, message: e.message || 'Failed to delete role', severity: 'error' });
     } finally {
       setDeleteConfirm({ open: false, role: null });
     }
   };
 
-  const handleCloseSnackbar = (event?: any, reason?: string) => {
-    if (reason === 'clickaway') return;
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
+  // Instant 0ms in-memory filtering across all roles
+  const filteredRoles = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const hasEnv = envFilter.length > 0;
+    const hasType = typeFilter !== 'ALL';
 
-  async function load() {
-    setLoading(true);
-    try {
-      const params: api.GetRolesParams = {
-        top: rowsPerPage,
-        skip: page * rowsPerPage,
-        count: true,
-        search: searchQuery,
-        envFilter,
-        typeFilter,
-        healthFilter
-      };
+    return allRoles.filter((r) => {
+      if (!r) return false;
+      if (hasType && r.type !== typeFilter) return false;
+      if (hasEnv && !envFilter.includes(r.environment_ID)) return false;
 
-      const [rolesRes, nodesData] = await Promise.all([
-        api.getRoles(params),
-        api.getAllOrgNodesFlat()
-      ]);
-
-      if (rolesRes && typeof rolesRes === 'object' && 'value' in rolesRes) {
-        setRoles(rolesRes.value || []);
-        setTotalCount(rolesRes.count ?? (rolesRes.value ? rolesRes.value.length : 0));
-      } else if (Array.isArray(rolesRes)) {
-        setRoles(rolesRes);
-        setTotalCount(rolesRes.length);
+      if (healthFilter) {
+        if (healthFilter === 'unrestricted') {
+          if (r.ownRestrictions && r.ownRestrictions.length > 0) return false;
+        } else if (healthFilter === 'no-users') {
+          const count = r.assignmentsCount ?? r.assignments?.length ?? 0;
+          if (count > 0) return false;
+        } else if (healthFilter === 'no-approver') {
+          if (r.approvers && r.approvers.length > 0) return false;
+        } else if (healthFilter === 'critical') {
+          if (!r.critical) return false;
+        }
       }
 
-      setOrgNodes(nodesData || []);
-    } catch (e) {
-      console.error('Failed to load roles from OData service:', e);
-    } finally {
-      setLoading(false);
-    }
-  }
+      if (q) {
+        const nameMatch = r.name && r.name.toLowerCase().includes(q);
+        const descMatch = r.description && r.description.toLowerCase().includes(q);
+        if (!nameMatch && !descMatch) return false;
+      }
 
-  useEffect(() => {
-    load();
-  }, [page, rowsPerPage, searchQuery, envFilter, typeFilter, healthFilter]);
-
-  const parseEnvironments = (val) => {
-    if (!val || val === 'ALL' || val === '*') return 'ALL';
-    try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {
-      return val.split(',').map(s => s.trim().toUpperCase());
-    }
-    return [];
-  };
-
-  const visibleRoles = roles;
-  const filteredRoles = roles;
-  const rootRoles = roles.filter(r => {
-    if (!r.parentRoles || r.parentRoles.length === 0) return true;
-    return !r.parentRoles.some(pr => {
-      const parentId = pr.parent_ID || pr.parent?.ID;
-      return roles.some(vr => vr.ID === parentId);
+      return true;
     });
-  });
+  }, [allRoles, searchQuery, envFilter, typeFilter, healthFilter]);
 
-  const paginatedRoots = (viewMode === 'table' || viewMode === 'tree') ? rootRoles : roles;
-  const paginatedFilteredRoles = roles;
+  const pagedRoles = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filteredRoles.slice(start, start + rowsPerPage);
+  }, [filteredRoles, page, rowsPerPage]);
 
-  const handlePageChange = (event, newPage) => {
+  // O(N) root role detection via Set
+  const rootRoles = useMemo(() => {
+    const roleIdSet = new Set<string>();
+    for (let i = 0; i < pagedRoles.length; i++) {
+      roleIdSet.add(pagedRoles[i].ID);
+    }
+    return pagedRoles.filter((r) => {
+      if (!r.parentRoles || r.parentRoles.length === 0) return true;
+      return !r.parentRoles.some((pr: any) => {
+        const parentId = pr.parent_ID || pr.parent?.ID;
+        return parentId && roleIdSet.has(parentId);
+      });
+    });
+  }, [pagedRoles]);
+
+  const paginatedRoots = viewMode === 'table' || viewMode === 'tree' ? rootRoles : pagedRoles;
+
+  const handlePageChange = (_event: any, newPage: number) => {
     setPage(newPage);
   };
 
-  const handleRowsPerPageChange = (event) => {
+  const handleRowsPerPageChange = (event: any) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const paginationCount = totalCount;
-
   const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL');
 
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s' }}>
+    <Box>
       {/* Page Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <Box>
@@ -172,7 +194,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           <ToggleButtonGroup
             value={viewMode}
             exclusive
-            onChange={(e, val) => { if (val !== null) setViewMode(val); }}
+            onChange={(_e, val) => { if (val !== null) setViewMode(val); }}
             size="small"
             sx={{ height: 38 }}
           >
@@ -191,7 +213,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             variant="contained"
             color="primary"
             onClick={onCreateRole}
-            disabled={permissions && !permissions.canManageSingleRoles && !permissions.canManageOrgRoles}
+            disabled={Boolean(permissions && !permissions.canManageSingleRoles && !permissions.canManageOrgRoles)}
             startIcon={<Plus size={15} />}
           >
             Create Role
@@ -205,27 +227,31 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           size="small"
           placeholder="Search roles or restrictions…"
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setPage(0);
+          }}
           sx={{ width: { xs: '100%', sm: 260 } }}
         />
 
         <EnvironmentSelection
           value={envFilter}
-          onChange={setEnvFilter}
+          onChange={(val) => {
+            setEnvFilter(val);
+            setPage(0);
+          }}
           multiple={true}
           sx={{ minWidth: 160 }}
           fullWidth={false}
         />
 
         <SearchableSelect
-          options={[
-            { value: 'ALL', label: 'All Types' },
-            { value: 'SINGLE', label: 'Single Role' },
-            { value: 'DERIVED', label: 'Derived Role' },
-            { value: 'ORG_BASED', label: 'Org-Based Role' }
-          ]}
+          options={ROLE_TYPE_OPTIONS}
           value={typeFilter}
-          onChange={val => setTypeFilter(val)}
+          onChange={(val) => {
+            setTypeFilter(val);
+            setPage(0);
+          }}
           label="Role Type"
           sx={{ minWidth: 160 }}
         />
@@ -240,6 +266,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             }
             onDelete={() => {
               setHealthFilter(null);
+              setPage(0);
               if (setInitialFilter) setInitialFilter(null);
             }}
             color="warning"
@@ -256,6 +283,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
               setEnvFilter([]);
               setTypeFilter('ALL');
               setHealthFilter(null);
+              setPage(0);
               if (setInitialFilter) setInitialFilter(null);
             }}
           >
@@ -264,7 +292,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         )}
 
         <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 600 }}>
-          Showing {roles.length} of {totalCount} roles
+          Showing {pagedRoles.length} of {filteredRoles.length} roles
         </Typography>
       </Card>
 
@@ -279,22 +307,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         </Alert>
       </Snackbar>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {[1, 2, 3, 4].map(idx => (
-            <Card key={idx} variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Skeleton variant="circular" width={40} height={40} />
-                <Box sx={{ flex: 1 }}>
-                  <Skeleton variant="text" width="40%" height={24} />
-                  <Skeleton variant="text" width="60%" height={18} />
-                </Box>
-                <Skeleton variant="rectangular" width={100} height={32} sx={{ borderRadius: 1.5 }} />
-              </Box>
-            </Card>
-          ))}
-        </Box>
-      ) : visibleRoles.length === 0 ? (
+      {hasLoaded && allRoles.length === 0 ? (
         <Card sx={{ py: 8, textAlign: 'center' }}>
           <Box sx={{ opacity: 0.5, mb: 2 }}><Shield size={40} /></Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>No roles yet</Typography>
@@ -305,14 +318,13 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           {viewMode === 'table' && (
             <RoleTableView
               roles={paginatedRoots}
-              allRoles={roles}
-              orgNodes={orgNodes}
+              allRoles={filteredRoles}
               onDerive={onDeriveRole}
               onEdit={onEditRole}
               onDelete={handleDeleteClick}
               onRefresh={load}
-              onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-              onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
+              onError={handleError}
+              onSuccess={handleSuccess}
               permissions={permissions}
             />
           )}
@@ -320,31 +332,29 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           {viewMode === 'tree' && (
             <RoleTreeView
               roles={paginatedRoots}
-              allRoles={roles}
-              orgNodes={orgNodes}
+              allRoles={filteredRoles}
               onDeriveRole={onDeriveRole}
               onEditRole={onEditRole}
               onRefresh={load}
-              onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-              onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
+              onError={handleError}
+              onSuccess={handleSuccess}
               permissions={permissions}
             />
           )}
 
           {viewMode === 'grid' && (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 2 }}>
-              {paginatedFilteredRoles.map(r => (
+              {pagedRoles.map((r) => (
                 <RoleCard
                   key={r.ID}
                   role={r}
-                  allRoles={roles}
-                  orgNodes={orgNodes}
+                  allRoles={filteredRoles}
                   depth={0}
                   onDerive={onDeriveRole}
                   onEdit={onEditRole}
                   onRefresh={load}
-                  onError={msg => setSnackbar({ open: true, message: msg, severity: 'error' })}
-                  onSuccess={msg => setSnackbar({ open: true, message: msg, severity: 'success' })}
+                  onError={handleError}
+                  onSuccess={handleSuccess}
                   isCompact={true}
                   permissions={permissions}
                 />
@@ -354,12 +364,12 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
         </>
       )}
 
-      {!loading && visibleRoles.length > 0 && (
+      {filteredRoles.length > 0 && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
           <TablePagination
             rowsPerPageOptions={[10, 25, 50, 100]}
             component="div"
-            count={paginationCount}
+            count={filteredRoles.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handlePageChange}
@@ -370,22 +380,23 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
       )}
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteConfirm.open}
-        onClose={() => setDeleteConfirm({ open: false, role: null })}
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Role</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            Are you sure you want to delete role "{deleteConfirm.role?.name}"? This action cannot be undone and will remove all assignments.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDeleteConfirm({ open: false, role: null })} color="inherit">Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">Delete</Button>
-        </DialogActions>
-      </Dialog>
+      {deleteConfirm.open && (
+        <Dialog
+          open={deleteConfirm.open}
+          onClose={() => setDeleteConfirm({ open: false, role: null })}
+        >
+          <DialogTitle sx={{ fontWeight: 700 }}>Delete Role</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              Are you sure you want to delete role "{deleteConfirm.role?.name}"? This action cannot be undone and will remove all assignments.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setDeleteConfirm({ open: false, role: null })} color="inherit">Cancel</Button>
+            <Button onClick={handleDeleteConfirm} color="error" variant="contained">Delete</Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 }
-

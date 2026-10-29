@@ -163,7 +163,7 @@ async function upsertOrgRole(db, Roles, Restrictions, RoleInheritance, AuditLogs
  */
 async function generateForNodeInDomain(
   db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
-  node, domain, fieldSet, rfMap, ancestorCtx, results, recursive = true
+  node, domain, fieldSet, rfMap, ancestorCtx, results, recursive = true, nodesMap = null
 ) {
   const myFieldName = rfMap.get(node.type_ID);
   if (!myFieldName) return;
@@ -192,7 +192,9 @@ async function generateForNodeInDomain(
       parentRoleId = parentRole.ID;
       break;
     }
-    const pNode = await db.run(SELECT.one.from(OrgNodes).where({ ID: currentParentId }));
+    const pNode = nodesMap
+      ? nodesMap.get(currentParentId)
+      : await db.run(SELECT.one.from(OrgNodes).where({ ID: currentParentId }));
     currentParentId = pNode ? pNode.parent_ID : null;
   }
 
@@ -228,7 +230,7 @@ async function generateForNodeInDomain(
       if (!fieldSet.has(child.type_ID)) continue;
       await generateForNodeInDomain(
         db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
-        child, domain, fieldSet, rfMap, context, results, recursive
+        child, domain, fieldSet, rfMap, context, results, recursive, nodesMap
       );
     }
   }
@@ -248,7 +250,7 @@ async function generateForNodeInDomain(
  * @param {boolean} recursive - Whether to recurse down to child org nodes
  * @returns {{ roles: [{roleId, roleName}], count: number }}
  */
-async function generateRoleForNode(cds, entities, node, recursive = true, nodesMap = null) {
+async function generateRoleForNode(cds, entities, node, recursive = true, nodesMap = null, preloadedRfMap = null, preloadedDomains = null) {
   const db = cds.db;
   const {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
@@ -263,11 +265,10 @@ async function generateRoleForNode(cds, entities, node, recursive = true, nodesM
   }
 
   // Build restriction field ID -> name map
-  const allRF = await db.run(SELECT.from(RestrictionFields));
-  const rfMap = new Map(allRF.map(rf => [rf.ID, rf.name]));
+  const rfMap = preloadedRfMap || new Map((await db.run(SELECT.from(RestrictionFields))).map(rf => [rf.ID, rf.name]));
 
   // Load all domains with their field lists
-  const domains = await loadAllDomainsWithFields(db, AccessDomains, AccessDomainFields, RestrictionFields);
+  const domains = preloadedDomains || await loadAllDomainsWithFields(db, AccessDomains, AccessDomainFields, RestrictionFields);
 
   // Only process domains that include this node's type
   const applicableDomains = domains.filter(d =>
@@ -282,7 +283,7 @@ async function generateRoleForNode(cds, entities, node, recursive = true, nodesM
     const ancestorCtx = await buildAncestorContext(db, OrgNodes, node, fieldSet, rfMap, nodesMap);
     await generateForNodeInDomain(
       db, Roles, Restrictions, RoleInheritance, AuditLogs, OrgNodes,
-      node, domain, fieldSet, rfMap, ancestorCtx, results, recursive
+      node, domain, fieldSet, rfMap, ancestorCtx, results, recursive, nodesMap
     );
   }
 
@@ -327,8 +328,13 @@ function makeGenerateOrgRoleHandler(cds, entities) {
  */
 function makeGenerateAllOrgRolesHandler(cds, entities) {
   return async function generateAllOrgRolesHandler(_req) {
-    const { OrgNodes } = entities;
-    const nodes = await cds.db.run(SELECT.from(OrgNodes));
+    const { OrgNodes, RestrictionFields, AccessDomains, AccessDomainFields } = entities;
+    const [nodes, allRF, domains] = await Promise.all([
+      cds.db.run(SELECT.from(OrgNodes)),
+      cds.db.run(SELECT.from(RestrictionFields)),
+      loadAllDomainsWithFields(cds.db, AccessDomains, AccessDomainFields, RestrictionFields)
+    ]);
+    const rfMap = new Map(allRF.map(rf => [rf.ID, rf.name]));
 
     // Sort nodes by hierarchical depth so parent roles are generated first
     const nodesMap = new Map(nodes.map(n => [n.ID, n]));
@@ -346,7 +352,7 @@ function makeGenerateAllOrgRolesHandler(cds, entities) {
     let totalRoles = 0;
     // Process sequentially to completely eliminate DB transaction race conditions
     for (const node of nodes) {
-      const result = await generateRoleForNode(cds, entities, node, false, nodesMap);
+      const result = await generateRoleForNode(cds, entities, node, false, nodesMap, rfMap, domains);
       totalRoles += result.count;
     }
 

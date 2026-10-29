@@ -463,7 +463,16 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
         await api.updateRole(roleId, deepPayload);
       } else if (roleType === 'ORG_BASED') {
         const result = await api.generateOrgRole(selectedOrgNodeId);
-        roleId = result.roleId;
+        roleId = result?.roleId;
+        if (!roleId) {
+          setSnackbar({
+            open: true,
+            message: 'No role could be generated: no Access Domain having matching restriction fields could be found.',
+            severity: 'warning',
+          });
+          setLoading(false);
+          return;
+        }
         const deepPayload = {
           name: roleName || result.roleName,
           description,

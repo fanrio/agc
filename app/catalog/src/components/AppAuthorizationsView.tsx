@@ -26,7 +26,7 @@ import {
   Divider,
   Tooltip
 } from '@mui/material';
-import { Plus, Trash2, Shield, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import * as api from '../api';
 import AppToast from './AppToast';
 import UserSelection from './UserSelection';
@@ -329,8 +329,17 @@ export default function AppAuthorizationsView() {
   const [allRoles, setAllRoles] = useState<any[]>([]);
   const [restrictionFields, setRestrictionFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openAdd, setOpenAdd] = useState(false);
+
+  // Unified Add / Edit Dialog State (`editingAuth === null` means Add mode; non-null means Edit mode)
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAuth, setEditingAuth] = useState<any | null>(null);
   const [selectedScimUser, setSelectedScimUser] = useState<any>(null);
+  const [dialogRoles, setDialogRoles] = useState<AppRoleId[]>(['AUTHORIZATION_ARCHITECT']);
+  const [dialogActive, setDialogActive] = useState<boolean>(true);
+  const [dialogEnvironments, setDialogEnvironments] = useState<string[]>(['D', 'Q', 'P']);
+  const [dialogAccessDomains, setDialogAccessDomains] = useState<string[] | null>(null); // null = ALL
+  const [dialogDerivedScope, setDialogDerivedScope] = useState<string>('ALL');
+
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -342,22 +351,6 @@ export default function AppAuthorizationsView() {
     message: string;
     severity: AlertColor;
   }>({ open: false, message: '', severity: 'success' });
-
-  // Add-user dialog state
-  const [newUserRoles, setNewUserRoles] = useState<AppRoleId[]>(['AUTHORIZATION_ARCHITECT']);
-  const [newUserActive, setNewUserActive] = useState<boolean>(true);
-  const [newUserEnvironments, setNewUserEnvironments] = useState<string[]>(['D', 'Q', 'P']);
-  const [newUserAccessDomains, setNewUserAccessDomains] = useState<string[] | null>(null); // null = ALL
-  const [newUserDerivedScope, setNewUserDerivedScope] = useState<string>('ALL');
-
-  const resetAddDialogState = () => {
-    setSelectedScimUser(null);
-    setNewUserRoles(['AUTHORIZATION_ARCHITECT']);
-    setNewUserActive(true);
-    setNewUserEnvironments(['D', 'Q', 'P']);
-    setNewUserAccessDomains(null);
-    setNewUserDerivedScope('ALL');
-  };
 
   // ─── Data loading ───────────────────────────────────────────────────────────
   const loadData = async () => {
@@ -397,99 +390,95 @@ export default function AppAuthorizationsView() {
     return inferAppRolesFromFlags(auth);
   };
 
-  // ─── Update handlers ────────────────────────────────────────────────────────
-  const handleToggleActive = async (id: string, isActive: boolean) => {
-    try {
-      await api.updateAppAuthorization(id, { isActive });
-      setAuthorizations((prev) => prev.map((item) => (item.ID === id ? { ...item, isActive } : item)));
-      setSnackbar({ open: true, message: `User ${isActive ? 'activated' : 'deactivated'}`, severity: 'success' });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
-    }
+  // ─── Dialog Openers (Add vs Edit) ───────────────────────────────────────────
+  const handleOpenAddDialog = () => {
+    setEditingAuth(null);
+    setSelectedScimUser(null);
+    setDialogRoles(['AUTHORIZATION_ARCHITECT']);
+    setDialogActive(true);
+    setDialogEnvironments(['D', 'Q', 'P']);
+    setDialogAccessDomains(null);
+    setDialogDerivedScope('ALL');
+    setDialogOpen(true);
   };
 
-  const handleUpdateUserRoles = async (auth: any, nextRoleDefs: AppRoleDefinition[]) => {
-    const prevRoles = getEffectiveRolesForRow(auth);
-    const rawNextIds = nextRoleDefs.map((d) => d.id);
-    const normalizedIds = normalizeSelectedRoles(prevRoles, rawNextIds);
-
-    if (normalizedIds.length === 0) {
-      setSnackbar({ open: true, message: 'At least one application role must be assigned', severity: 'warning' });
-      return;
-    }
-
-    const flags = rolesToFlags(normalizedIds);
-    const payload: Record<string, any> = { ...flags };
-
-    if (normalizedIds.includes('SUPER_ADMIN')) {
-      payload.allowedEnvironments = 'ALL';
-      payload.allowedAccessDomains = 'ALL';
-      payload.managedDerivedRolesScope = 'ALL';
-    } else if (normalizedIds.includes('AUTHORIZATION_ARCHITECT')) {
-      payload.managedDerivedRolesScope = 'ALL';
-    }
-
-    try {
-      await api.updateAppAuthorization(auth.ID, payload);
-      setUserRoleOverrides((prev) => ({ ...prev, [auth.ID]: normalizedIds }));
-      setAuthorizations((prev) =>
-        prev.map((item) => (item.ID === auth.ID ? { ...item, ...payload } : item))
-      );
-      setSnackbar({ open: true, message: 'Application roles updated', severity: 'success' });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
-    }
+  const handleOpenEditDialog = (auth: any) => {
+    const currentRoles = getEffectiveRolesForRow(auth);
+    setEditingAuth(auth);
+    setSelectedScimUser({
+      username: auth.userId,
+      displayName: auth.userName || auth.userId,
+    });
+    setDialogRoles([...currentRoles]);
+    setDialogActive(!!auth.isActive);
+    setDialogEnvironments(parseEnvironments(auth.allowedEnvironments));
+    setDialogAccessDomains(parseAccessDomains(auth.allowedAccessDomains));
+    setDialogDerivedScope(auth.managedDerivedRolesScope || 'ALL');
+    setDialogOpen(true);
   };
 
-  const handleUpdateEnvironments = async (id: string, valueArr: string[]) => {
-    const serialized = serializeEnvironments(valueArr);
-    try {
-      await api.updateAppAuthorization(id, { allowedEnvironments: serialized });
-      setAuthorizations((prev) => prev.map((item) => (item.ID === id ? { ...item, allowedEnvironments: serialized } : item)));
-      setSnackbar({ open: true, message: 'Environments updated', severity: 'success' });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
-    }
-  };
-
-  const handleUpdateAccessDomains = async (id: string, accessDomainIds: string[]) => {
-    const serialized = serializeAccessDomains(accessDomainIds, accessDomains);
-    try {
-      await api.updateAppAuthorization(id, { allowedAccessDomains: serialized });
-      setAuthorizations((prev) => prev.map((item) => (item.ID === id ? { ...item, allowedAccessDomains: serialized } : item)));
-      setSnackbar({ open: true, message: 'Access Domain scope updated', severity: 'success' });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
-    }
-  };
-
-  const handleUpdateScope = async (id: string, value: string) => {
-    try {
-      await api.updateAppAuthorization(id, { managedDerivedRolesScope: value });
-      setAuthorizations((prev) => prev.map((item) => (item.ID === id ? { ...item, managedDerivedRolesScope: value } : item)));
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
-    }
-  };
-
-  // ─── Add / Delete ───────────────────────────────────────────────────────────
   const handleToggleDialogRole = (roleId: AppRoleId) => {
-    setNewUserRoles((prev) => {
+    setDialogRoles((prev) => {
       const exists = prev.includes(roleId);
       const nextRaw = exists ? prev.filter((r) => r !== roleId) : [...prev, roleId];
       return normalizeSelectedRoles(prev, nextRaw);
     });
   };
 
-  const handleAddAuthorization = async () => {
-    if (!selectedScimUser) {
+  // ─── Save (Create or Update via the same Dialog) ────────────────────────────
+  const handleSaveAuthorization = async () => {
+    if (!editingAuth && !selectedScimUser) {
       setSnackbar({ open: true, message: 'Please select a user from SCIM', severity: 'error' });
       return;
     }
-    if (newUserRoles.length === 0) {
+    if (dialogRoles.length === 0) {
       setSnackbar({ open: true, message: 'Please select at least one application role', severity: 'error' });
       return;
     }
+
+    const flags = rolesToFlags(dialogRoles);
+    const hasEnvScope = rolesSupportEnvironmentScope(dialogRoles);
+    const hasDomainScope = rolesSupportAccessDomainScope(dialogRoles);
+    const hasDerivedScope = rolesSupportDerivedRoleScope(dialogRoles);
+
+    const allowedEnvironments = !hasEnvScope
+      ? 'ALL'
+      : serializeEnvironments(dialogEnvironments);
+
+    const allowedAccessDomains = !hasDomainScope
+      ? 'ALL'
+      : dialogAccessDomains === null
+        ? 'ALL'
+        : serializeAccessDomains(dialogAccessDomains, accessDomains);
+
+    const managedDerivedRolesScope = hasDerivedScope
+      ? (dialogDerivedScope || 'ALL')
+      : 'ALL';
+
+    const payload = {
+      ...flags,
+      managedDerivedRolesScope,
+      allowedEnvironments,
+      allowedAccessDomains,
+      isActive: dialogActive,
+    };
+
+    if (editingAuth) {
+      try {
+        await api.updateAppAuthorization(editingAuth.ID, payload);
+        setUserRoleOverrides((prev) => ({ ...prev, [editingAuth.ID]: [...dialogRoles] }));
+        setAuthorizations((prev) =>
+          prev.map((item) => (item.ID === editingAuth.ID ? { ...item, ...payload } : item))
+        );
+        setDialogOpen(false);
+        setEditingAuth(null);
+        setSnackbar({ open: true, message: 'User authorization updated', severity: 'success' });
+      } catch (err: any) {
+        setSnackbar({ open: true, message: err.message || 'Failed to update authorization', severity: 'error' });
+      }
+      return;
+    }
+
     const exists = authorizations.some(
       (a) => a.userId.toLowerCase() === selectedScimUser.username.toLowerCase()
     );
@@ -498,48 +487,34 @@ export default function AppAuthorizationsView() {
       return;
     }
 
-    const flags = rolesToFlags(newUserRoles);
-    const hasEnvScope = rolesSupportEnvironmentScope(newUserRoles);
-    const hasDomainScope = rolesSupportAccessDomainScope(newUserRoles);
-    const hasDerivedScope = rolesSupportDerivedRoleScope(newUserRoles);
-
-    const allowedEnvironments = !hasEnvScope
-      ? 'ALL'
-      : serializeEnvironments(newUserEnvironments);
-
-    const allowedAccessDomains = !hasDomainScope
-      ? 'ALL'
-      : newUserAccessDomains === null
-        ? 'ALL'
-        : serializeAccessDomains(newUserAccessDomains, accessDomains);
-
-    const managedDerivedRolesScope = hasDerivedScope
-      ? (newUserDerivedScope || 'ALL')
-      : 'ALL';
-
     try {
       const newAuth = await api.createAppAuthorization({
         userId: selectedScimUser.username,
         userName: selectedScimUser.displayName,
-        ...flags,
-        managedDerivedRolesScope,
-        allowedEnvironments,
-        allowedAccessDomains,
-        isActive: newUserActive,
+        ...payload,
       });
       if (newAuth) {
         setAuthorizations((prev) => [...prev, newAuth].filter(Boolean));
         if (newAuth.ID) {
-          setUserRoleOverrides((prev) => ({ ...prev, [newAuth.ID]: [...newUserRoles] }));
+          setUserRoleOverrides((prev) => ({ ...prev, [newAuth.ID]: [...dialogRoles] }));
         }
       } else {
         await loadData();
       }
-      setOpenAdd(false);
-      resetAddDialogState();
+      setDialogOpen(false);
       setSnackbar({ open: true, message: 'User authorization added', severity: 'success' });
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message || 'Failed to add authorization', severity: 'error' });
+    }
+  };
+
+  const handleToggleActive = async (id: string, isActive: boolean) => {
+    try {
+      await api.updateAppAuthorization(id, { isActive });
+      setAuthorizations((prev) => prev.map((item) => (item.ID === id ? { ...item, isActive } : item)));
+      setSnackbar({ open: true, message: `User ${isActive ? 'activated' : 'deactivated'}`, severity: 'success' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Update failed', severity: 'error' });
     }
   };
 
@@ -566,7 +541,7 @@ export default function AppAuthorizationsView() {
     });
   };
 
-  // ─── Sub-components ─────────────────────────────────────────────────────────
+  // ─── Scope Helpers & Sub-components ─────────────────────────────────────────
   const getRoleRestrictionFields = (roleId: string) => {
     const roleObj = allRoles.find((r) => r.ID === roleId);
     if (!roleObj) return [];
@@ -629,7 +604,7 @@ export default function AppAuthorizationsView() {
       onChange(JSON.stringify(scopeList.map((s: any) => (s.roleId === roleId ? { ...s, fields } : s))));
     };
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: 230 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
         <Autocomplete
           size="small"
           options={availableRoles}
@@ -674,60 +649,6 @@ export default function AppAuthorizationsView() {
     );
   };
 
-  const AccessDomainCell = ({ auth, roleIds }: { auth: any; roleIds: AppRoleId[] }) => {
-    if (!rolesSupportAccessDomainScope(roleIds)) {
-      return <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />;
-    }
-    const accessDomainIds = parseAccessDomains(auth.allowedAccessDomains);
-    if (auth.isSuperAdmin || accessDomainIds === null) {
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-          <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />
-          {accessDomains.length > 0 && (
-            <Button
-              size="small"
-              variant="text"
-              sx={{ fontSize: '0.7rem', minWidth: 'auto', px: 0.75 }}
-              onClick={() => handleUpdateAccessDomains(auth.ID, [accessDomains[0].ID])}
-            >
-              Restrict
-            </Button>
-          )}
-        </Box>
-      );
-    }
-    const selectedAccessDomainNames = accessDomainIds.map((id) => {
-      const s = accessDomains.find((st) => st.ID === id);
-      return s ? s.name : id;
-    });
-    return (
-      <Autocomplete
-        multiple
-        size="small"
-        options={accessDomains}
-        getOptionLabel={(o: any) => o.name || o.ID}
-        value={accessDomains.filter((s) => accessDomainIds.includes(s.ID))}
-        onChange={(_e, val) => handleUpdateAccessDomains(auth.ID, val.map((s: any) => s.ID))}
-        renderTags={(value, getTagProps) =>
-          value.map((option: any, index: number) => {
-            const { key, ...tagProps } = getTagProps({ index });
-            return <Chip key={key} label={option.name} size="small" {...tagProps} />;
-          })
-        }
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            variant="outlined"
-            size="small"
-            placeholder={selectedAccessDomainNames.length === 0 ? 'All access domains' : ''}
-            sx={{ minWidth: 160 }}
-          />
-        )}
-        sx={{ minWidth: 160 }}
-      />
-    );
-  };
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <AppToast
@@ -750,10 +671,7 @@ export default function AppAuthorizationsView() {
         <Button
           variant="contained"
           startIcon={<Plus size={16} />}
-          onClick={() => {
-            resetAddDialogState();
-            setOpenAdd(true);
-          }}
+          onClick={handleOpenAddDialog}
         >
           Add User
         </Button>
@@ -783,7 +701,7 @@ export default function AppAuthorizationsView() {
           <SectionHeading
             icon={Shield}
             title="Application Users & Assigned Roles"
-            subtitle="Each user can hold one or more Application Roles; permissions combine automatically"
+            subtitle="Each user can hold one or more Application Roles; click Edit to modify roles and scopes"
           />
           <TableContainer>
             <Table size="small">
@@ -792,7 +710,7 @@ export default function AppAuthorizationsView() {
                   <TableCell sx={{ fontWeight: 700 }}>User ID</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>User Name</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="center">Active</TableCell>
-                  <TableCell sx={{ fontWeight: 700, minWidth: 280 }}>Application Roles</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Application Roles</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="center">Derived Role Scope</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="center">Environments</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="center">Access Domains</TableCell>
@@ -815,6 +733,10 @@ export default function AppAuthorizationsView() {
                       .filter(Boolean);
                     const showDerivedScope = rolesSupportDerivedRoleScope(assignedRoleIds);
                     const showEnvScope = rolesSupportEnvironmentScope(assignedRoleIds);
+                    const showDomainScope = rolesSupportAccessDomainScope(assignedRoleIds);
+                    const scopeItems = parseScope(auth.managedDerivedRolesScope);
+                    const envList = parseEnvironments(auth.allowedEnvironments);
+                    const domainIds = parseAccessDomains(auth.allowedAccessDomains);
 
                     return (
                       <TableRow key={auth.ID} hover>
@@ -832,93 +754,106 @@ export default function AppAuthorizationsView() {
                             inputProps={{ 'aria-label': `Active status for ${auth.userName || auth.userId}` }}
                           />
                         </TableCell>
-                        {/* Multi-select Application Roles */}
-                        <TableCell sx={{ minWidth: 280, py: 1 }}>
-                          <Autocomplete
-                            multiple
-                            disableClearable
-                            size="small"
-                            options={APP_ROLES}
-                            getOptionLabel={(option) => option.label}
-                            isOptionEqualToValue={(option, value) => option.id === value.id}
-                            value={assignedRoleDefs}
-                            onChange={(_e, nextDefs) => handleUpdateUserRoles(auth, nextDefs)}
-                            renderOption={(props, option) => {
-                              const { key, ...restProps } = props as any;
-                              return (
-                                <li key={key} {...restProps}>
-                                  <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.25 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                      {option.label}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {option.description}
-                                    </Typography>
-                                  </Box>
-                                </li>
-                              );
+                        {/* Read-only Role Chips (clicking opens the unified Add/Edit dialog) */}
+                        <TableCell sx={{ py: 1 }}>
+                          <Box
+                            onClick={() => handleOpenEditDialog(auth)}
+                            sx={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 0.75,
+                              cursor: 'pointer',
+                              alignItems: 'center'
                             }}
-                            renderTags={(value, getTagProps) =>
-                              value.map((option, index) => {
-                                const { key, ...tagProps } = getTagProps({ index });
-                                return (
-                                  <Tooltip key={key} title={option.description} arrow>
-                                    <Chip
-                                      label={option.label}
-                                      size="small"
-                                      color={option.color}
-                                      variant="outlined"
-                                      sx={{ fontWeight: 600 }}
-                                      {...tagProps}
-                                    />
-                                  </Tooltip>
-                                );
-                              })
-                            }
-                            renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                variant="outlined"
-                                size="small"
-                                placeholder={assignedRoleDefs.length === 0 ? 'Select roles...' : ''}
-                              />
-                            )}
-                          />
+                          >
+                            {assignedRoleDefs.map((roleDef) => (
+                              <Tooltip key={roleDef.id} title={roleDef.description} arrow>
+                                <Chip
+                                  label={roleDef.label}
+                                  size="small"
+                                  color={roleDef.color}
+                                  variant="outlined"
+                                  sx={{ fontWeight: 600, cursor: 'pointer' }}
+                                />
+                              </Tooltip>
+                            ))}
+                          </Box>
                         </TableCell>
-                        {/* Derived Role Scope */}
+                        {/* Derived Role Scope Summary */}
                         <TableCell align="center">
                           {showDerivedScope ? (
-                            <ScopeSelector
-                              scopeStr={auth.managedDerivedRolesScope}
-                              onChange={(val) => handleUpdateScope(auth.ID, val)}
-                            />
+                            scopeItems.length === 0 ? (
+                              <Chip label="All Parent Roles" size="small" color="secondary" variant="outlined" />
+                            ) : (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0.5 }}>
+                                {scopeItems.map((s: any) => {
+                                  const rObj = allRoles.find((r) => r.ID === s.roleId);
+                                  return (
+                                    <Chip
+                                      key={s.roleId}
+                                      label={rObj ? rObj.name : s.roleId}
+                                      size="small"
+                                      variant="outlined"
+                                    />
+                                  );
+                                })}
+                              </Box>
+                            )
                           ) : assignedRoleIds.includes('SUPER_ADMIN') || assignedRoleIds.includes('AUTHORIZATION_ARCHITECT') ? (
                             <Chip label="All Roles" size="small" color="primary" variant="outlined" />
                           ) : (
                             <Typography variant="caption" color="text.secondary">—</Typography>
                           )}
                         </TableCell>
-                        {/* Environments */}
+                        {/* Environments Summary */}
                         <TableCell align="center">
-                          {!showEnvScope ? (
+                          {!showEnvScope || auth.allowedEnvironments === 'ALL' || envList.length === 3 ? (
                             <Chip label="ALL" size="small" color="primary" variant="outlined" />
+                          ) : envList.length === 0 ? (
+                            <Typography variant="caption" color="text.secondary">None</Typography>
                           ) : (
-                            <EnvironmentSelection
-                              multiple={true}
-                              value={parseEnvironments(auth.allowedEnvironments)}
-                              onChange={(val: string[]) => handleUpdateEnvironments(auth.ID, val)}
-                              size="small"
-                              sx={{ minWidth: 120 }}
-                              fullWidth={false}
-                            />
+                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                              {envList.map((env) => (
+                                <Chip key={env} label={env} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                              ))}
+                            </Box>
                           )}
                         </TableCell>
-                        {/* Access Domains */}
+                        {/* Access Domains Summary */}
                         <TableCell align="center">
-                          <AccessDomainCell auth={auth} roleIds={assignedRoleIds} />
+                          {!showDomainScope || auth.isSuperAdmin || domainIds === null ? (
+                            <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />
+                          ) : domainIds.length === 0 ? (
+                            <Typography variant="caption" color="text.secondary">None</Typography>
+                          ) : (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0.5 }}>
+                              {domainIds.map((id) => {
+                                const dom = accessDomains.find((d) => d.ID === id);
+                                return (
+                                  <Chip
+                                    key={id}
+                                    label={dom ? dom.name : id}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                );
+                              })}
+                            </Box>
+                          )}
                         </TableCell>
-                        {/* Actions */}
-                        <TableCell align="right">
+                        {/* Actions: Edit (opens unified dialog) + Delete */}
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                          <Tooltip title="Edit roles & scopes">
+                            <IconButton
+                              color="primary"
+                              size="small"
+                              onClick={() => handleOpenEditDialog(auth)}
+                              aria-label="Edit user authorization"
+                              sx={{ mr: 0.5 }}
+                            >
+                              <Pencil size={15} />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Delete user authorization">
                             <IconButton
                               color="error"
@@ -940,10 +875,13 @@ export default function AppAuthorizationsView() {
         </Card>
       )}
 
-      {/* ── Add User Dialog (Multi-Role Selection) ─────────────────────────── */}
+      {/* ── Unified Add / Edit Application User Dialog ─────────────────────── */}
       <Dialog
-        open={openAdd}
-        onClose={() => setOpenAdd(false)}
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          setEditingAuth(null);
+        }}
         maxWidth="sm"
         fullWidth
         PaperProps={{
@@ -956,24 +894,36 @@ export default function AppAuthorizationsView() {
         }}
       >
         <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 2 }}>
-          Add Application User
+          {editingAuth
+            ? `Edit Application User — ${editingAuth.userName || editingAuth.userId}`
+            : 'Add Application User'}
         </DialogTitle>
         <DialogContent sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          {/* 1. User Selection */}
+          {/* 1. User Selection (or read-only User Identity when editing) */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ flex: 1 }}>
-              <UserSelection
-                value={selectedScimUser}
-                onChange={(_e: any, v: any) => setSelectedScimUser(v)}
-              />
+              {editingAuth ? (
+                <TextField
+                  label="User"
+                  value={`${editingAuth.userName || editingAuth.userId} (${editingAuth.userId})`}
+                  size="small"
+                  fullWidth
+                  disabled
+                />
+              ) : (
+                <UserSelection
+                  value={selectedScimUser}
+                  onChange={(_e: any, v: any) => setSelectedScimUser(v)}
+                />
+              )}
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: editingAuth ? 0 : 1 }}>
               <Checkbox
-                id="new-user-active"
-                checked={newUserActive}
-                onChange={(e) => setNewUserActive(e.target.checked)}
+                id="dialog-user-active"
+                checked={dialogActive}
+                onChange={(e) => setDialogActive(e.target.checked)}
               />
-              <Box component="label" htmlFor="new-user-active" sx={{ cursor: 'pointer' }}>
+              <Box component="label" htmlFor="dialog-user-active" sx={{ cursor: 'pointer' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>Active</Typography>
               </Box>
             </Box>
@@ -991,7 +941,7 @@ export default function AppAuthorizationsView() {
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {APP_ROLES.map((role) => {
-                const selected = newUserRoles.includes(role.id);
+                const selected = dialogRoles.includes(role.id);
                 return (
                   <Card
                     key={role.id}
@@ -1043,9 +993,9 @@ export default function AppAuthorizationsView() {
           </Box>
 
           {/* 3. Dynamic Scoping Controls */}
-          {(rolesSupportEnvironmentScope(newUserRoles) ||
-            rolesSupportAccessDomainScope(newUserRoles) ||
-            rolesSupportDerivedRoleScope(newUserRoles)) && (
+          {(rolesSupportEnvironmentScope(dialogRoles) ||
+            rolesSupportAccessDomainScope(dialogRoles) ||
+            rolesSupportDerivedRoleScope(dialogRoles)) && (
             <>
               <Divider />
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1054,25 +1004,25 @@ export default function AppAuthorizationsView() {
                 </Typography>
 
                 {/* Derived Role Scope */}
-                {rolesSupportDerivedRoleScope(newUserRoles) && (
+                {rolesSupportDerivedRoleScope(dialogRoles) && (
                   <Box>
                     <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
                       Permitted Parent Roles for Derivation
                     </Typography>
                     <ScopeSelector
-                      scopeStr={newUserDerivedScope}
-                      onChange={(val) => setNewUserDerivedScope(val)}
+                      scopeStr={dialogDerivedScope}
+                      onChange={(val) => setDialogDerivedScope(val)}
                     />
                   </Box>
                 )}
 
                 {/* Allowed Environments */}
-                {rolesSupportEnvironmentScope(newUserRoles) && (
+                {rolesSupportEnvironmentScope(dialogRoles) && (
                   <Box>
                     <EnvironmentSelection
                       multiple={true}
-                      value={newUserEnvironments}
-                      onChange={(val: string[]) => setNewUserEnvironments(val)}
+                      value={dialogEnvironments}
+                      onChange={(val: string[]) => setDialogEnvironments(val)}
                       size="small"
                       label="Allowed Environments"
                       fullWidth
@@ -1081,18 +1031,18 @@ export default function AppAuthorizationsView() {
                 )}
 
                 {/* Allowed Access Domains */}
-                {rolesSupportAccessDomainScope(newUserRoles) && (
+                {rolesSupportAccessDomainScope(dialogRoles) && (
                   <Box>
                     <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
                       Allowed Access Domains
                     </Typography>
-                    {newUserAccessDomains === null ? (
+                    {dialogAccessDomains === null ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip label="All Access Domains" size="small" color="primary" variant="outlined" />
                         <Button
                           size="small"
                           variant="text"
-                          onClick={() => setNewUserAccessDomains([])}
+                          onClick={() => setDialogAccessDomains([])}
                         >
                           Restrict
                         </Button>
@@ -1104,8 +1054,8 @@ export default function AppAuthorizationsView() {
                           size="small"
                           options={accessDomains}
                           getOptionLabel={(o: any) => o.name || o.ID}
-                          value={accessDomains.filter((s) => (newUserAccessDomains || []).includes(s.ID))}
-                          onChange={(_e, val) => setNewUserAccessDomains(val.map((s: any) => s.ID))}
+                          value={accessDomains.filter((s) => (dialogAccessDomains || []).includes(s.ID))}
+                          onChange={(_e, val) => setDialogAccessDomains(val.map((s: any) => s.ID))}
                           renderTags={(value, getTagProps) =>
                             value.map((option: any, index: number) => {
                               const { key, ...tagProps } = getTagProps({ index });
@@ -1116,12 +1066,12 @@ export default function AppAuthorizationsView() {
                             <TextField {...params} placeholder="Select access domains..." variant="outlined" />
                           )}
                         />
-                        {newUserAccessDomains.length === 0 && (
+                        {dialogAccessDomains.length === 0 && (
                           <Button
                             size="small"
                             variant="text"
                             sx={{ mt: 0.5 }}
-                            onClick={() => setNewUserAccessDomains(null)}
+                            onClick={() => setDialogAccessDomains(null)}
                           >
                             ← Grant all access domains
                           </Button>
@@ -1135,15 +1085,21 @@ export default function AppAuthorizationsView() {
           )}
         </DialogContent>
         <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
-          <Button onClick={() => setOpenAdd(false)} color="inherit">
+          <Button
+            onClick={() => {
+              setDialogOpen(false);
+              setEditingAuth(null);
+            }}
+            color="inherit"
+          >
             Cancel
           </Button>
           <Button
             variant="contained"
-            onClick={handleAddAuthorization}
-            disabled={!selectedScimUser || newUserRoles.length === 0}
+            onClick={handleSaveAuthorization}
+            disabled={(!editingAuth && !selectedScimUser) || dialogRoles.length === 0}
           >
-            Add
+            {editingAuth ? 'Save Changes' : 'Add'}
           </Button>
         </DialogActions>
       </Dialog>

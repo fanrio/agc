@@ -34,7 +34,7 @@ This document explains how to extend the fanrio-auth codebase safely and consist
    }
    ```
 
-2. **Expose it in the OData service** (`srv/authorization-service.cds`):
+2. **Expose it in the OData service** (`srv/cortex_service.cds`):
    ```cds
    entity MyNewEntity as projection on db.MyNewEntity;
    ```
@@ -67,7 +67,7 @@ This document explains how to extend the fanrio-auth codebase safely and consist
 
 ## 3. Adding a New OData Action
 
-1. **Declare the action signature** in `srv/authorization-service.cds`:
+1. **Declare the action signature** in `srv/cortex_service.cds`:
    ```cds
    action myNewAction(param: String) returns {
      success : Boolean;
@@ -75,7 +75,7 @@ This document explains how to extend the fanrio-auth codebase safely and consist
    };
    ```
 
-2. **Implement the handler** in `srv/authorization-service.js`:
+2. **Implement the handler** in `srv/cortex_service.js`:
    ```js
    this.on('myNewAction', async (req) => {
      const { param } = req.data;
@@ -116,7 +116,7 @@ function registerMyEntityHandlers(service, entities, deps) {
 module.exports = { registerMyEntityHandlers };
 ```
 
-Then register it in `srv/authorization-service.js`:
+Then register it in `srv/cortex_service.js`:
 
 ```js
 const { registerMyEntityHandlers } = require('./handlers/myEntityHandlers');

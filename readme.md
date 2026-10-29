@@ -49,8 +49,8 @@ fanrio-auth/
 │   ├── schema.cds          # Entity definitions (source of truth)
 │   └── data/               # CSV seed data
 ├── srv/                    # CAP backend
-│   ├── authorization-service.cds  # OData service contract
-│   ├── authorization-service.js   # Wiring layer (thin)
+│   ├── cortex_service.cds         # OData service contract
+│   ├── cortex_service.js          # Wiring layer (thin)
 │   ├── handlers/           # Entity event hooks
 │   ├── services/           # Business logic services
 │   └── lib/                # Utility modules
