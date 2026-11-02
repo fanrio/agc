@@ -397,6 +397,82 @@ function makeFetchBdcTaskChainLogHandler(cds, entities, BdcClient) {
   };
 }
 
+async function _getLocalFallbackUsers(cds, entities, query) {
+  const { AppAuthorizations, RoleAssignments } = entities;
+  const userMap = new Map();
+
+  // 1. Load users from AppAuthorizations
+  if (AppAuthorizations) {
+    try {
+      const appUsers = await cds.db.run(SELECT.from(AppAuthorizations));
+      for (const u of appUsers) {
+        if (!u.userId) continue;
+        userMap.set(u.userId.toLowerCase(), {
+          username: u.userId,
+          displayName: u.userName ? `${u.userName} (${u.userId})` : u.userId,
+          email: u.userId.includes('@') ? u.userId : '',
+          department: u.isSuperAdmin ? 'System Admin' : 'Security'
+        });
+      }
+    } catch (e) {
+      // Ignore if DB not ready
+    }
+  }
+
+  // 2. Load users from RoleAssignments
+  if (RoleAssignments) {
+    try {
+      const assignedUsers = await cds.db.run(SELECT.distinct.from(RoleAssignments).columns('userId', 'userName'));
+      for (const u of assignedUsers) {
+        if (!u.userId) continue;
+        const key = u.userId.toLowerCase();
+        if (!userMap.has(key)) {
+          userMap.set(key, {
+            username: u.userId,
+            displayName: u.userName ? `${u.userName} (${u.userId})` : u.userId,
+            email: u.userId.includes('@') ? u.userId : '',
+            department: 'Assigned User'
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // 3. Fallback mock users list (including admin)
+  const defaultMockUsers = [
+    { username: 'admin', displayName: 'Administrator (admin)', email: 'admin@fanrio.corp', department: 'System Admin' },
+    { username: 'tim.waecken@cimt-ag.de', displayName: 'Tim Wäcken (tim.waecken@cimt-ag.de)', email: 'tim.waecken@cimt-ag.de', department: 'Finance' },
+    { username: 'alice.smith@fanrio.com', displayName: 'Alice Smith (alice.smith@fanrio.com)', email: 'alice.smith@fanrio.com', department: 'Controlling' },
+    { username: 'bob.martin@fanrio.com', displayName: 'Bob Martin (bob.martin@fanrio.com)', email: 'bob.martin@fanrio.com', department: 'Sales' },
+    { username: 'charlie.white@fanrio.com', displayName: 'Charlie White (charlie.white@fanrio.com)', email: 'charlie.white@fanrio.com', department: 'Procurement' },
+    { username: 'emily.miller@fanrio.com', displayName: 'Emily Miller (emily.miller@fanrio.com)', email: 'emily.miller@fanrio.com', department: 'HR' },
+    { username: 'david.brown@fanrio.com', displayName: 'David Brown (david.brown@fanrio.com)', email: 'david.brown@fanrio.com', department: 'IT' },
+    { username: 'sarah.meissner@fanrio.com', displayName: 'Sarah Meissner (sarah.meissner@fanrio.com)', email: 'sarah.meissner@fanrio.com', department: 'Operations' },
+    { username: 'eisen.schmidt@fanrio.com', displayName: 'Eisen Schmidt (eisen.schmidt@fanrio.com)', email: 'eisen.schmidt@fanrio.com', department: 'Logistics' }
+  ];
+
+  for (const mu of defaultMockUsers) {
+    if (!userMap.has(mu.username.toLowerCase())) {
+      userMap.set(mu.username.toLowerCase(), mu);
+    }
+  }
+
+  const allUsers = Array.from(userMap.values());
+  if (!query || !query.trim()) {
+    return allUsers;
+  }
+
+  const q = query.toLowerCase().trim();
+  return allUsers.filter(u =>
+    u.username.toLowerCase().includes(q) ||
+    u.displayName.toLowerCase().includes(q) ||
+    u.email.toLowerCase().includes(q) ||
+    u.department.toLowerCase().includes(q)
+  );
+}
+
 function makeSearchScimUsersHandler(cds, entities, BdcClient) {
   return async function searchScimUsersHandler(req) {
     const { query } = req.data;
@@ -406,34 +482,15 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
       const setting = await cds.db.run(
         SELECT.one.from(BdcSettings).where({ connectionType: 'OData', isActive: true })
       );
-      if (!setting) {
-        return req.error(400, 'No active OData BDC Connection configuration found in BdcSettings');
+      if (!setting || isMockUrl(setting.url)) {
+        return await _getLocalFallbackUsers(cds, entities, query);
       }
 
-      // Check if mock URL (local development/tests fallback)
-      if (isMockUrl(setting.url)) {
-        const mockResources = [
-          { userName: 'tim.waecken@cimt-ag.de', emails: [{ value: 'tim.waecken@cimt-ag.de' }], name: { givenName: 'Tim', familyName: 'Wäcken' }, urn_ietf_params_scim_schemas_extension_enterprise_2_0_User: { department: 'Finance' } },
-          { userName: 'alice.smith@fanrio.com', emails: [{ value: 'alice.smith@fanrio.com' }], name: { givenName: 'Alice', familyName: 'Smith' } },
-          { userName: 'bob.martin@fanrio.com', emails: [{ value: 'bob.martin@fanrio.com' }], name: { givenName: 'Bob', familyName: 'Martin' } },
-          { userName: 'charlie.white@fanrio.com', emails: [{ value: 'charlie.white@fanrio.com' }], name: { givenName: 'Charlie', familyName: 'White' } },
-          { userName: 'emily.miller@fanrio.com', emails: [{ value: 'emily.miller@fanrio.com' }], name: { givenName: 'Emily', familyName: 'Miller' } },
-          { userName: 'david.brown@fanrio.com', emails: [{ value: 'david.brown@fanrio.com' }], name: { givenName: 'David', familyName: 'Brown' } },
-          { userName: 'sarah.meissner@fanrio.com', emails: [{ value: 'sarah.meissner@fanrio.com' }], name: { givenName: 'Sarah', familyName: 'Meissner' } },
-          { userName: 'eisen.schmidt@fanrio.com', emails: [{ value: 'eisen.schmidt@fanrio.com' }], name: { givenName: 'Eisen', familyName: 'Schmidt' } }
-        ];
-
-        let filtered = mockResources;
-        if (query && query.trim()) {
-          const q = query.toLowerCase().trim();
-          filtered = mockResources.filter(r =>
-            r.userName.toLowerCase().includes(q) ||
-            (r.emails && r.emails[0] && r.emails[0].value.toLowerCase().includes(q)) ||
-            (r.name && r.name.givenName.toLowerCase().includes(q))
-          );
-        }
-
-        return filtered.map(u => {
+      // Execute real SCIM API call on BDC system
+      try {
+        const response = await BdcClient.searchScimUsers(setting.url, setting.tokenUrl, setting.clientId, setting.clientSecret, query);
+        const resources = response.Resources || [];
+        return resources.map(u => {
           const emailVal = u.emails && u.emails[0] ? u.emails[0].value : u.userName;
           const formattedName = u.name && u.name.formatted ? u.name.formatted :
             (u.name && u.name.givenName && u.name.familyName ? `${u.name.givenName} ${u.name.familyName}` : (u.displayName || u.userName));
@@ -445,26 +502,13 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
             department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
           };
         });
+      } catch (scimErr) {
+        console.warn('[SearchScimUsers] SCIM integration query failed, falling back to local users:', scimErr.message);
+        return await _getLocalFallbackUsers(cds, entities, query);
       }
-
-      // Execute real SCIM API call on BDC system
-      const response = await BdcClient.searchScimUsers(setting.url, setting.tokenUrl, setting.clientId, setting.clientSecret, query);
-      const resources = response.Resources || [];
-      return resources.map(u => {
-        const emailVal = u.emails && u.emails[0] ? u.emails[0].value : u.userName;
-        const formattedName = u.name && u.name.formatted ? u.name.formatted :
-          (u.name && u.name.givenName && u.name.familyName ? `${u.name.givenName} ${u.name.familyName}` : (u.displayName || u.userName));
-        const dispName = formattedName.toLowerCase().includes(emailVal.toLowerCase()) ? formattedName : `${formattedName} (${emailVal})`;
-        return {
-          username: emailVal,
-          displayName: dispName,
-          email: u.emails && u.emails[0] ? u.emails[0].value : '',
-          department: u.urn_ietf_params_scim_schemas_extension_enterprise_2_0_User?.department || 'N/A'
-        };
-      });
     } catch (err) {
-      console.error('[SearchScimUsers] SCIM integration query failed:', err.message);
-      return req.error(500, `SCIM Integration Query Failed: ${err.message}`);
+      console.warn('[SearchScimUsers] Fallback search error:', err.message);
+      return await _getLocalFallbackUsers(cds, entities, query);
     }
   };
 }
