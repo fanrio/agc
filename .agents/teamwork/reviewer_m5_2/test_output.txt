@@ -1,0 +1,289 @@
+﻿ÔûÂ E2E Direct Synchronization Test Suite (Databricks & SAP Datasphere)
+  ÔûÂ Tier 1: Feature Coverage
+    Ô£û T1.1: Roles targetPlatform CRUD (DATASPHERE, DATABRICKS, BOTH) (52.1625ms)
+    Ô£û T1.2: AccessDomains targetPlatform CRUD (default BOTH) (4.0473ms)
+    Ô£û T1.3: DatabricksSettings Data Model & CRUD Contract (3.8953ms)
+    Ô£ö T1.4: Pluggable DatabricksClient & Mock Adapter Interface (1.5352ms)
+    Ô£ö T1.5: testDatabricksConnection Action & Validation Contract (0.3341ms)
+    Ô£ö T1.6: Databricks Unity Catalog SQL Filter Generator across all filter types (0.4346ms)
+    Ô£ö T1.7: Direct Multi-Target Sync Dispatcher Routing (1.324ms)
+    Ô£û T1.8: RoleAssignments CREATE/DELETE triggers direct sync without blocking (4.2122ms)
+    Ô£û T1.9: Retirement of Replication Queue Engine & Actions Contract (11.3709ms)
+  Ô£û Tier 1: Feature Coverage (83.5461ms)
+  ÔûÂ Tier 2: Boundary & Corner Cases
+    Ô£ö T2.1: Empty and blank restriction values evaluate safely (0.295ms)
+    Ô£ö T2.2: Wildcard translation and SQL injection character escaping (0.2344ms)
+    Ô£ö T2.3: Multi-value cardinality limits (1, 2, 25 items) (0.3006ms)
+    Ô£ö T2.4: Case sensitivity and whitespace preservation in values (0.1655ms)
+    Ô£û T2.5: Rejection of invalid targetPlatform string values (6.3321ms)
+    Ô£ö T2.6: Connection test failure modes and credential boundaries (0.4989ms)
+    Ô£ö T2.7: Multi-level role inheritance depth (>=3) overrides parent wildcards for Databricks (0.6008ms)
+  Ô£û Tier 2: Boundary & Corner Cases (9.4187ms)
+  ÔûÂ Tier 3: Cross-Feature Combinations
+    Ô£û T3.1: Role targeting BOTH platforms simultaneously dispatches to HANA and Databricks (5.5299ms)
+    Ô£û T3.2: Derived role targeting DATABRICKS inheriting restrictions from parent targeting DATASPHERE (3.8448ms)
+    Ô£ö T3.3: Multiple users assigned to the same Databricks role generates composite OR predicates (0.5091ms)
+  Ô£û Tier 3: Cross-Feature Combinations (10.5041ms)
+  ÔûÂ Tier 4: Real-World Application Scenarios
+    Ô£û T4.1: End-to-End User Assignment Lifecycle (Role Create -> Assign -> Push -> Revoke -> Cleanup) (3.8315ms)
+    Ô£û T4.2: Security & Permissions Enforcement for Databricks Administration (6.6767ms)
+  Ô£û Tier 4: Real-World Application Scenarios (11.7178ms)
+Ô£û E2E Direct Synchronization Test Suite (Databricks & SAP Datasphere) (1344.7448ms)
+Ôä╣ tests 26
+Ôä╣ suites 0
+Ôä╣ pass 11
+Ôä╣ fail 15
+Ôä╣ cancelled 0
+Ôä╣ skipped 0
+Ôä╣ todo 0
+Ôä╣ duration_ms 2249.5327
+
+Ô£û failing tests:
+
+test at test\e2e_direct_sync.test.js:379:14
+Ô£û T1.1: Roles targetPlatform CRUD (DATASPHERE, DATABRICKS, BOTH) (52.1625ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:382:27)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:379:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:377:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:442:14
+Ô£û T1.2: AccessDomains targetPlatform CRUD (default BOTH) (4.0473ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:445:21)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:442:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:377:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:473:14
+Ô£û T1.3: DatabricksSettings Data Model & CRUD Contract (3.8953ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:487:27)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:473:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:377:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:668:14
+Ô£û T1.8: RoleAssignments CREATE/DELETE triggers direct sync without blocking (4.2122ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:670:23)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:668:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:377:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:703:14
+Ô£û T1.9: Retirement of Replication Queue Engine & Actions Contract (11.3709ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([404, 400, 403, 500, 501].includes(err.status || err.response?.status))
+  
+      at TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:710:16)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:703:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:377:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\e2e_direct_sync.test.js:781:14
+Ô£û T2.5: Rejection of invalid targetPlatform string values (6.3321ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400, 422, 500].includes(err.status || err.response?.status))
+  
+      at TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:809:18)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:781:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:731:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\e2e_direct_sync.test.js:883:14
+Ô£û T3.1: Role targeting BOTH platforms simultaneously dispatches to HANA and Databricks (5.5299ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:887:23)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:883:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:881:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:923:14
+Ô£û T3.2: Derived role targeting DATABRICKS inheriting restrictions from parent targeting DATASPHERE (3.8448ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:925:25)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:923:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:881:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:1020:14
+Ô£û T4.1: End-to-End User Assignment Lifecycle (Role Create -> Assign -> Push -> Revoke -> Cleanup) (3.8315ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1026:7)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1020:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1018:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:56929
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\e2e_direct_sync.test.js:1170:14
+Ô£û T4.2: Security & Permissions Enforcement for Databricks Administration (6.6767ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([403, 404].includes(err.status || err.response?.status))
+  
+      at TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1178:16)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1170:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\e2e_direct_sync.test.js:1018:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

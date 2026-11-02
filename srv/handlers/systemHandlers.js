@@ -11,6 +11,7 @@ function registerSystemHandlers(service, entities) {
     ['CREATE', 'UPDATE', 'DELETE'],
     [
       'BdcSettings',
+      'DatabricksSettings',
       'RestrictionFields',
       'DynamicGenerationRules',
       'DynamicRuleFieldMappings',
@@ -24,10 +25,21 @@ function registerSystemHandlers(service, entities) {
     }
   );
 
-  // Direct READ on BdcSettings requires settings management permission
-  service.before('READ', 'BdcSettings', async (req) => {
+  // Direct READ on BdcSettings & DatabricksSettings requires settings management permission
+  service.before('READ', ['BdcSettings', 'DatabricksSettings'], async (req) => {
     const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
     requirePermission(perms, 'canManageSettings', req);
+  });
+
+  // Strip sensitive credentials on DatabricksSettings READ
+  service.after('READ', 'DatabricksSettings', (data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    for (const row of rows) {
+      if (row) {
+        delete row.apiToken;
+        delete row.clientSecret;
+      }
+    }
   });
 
   // Strip sensitive credentials from expanded bdcConnection on RestrictionFields READ
@@ -92,7 +104,7 @@ function registerSystemHandlers(service, entities) {
   });
 
   service.before([
-    'testBdcConnection', 'fetchBdcSpaces', 'fetchBdcAssets',
+    'testBdcConnection', 'testDatabricksConnection', 'fetchBdcSpaces', 'fetchBdcAssets',
     'fetchBdcAssetColumns', 'fetchBdcAssetKeyColumns', 'fetchRawBdcSpaces',
     'fetchRawBdcAssets', 'fetchRawBdcRelationalValues', 'fetchRawBdcAssetColumns',
     'fetchRawBdcUsers', 'fetchBdcAssociations', 'runBdcTaskChain', 'fetchBdcTaskChainLog',
@@ -117,17 +129,6 @@ function registerSystemHandlers(service, entities) {
     requirePermission(perms, 'canManageSettings', req);
   });
 
-  // Replications CRUD protection
-  service.before(['CREATE', 'UPDATE', 'DELETE'], 'Replications', async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageReplications', req);
-  });
-
-  // Replications Action protection
-  service.before(['triggerReplication', 'checkReplicationStatuses'], async (req) => {
-    const perms = await getSessionPermissions(req, cds.db, AppAuthorizations);
-    requirePermission(perms, 'canManageReplications', req);
-  });
 
   // UUID auto-generation (consolidated — same for all entities below)
   ['OrgNodes', 'BdcSettings', 'DynamicGenerationRules', 'DynamicRuleFieldMappings', 'GeneratedResourceMap'].forEach(entity => {

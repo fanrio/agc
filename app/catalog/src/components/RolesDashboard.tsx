@@ -32,6 +32,13 @@ const ROLE_TYPE_OPTIONS = [
   { value: 'ORG_BASED', label: 'Org-Based Role' }
 ];
 
+const PLATFORM_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Platforms' },
+  { value: 'DATASPHERE', label: 'SAP Datasphere' },
+  { value: 'DATABRICKS', label: 'Databricks' },
+  { value: 'BOTH', label: 'Both Platforms' }
+];
+
 export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }: any) {
   const { permissions } = usePermissions();
   const [allRoles, setAllRoles] = useState<any[]>(() => {
@@ -43,6 +50,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
   const [healthFilter, setHealthFilter] = useState<string | null>(initialFilter || null);
   const [envFilter, setEnvFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [platformFilter, setPlatformFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
@@ -119,11 +127,18 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     const q = searchQuery.trim().toLowerCase();
     const hasEnv = envFilter.length > 0;
     const hasType = typeFilter !== 'ALL';
+    const hasPlatform = platformFilter !== 'ALL';
 
     return allRoles.filter((r) => {
       if (!r) return false;
       if (hasType && r.type !== typeFilter) return false;
       if (hasEnv && !envFilter.includes(r.environment_ID)) return false;
+      if (hasPlatform) {
+        const rolePlatform = r.targetPlatform || 'DATASPHERE';
+        if (platformFilter === 'DATASPHERE' && rolePlatform !== 'DATASPHERE' && rolePlatform !== 'BOTH') return false;
+        if (platformFilter === 'DATABRICKS' && rolePlatform !== 'DATABRICKS' && rolePlatform !== 'BOTH') return false;
+        if (platformFilter === 'BOTH' && rolePlatform !== 'BOTH') return false;
+      }
 
       if (healthFilter) {
         if (healthFilter === 'unrestricted') {
@@ -146,7 +161,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
       return true;
     });
-  }, [allRoles, searchQuery, envFilter, typeFilter, healthFilter]);
+  }, [allRoles, searchQuery, envFilter, typeFilter, healthFilter, platformFilter]);
 
   const pagedRoles = useMemo(() => {
     const start = page * rowsPerPage;
@@ -179,7 +194,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     setPage(0);
   };
 
-  const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL');
+  const isFilterActive = Boolean(searchQuery.trim() || healthFilter || envFilter.length > 0 || typeFilter !== 'ALL' || platformFilter !== 'ALL');
 
   return (
     <Box>
@@ -256,6 +271,17 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
           sx={{ minWidth: 160 }}
         />
 
+        <SearchableSelect
+          options={PLATFORM_FILTER_OPTIONS}
+          value={platformFilter}
+          onChange={(val) => {
+            setPlatformFilter(val);
+            setPage(0);
+          }}
+          label="Platform"
+          sx={{ minWidth: 160 }}
+        />
+
         {healthFilter && (
           <Chip
             label={
@@ -282,6 +308,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
               setSearchQuery('');
               setEnvFilter([]);
               setTypeFilter('ALL');
+              setPlatformFilter('ALL');
               setHealthFilter(null);
               setPage(0);
               if (setInitialFilter) setInitialFilter(null);

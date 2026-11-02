@@ -17,13 +17,14 @@ const cds = require('@sap/cds');
 // Lib
 const HanaClient = require('./lib/hanaClient');
 const BdcClient = require('./lib/bdcClient');
+const DatabricksClient = require('./lib/databricksClient');
 const { syncDynamicRule } = require('./services/dynamicSyncService');
 
 const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
+const directSyncDispatcher = require('./services/directSyncDispatcher');
 
 // Services
 const { syncAssignmentToHana, syncRoleAssignmentsToHana } = require('./services/hanaReplicationService');
-const { queueReplication, checkAndUpdateRunningReplications, makeTriggerReplicationHandler } = require('./services/replicationQueueService');
 const { makeGenerateOrgRoleHandler, makeGenerateAllOrgRolesHandler } = require('./services/orgRoleGeneratorService');
 const { makeResolveEffectiveRestrictionsHandler, makeSimulateAccessHandler } = require('./services/accessActionService');
 const {
@@ -58,7 +59,7 @@ module.exports = cds.service.impl(async function () {
   const {
     OrgNodes, OrgNodeAttributes, Roles, Restrictions,
     RoleAssignments, RoleInheritance, RestrictionFields,
-    BdcSettings, AuditLogs, Replications, DynamicGenerationRules,
+    BdcSettings, DatabricksSettings, AuditLogs, DynamicGenerationRules,
     AppAuthorizations, RoleApprovers, AccessDomains, AccessDomainFields,
   } = entities;
 
@@ -151,9 +152,6 @@ module.exports = cds.service.impl(async function () {
   const boundSyncRoleAssignments = (roleId) =>
     syncRoleAssignmentsToHana(cds, HanaClient, entities, roleId);
 
-  /** Bound queueReplication */
-  const boundQueueReplication = (roleName, environmentId, user) =>
-    queueReplication(cds, Replications, roleName, environmentId, user);
 
   // ---------------------------------------------------------------------------
   // DRAGE — Dynamic Role & Assignment Generation Engine
@@ -175,7 +173,7 @@ module.exports = cds.service.impl(async function () {
 
   const handlerDeps = {
     cds,
-    queueReplication: boundQueueReplication,
+    directSyncDispatcher,
     syncAssignmentToHana: boundSyncAssignment,
     syncRoleAssignmentsToHana: boundSyncRoleAssignments,
     resolveEffectiveRestrictions
@@ -203,6 +201,73 @@ module.exports = cds.service.impl(async function () {
   this.on('simulateAccess', makeSimulateAccessHandler(cds, entities));
 
   // ---------------------------------------------------------------------------
+  // Databricks connection actions
+  // ---------------------------------------------------------------------------
+
+  this.on('testDatabricksConnection', async (req) => {
+    const { settingId } = req.data;
+    if (!settingId) {
+      return req.error(400, 'Parameter settingId is required');
+    }
+
+    const setting = await cds.db.run(SELECT.one.from(DatabricksSettings).where({ ID: settingId }));
+    if (!setting) {
+      return req.error(404, `Databricks Setting with ID '${settingId}' not found`);
+    }
+
+    // Validation 1: Workspace URL
+    if (!setting.workspaceUrl || typeof setting.workspaceUrl !== 'string' || !setting.workspaceUrl.trim().startsWith('http')) {
+      return {
+        success: false,
+        message: `Failed: Invalid or missing workspace URL '${setting.workspaceUrl || ''}'. URL must begin with http:// or https://`,
+        httpStatus: 400
+      };
+    }
+
+    // Validation 2: Authentication credentials based on authType
+    const authType = (setting.authType || 'TOKEN').toUpperCase();
+    if (authType === 'TOKEN') {
+      if (!setting.apiToken || !setting.apiToken.trim()) {
+        return {
+          success: false,
+          message: 'Failed: Missing API Bearer Token for TOKEN authentication',
+          httpStatus: 400
+        };
+      }
+    } else if (authType === 'SERVICE_PRINCIPAL') {
+      if (!setting.clientId || !setting.clientId.trim() || !setting.clientSecret || !setting.clientSecret.trim()) {
+        return {
+          success: false,
+          message: 'Failed: Missing Client ID or Client Secret for SERVICE_PRINCIPAL authentication',
+          httpStatus: 400
+        };
+      }
+    } else {
+      return {
+        success: false,
+        message: `Failed: Unsupported authentication type '${setting.authType}'`,
+        httpStatus: 400
+      };
+    }
+
+    // Execution: call DatabricksClient.testConnection
+    try {
+      const result = await DatabricksClient.testConnection(setting);
+      return {
+        success: Boolean(result?.success),
+        message: result?.message || (result?.success ? 'Connection test succeeded' : 'Connection test failed'),
+        httpStatus: Number(result?.httpStatus || (result?.success ? 200 : 502))
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Failed to connect to Databricks Workspace [${setting.systemName || ''}]: ${err.message}`,
+        httpStatus: Number(err.httpStatus || err.status || 502)
+      };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // BDC / HANA connection & data actions
   // ---------------------------------------------------------------------------
 
@@ -223,19 +288,6 @@ module.exports = cds.service.impl(async function () {
   this.on('fetchBdcTaskChainLog', makeFetchBdcTaskChainLogHandler(cds, entities, BdcClient));
   this.on('searchScimUsers', makeSearchScimUsersHandler(cds, entities, BdcClient));
 
-  // ---------------------------------------------------------------------------
-  // Replication actions
-  // ---------------------------------------------------------------------------
-
-  this.on('checkReplicationStatuses', async (req) => {
-    try {
-      return await checkAndUpdateRunningReplications(cds, entities, BdcClient);
-    } catch (e) {
-      return req.error(500, `Failed to check replication statuses: ${e.message}`);
-    }
-  });
-
-  this.on('triggerReplication', makeTriggerReplicationHandler(cds, entities, BdcClient));
 
   const { getUserEffectiveAuthorizations } = require('./services/userAuthorizationService');
 

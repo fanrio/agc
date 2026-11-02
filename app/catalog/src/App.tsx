@@ -43,7 +43,6 @@ const SystemView = lazy(() => import('./components/SystemView'));
 const UsersView = lazy(() => import('./components/UsersView'));
 const AppAuthorizationsView = lazy(() => import('./components/AppAuthorizationsView'));
 const AuditLogsView = lazy(() => import('./components/AuditLogsView'));
-const ReplicationsView = lazy(() => import('./components/ReplicationsView'));
 const UserAuthorizationCardDrawer = lazy(() => import('./components/UserAuthorizationCard/UserAuthorizationCardDrawer'));
 
 const EXPANDED_DRAWER_WIDTH = 240;
@@ -66,7 +65,7 @@ function getNavFromHash() {
   if (['security-profiles', 'security_profiles', 'profiles', 'securityprofiles', 'access-profiles', 'access_profiles', 'accessprofiles'].includes(hash)) {
     return 'access-profiles';
   }
-  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'access-profiles', 'users', 'system', 'wizard', 'replications'];
+  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'access-profiles', 'users', 'system', 'wizard'];
   return validNavs.includes(hash) ? hash : 'home';
 }
 
@@ -140,7 +139,6 @@ function AppContent({ simulatedUser, onLogout }) {
   const filteredNav = NAV.filter(item => {
     if (permissions?.isSuperAdmin) return true;
     if (item.id === 'org') return !!permissions?.canManageOrgRoles;
-    if (item.id === 'replications') return !!permissions?.canManageReplications;
     if (item.id === 'audit') return !!permissions?.canViewAuditLogs;
     if (item.id === 'users') return !!permissions?.canManageAppUsers;
     if (item.id === 'access-profiles') return true;
@@ -322,7 +320,6 @@ function AppContent({ simulatedUser, onLogout }) {
           {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
           {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
           {activeNav === 'assignments' && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
-          {activeNav === 'replications' && <ReplicationsView />}
           {activeNav === 'audit' && <AuditLogsView />}
           {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
           {activeNav === 'users' && <AppAuthorizationsView />}

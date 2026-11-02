@@ -1,0 +1,762 @@
+﻿ÔûÂ Comprehensive Backend Integration & Action Test Suite
+  ÔûÂ Role & Restriction CRUD triggers
+    Ô£û Create a Role (72.9358ms)
+    Ô£û Verify CREATE AuditLog (7.4604ms)
+    Ô£û Add Restriction to Role (6.5981ms)
+    Ô£û Update Restriction value (6.0597ms)
+    Ô£û Update Role description (5.392ms)
+    Ô£û Delete Restriction (5.6399ms)
+    Ô£û Delete Role (5.2618ms)
+  Ô£û Role & Restriction CRUD triggers (113.135ms)
+  Ô£û generateOrgRole and generateAllOrgRoles actions (12.3713ms)
+  Ô£û resolveEffectiveRestrictions action (3.8061ms)
+  Ô£û resolveEffectiveRestrictions overrides parent wildcard restriction if child restricts same field (3.5962ms)
+  Ô£û RoleInheritance and Restrictions CREATE/DELETE triggers HANA re-sync (4.5246ms)
+  Ô£û simulateAccess function and evaluation logic (3.202ms)
+  Ô£û testBdcConnection OData & Hana branches (3.2734ms)
+  Ô£û DatabricksSettings CRUD & testDatabricksConnection action (3.5684ms)
+  Ô£û fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns OData actions (4.502ms)
+  Ô£û fetchRawBdcSpaces, fetchRawBdcAssets, fetchRawBdcRelationalValues, fetchRawBdcAssetColumns, fetchRawHanaViews actions (3.6788ms)
+  Ô£û searchScimUsers action (2.6405ms)
+  Ô£û runBdcTaskChain and fetchBdcTaskChainLog actions (2.7777ms)
+  ÔûÂ Direct Multi-Target Real-Time Synchronization (replacing batch replication queue)
+    Ô£û Create role with targetPlatform BOTH and assign restrictions (3.0164ms)
+    Ô£û Assignment CREATE triggers immediate real-time sync to Databricks and HANA (4.4926ms)
+    Ô£û Assignment DELETE triggers immediate real-time policy removal (2.9201ms)
+    Ô£û Verify decommissioned replication actions and entity return 404 (3.5586ms)
+  Ô£û Direct Multi-Target Real-Time Synchronization (replacing batch replication queue) (17.285ms)
+  Ô£ö HANA Flat Replication - Cartesian Product buildFlatAuthorizationsForHana (1.8279ms)
+  Ô£ö HANA Hier Replication - buildHierAuthorizationsForHana (0.8722ms)
+  Ô£ö HANA Hier Replication - syncCustomHierAssignment and auto-migration (2.5678ms)
+  Ô£û Derived Role Duplicate Restriction Checks (3.6906ms)
+  Ô£û OData function getDashboardKpis() computes and returns statistics correctly (2.4966ms)
+  Ô£û Atomic Deep POST and PATCH on Roles saves restrictions, parent inheritances, approvers, and assignments (3.0173ms)
+  Ô£û Function: getUserEffectiveAuthorizations returns domain-grouped user permissions (2.5838ms)
+  Ô£û Deletion Validation: AccessDomains cannot be deleted if used in Roles or DynamicGenerationRules (4.0401ms)
+  Ô£û Deletion Validation: RestrictionFields cannot be deleted if used in an AccessDomain (3.8063ms)
+Ô£û Comprehensive Backend Integration & Action Test Suite (1573.6672ms)
+Ôä╣ tests 34
+Ôä╣ suites 0
+Ôä╣ pass 3
+Ôä╣ fail 31
+Ôä╣ cancelled 0
+Ôä╣ skipped 0
+Ôä╣ todo 0
+Ôä╣ duration_ms 2464.6843
+
+Ô£û failing tests:
+
+test at test\backend_tests.test.js:206:14
+Ô£û Create a Role (72.9358ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:207:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:206:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:217:14
+Ô£û Verify CREATE AuditLog (7.4604ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:218:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:217:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:223:14
+Ô£û Add Restriction to Role (6.5981ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:224:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:223:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:234:14
+Ô£û Update Restriction value (6.0597ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:235:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:234:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:241:14
+Ô£û Update Role description (5.392ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:242:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:241:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:248:14
+Ô£û Delete Restriction (5.6399ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:249:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:248:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:253:14
+Ô£û Delete Role (5.2618ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:254:19)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:253:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:204:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:260:11
+Ô£û generateOrgRole and generateAllOrgRoles actions (12.3713ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:282:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:260:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:321:11
+Ô£û resolveEffectiveRestrictions action (3.8061ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:326:18)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:321:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:362:11
+Ô£û resolveEffectiveRestrictions overrides parent wildcard restriction if child restricts same field (3.5962ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:367:18)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:362:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:400:11
+Ô£û RoleInheritance and Restrictions CREATE/DELETE triggers HANA re-sync (4.5246ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:405:18)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:400:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:448:11
+Ô£û simulateAccess function and evaluation logic (3.202ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:450:21)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:448:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:524:11
+Ô£û testBdcConnection OData & Hana branches (3.2734ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:526:26)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:524:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:648:11
+Ô£û DatabricksSettings CRUD & testDatabricksConnection action (3.5684ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:653:26)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:648:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:793:11
+Ô£û fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns OData actions (4.502ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:795:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:793:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:902:11
+Ô£û fetchRawBdcSpaces, fetchRawBdcAssets, fetchRawBdcRelationalValues, fetchRawBdcAssetColumns, fetchRawHanaViews actions (3.6788ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:904:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:902:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1004:11
+Ô£û searchScimUsers action (2.6405ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1006:18)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1004:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1018:11
+Ô£û runBdcTaskChain and fetchBdcTaskChainLog actions (2.7777ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1020:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1018:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1079:14
+Ô£û Create role with targetPlatform BOTH and assign restrictions (3.0164ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1080:23)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1079:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1070:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1099:14
+Ô£û Assignment CREATE triggers immediate real-time sync to Databricks and HANA (4.4926ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1101:25)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1099:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1070:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1120:14
+Ô£û Assignment DELETE triggers immediate real-time policy removal (2.9201ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1122:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1120:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1070:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1132:14
+Ô£û Verify decommissioned replication actions and entity return 404 (3.5586ms)
+  AssertionError [ERR_ASSERTION]: Expected status 404, got undefined
+  
+  undefined !== 404
+  
+      at assertODataError (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:199:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1134:7)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1132:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1070:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 404,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend_tests.test.js:1070:11
+Ô£û Direct Multi-Target Real-Time Synchronization (replacing batch replication queue) (17.285ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1153:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1070:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1291:11
+Ô£û Derived Role Duplicate Restriction Checks (3.6906ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1293:27)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1291:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1374:11
+Ô£û OData function getDashboardKpis() computes and returns statistics correctly (2.4966ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1375:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1374:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1390:11
+Ô£û Atomic Deep POST and PATCH on Roles saves restrictions, parent inheritances, approvers, and assignments (3.0173ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1391:23)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1390:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1498:11
+Ô£û Function: getUserEffectiveAuthorizations returns domain-grouped user permissions (2.5838ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1499:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1498:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1508:11
+Ô£û Deletion Validation: AccessDomains cannot be deleted if used in Roles or DynamicGenerationRules (4.0401ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1511:23)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1508:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }
+
+test at test\backend_tests.test.js:1572:11
+Ô£û Deletion Validation: RestrictionFields cannot be deleted if used in an AccessDomain (3.8063ms)
+  TypeError: undefined - fetch failed
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1575:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async TestContext.<anonymous> (C:\Users\Fan\Documents\fanrio-auth\test\backend_tests.test.js:1572:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    [cause]: AggregateError [EACCES]: 
+        at internalConnectMultiple (node:net:1194:18)
+        at afterConnectMultiple (node:net:1784:7) {
+      code: 'EACCES',
+      [errors]: [
+        Error: connect EACCES ::1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16),
+        Error: connect EACCES 127.0.0.1:57398
+            at createConnectionError (node:net:1747:14)
+            at afterConnectMultiple (node:net:1777:16)
+      ]
+    }
+  }

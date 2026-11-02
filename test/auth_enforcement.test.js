@@ -141,51 +141,18 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: testUser }));
   });
 
-  await t.test('Replications authorization enforcement', async (t2) => {
-    const db = await cds.connect.to('db');
-    const { AppAuthorizations } = db.entities;
-
-    const replUser = 'repl-user';
-    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: replUser }));
-
-    // User without canManageReplications
-    await db.run(INSERT.into(AppAuthorizations).entries({
-      ID: cds.utils.uuid(),
-      userId: replUser,
-      userName: 'Repl User without permission',
-      canManageReplications: false,
-      allowedEnvironments: 'ALL',
-      allowedAccessDomains: '[]',
-      isActive: true
-    }));
-
-    await t2.test('Block triggerReplication for user without permission', async () => {
+  await t.test('Retired Replications endpoint decommission guard', async (t2) => {
+    await t2.test('triggerReplication is permanently decommissioned and returns 404 for all users', async () => {
       try {
         await POST('/odata/v4/auth/triggerReplication', {}, {
-          headers: { 'x-simulated-user': replUser }
+          headers: { 'x-simulated-user': 'admin' }
         });
-        assert.fail('Expected triggerReplication to fail with 403');
+        assert.fail('Expected triggerReplication to return 404');
       } catch (err) {
-        assert.strictEqual(err.status || err.response?.status, 403);
+        const status = err.status || err.response?.status;
+        assert.strictEqual(status, 404, `Expected 404 Not Found, got ${status}`);
       }
     });
-
-    // Grant canManageReplications
-    await db.run(UPDATE(AppAuthorizations).set({ canManageReplications: true }).where({ userId: replUser }));
-
-    await t2.test('Allow triggerReplication for user with permission', async () => {
-      // Clear pending replications to avoid connecting to unconfigured BDC settings
-      await db.run(cds.ql.DELETE('fanrio.auth.Replications'));
-
-      const res = await POST('/odata/v4/auth/triggerReplication', {}, {
-        headers: { 'x-simulated-user': replUser }
-      });
-      assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.data.success, true);
-    });
-
-    // Clean up
-    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: replUser }));
   });
 
   await t.test('Assign Roles restriction enforcement (Derived roles only)', async (t2) => {
@@ -781,6 +748,107 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     }
 
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: multiRoleUser }));
+  });
+
+  await t.test('testDatabricksConnection and DatabricksSettings require canManageSettings permission', async () => {
+    const db = await cds.connect.to('db');
+    const { AppAuthorizations, DatabricksSettings } = db.entities;
+
+    // Create a dummy DatabricksSetting record
+    const dummySettingId = cds.utils.uuid();
+    await db.run(INSERT.into(DatabricksSettings).entries({
+      ID: dummySettingId,
+      systemName: 'AUTH_TEST_DBX',
+      workspaceUrl: 'https://mock-workspace.cloud.databricks.com',
+      authType: 'TOKEN',
+      apiToken: 'test-token',
+      isActive: true
+    }));
+
+    // 1. Anonymous access to testDatabricksConnection is blocked with 403
+    try {
+      await POST('/odata/v4/auth/testDatabricksConnection', {
+        settingId: dummySettingId
+      }, {
+        headers: { 'x-simulated-user': 'anonymous' }
+      });
+      assert.fail('Expected testDatabricksConnection to fail with 403 for anonymous');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // 2. User without canManageSettings is blocked with 403 on testDatabricksConnection
+    const restrictedUser = 'dbx-no-settings-user';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: restrictedUser }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: restrictedUser,
+      userName: 'Restricted User',
+      isSuperAdmin: false,
+      canManageSettings: false,
+      canManageSingleRoles: true,
+      allowedEnvironments: 'ALL',
+      isActive: true
+    }));
+
+    try {
+      await POST('/odata/v4/auth/testDatabricksConnection', {
+        settingId: dummySettingId
+      }, {
+        headers: { 'x-simulated-user': restrictedUser }
+      });
+      assert.fail('Expected testDatabricksConnection to fail with 403 for user lacking canManageSettings');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // 3. User without canManageSettings is blocked with 403 on DatabricksSettings READ & CREATE
+    try {
+      await GET('/odata/v4/auth/DatabricksSettings', {
+        headers: { 'x-simulated-user': restrictedUser }
+      });
+      assert.fail('Expected DatabricksSettings READ to fail with 403 for user lacking canManageSettings');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    try {
+      await POST('/odata/v4/auth/DatabricksSettings', {
+        systemName: 'BLOCKED_SETTING',
+        workspaceUrl: 'https://mock.databricks.com'
+      }, {
+        headers: { 'x-simulated-user': restrictedUser }
+      });
+      assert.fail('Expected DatabricksSettings CREATE to fail with 403 for user lacking canManageSettings');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // 4. User with canManageSettings succeeds on testDatabricksConnection
+    const adminUser = 'dbx-settings-admin';
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: adminUser }));
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: adminUser,
+      userName: 'Settings Admin User',
+      isSuperAdmin: false,
+      canManageSettings: true,
+      allowedEnvironments: 'ALL',
+      isActive: true
+    }));
+
+    const res = await POST('/odata/v4/auth/testDatabricksConnection', {
+      settingId: dummySettingId
+    }, {
+      headers: { 'x-simulated-user': adminUser }
+    });
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.success, true);
+
+    // Clean up
+    await db.run(cds.ql.DELETE(DatabricksSettings).where({ ID: dummySettingId }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: restrictedUser }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: adminUser }));
   });
 
 });

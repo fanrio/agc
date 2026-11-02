@@ -13,13 +13,15 @@
  *
  * @param {object} service  - CAP service instance (this)
  * @param {object} entities - { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs }
- * @param {{ cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions }} deps
+ * @param {{ cds, directSyncDispatcher, resolveEffectiveRestrictions }} deps
  */
 const { getUserId, getSessionPermissions, requirePermission, requireEnvironment, filterAssignableRolesByBackendPermissions } = require('../lib/authGuard');
 const { fetchRoleAncestryChain } = require('../services/hanaReplicationService');
+const defaultDispatcher = require('../services/directSyncDispatcher');
 
-function registerAssignmentHandlers(service, entities, deps) {
-  const { cds, queueReplication, syncAssignmentToHana, resolveEffectiveRestrictions } = deps;
+function registerAssignmentHandlers(service, entities, deps = {}) {
+  const { cds, resolveEffectiveRestrictions } = deps;
+  const dispatcher = deps.directSyncDispatcher || defaultDispatcher;
   const { Roles, Restrictions, RoleInheritance, RoleAssignments, AuditLogs, RoleApprovers, AppAuthorizations } = entities;
 
   // -------------------------------------------------------------------------
@@ -174,14 +176,17 @@ function registerAssignmentHandlers(service, entities, deps) {
       console.error('[AssignmentHandlers] Audit Log failed for RoleAssignments CREATE:', err.message);
     }
 
-    // Run HANA sync and queue replication in background to prevent blocking HTTP thread
+    // Run multi-target direct sync in background to prevent blocking HTTP thread
     cds.spawn({ user: req?.user }, async () => {
       try {
-        await syncAssignmentToHana(assignmentId, userId, roleId, false);
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: roleId }));
-        if (role) await queueReplication(role.name, role.environment_ID, actorUser);
+        await dispatcher.dispatchAssignmentSync({
+          assignmentId,
+          userId,
+          roleId,
+          actorUser
+        });
       } catch (err) {
-        console.error('[AssignmentHandlers] Background sync/replication failed for RoleAssignments CREATE:', err.message);
+        console.error('[AssignmentHandlers] Background direct sync failed for RoleAssignments CREATE:', err.message);
       }
     });
   });
@@ -242,14 +247,28 @@ function registerAssignmentHandlers(service, entities, deps) {
         }));
       }
 
-      if (afterState) {
-        const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: afterState.role_ID }));
-        if (role) await queueReplication(role.name, role.environment_ID, req?.user?.id);
-      }
-      if (beforeState && beforeState.role_ID !== afterState?.role_ID) {
-        const oldRole = await cds.db.run(SELECT.one.from(Roles).where({ ID: beforeState.role_ID }));
-        if (oldRole) await queueReplication(oldRole.name, oldRole.environment_ID, req?.user?.id);
-      }
+      cds.spawn({ user: req?.user }, async () => {
+        try {
+          if (beforeState && beforeState.role_ID && beforeState.role_ID !== afterState?.role_ID) {
+            await dispatcher.dispatchAssignmentRemoval({
+              assignmentId: id,
+              userId: beforeState.userId,
+              roleId: beforeState.role_ID,
+              actorUser: getUserId(req)
+            });
+          }
+          if (afterState) {
+            await dispatcher.dispatchAssignmentSync({
+              assignmentId: id,
+              userId: afterState.userId,
+              roleId: afterState.role_ID,
+              actorUser: getUserId(req)
+            });
+          }
+        } catch (err) {
+          console.error('[AssignmentHandlers] Background direct sync failed for RoleAssignments UPDATE:', err.message);
+        }
+      });
     } catch (err) {
       console.error('[AssignmentHandlers] Audit Log failed for RoleAssignments UPDATE:', err.message);
     }
@@ -272,9 +291,6 @@ function registerAssignmentHandlers(service, entities, deps) {
         targetRoleId = assignment.role_ID;
 
         const role = await cds.db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
-        if (role) {
-          await queueReplication(`${role.name} (ASSIGNMENT DELETED)`, role.environment_ID, req?.user?.id);
-        }
 
         await cds.db.run(INSERT.into(AuditLogs).entries({
           ID:         cds.utils.uuid(),
@@ -293,12 +309,17 @@ function registerAssignmentHandlers(service, entities, deps) {
       console.error('[AssignmentHandlers] Deletion audit logs failed:', err.message);
     }
 
-    // Pass targetUserId and targetRoleId to clean access-domain-specific custom tables in background
+    // Pass targetUserId and targetRoleId to clean target platform assignments in background
     cds.spawn({ user: req?.user }, async () => {
       try {
-        await syncAssignmentToHana(id, targetUserId, targetRoleId, true);
+        await dispatcher.dispatchAssignmentRemoval({
+          assignmentId: id,
+          userId: targetUserId,
+          roleId: targetRoleId,
+          actorUser: getUserId(req)
+        });
       } catch (err) {
-        console.error('[AssignmentHandlers] Background HANA sync failed for RoleAssignments DELETE:', err.message);
+        console.error('[AssignmentHandlers] Background direct sync failed for RoleAssignments DELETE:', err.message);
       }
     });
   });

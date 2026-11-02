@@ -34,6 +34,12 @@ import * as api from '../api';
 import TemplateNameEditor from './TemplateNameEditor';
 import SearchableSelect from './SearchableSelect';
 
+const ACCESS_DOMAIN_PLATFORM_OPTIONS = [
+  { value: 'BOTH', label: 'Both Platforms' },
+  { value: 'DATASPHERE', label: 'SAP Datasphere' },
+  { value: 'DATABRICKS', label: 'Databricks' }
+];
+
 // ─── Move Dialog (O(N) descendant lookup via parent->children Map) ───────────
 function MoveDialog({ node, allNodes, onConfirm, onClose, open }: {
   node: any;
@@ -165,6 +171,7 @@ const NodeRow = memo(function NodeRow({
   createRestrictionField,
   deleteRestrictionField,
   showRoleTemplateName = false,
+  showTargetPlatformSelector = false,
 }: any) {
   const [expanded, setExpanded]         = useState(depth < 2);
   const [showAddChild, setShowAddChild] = useState(false);
@@ -174,8 +181,10 @@ const NodeRow = memo(function NodeRow({
   const [editName, setEditName]         = useState(node.name);
   const [editDesc, setEditDesc]         = useState(node.description || '');
   const [editTemplate, setEditTemplate] = useState(node.roleTemplateName || '');
+  const [editPlatform, setEditPlatform] = useState(node.targetPlatform || 'BOTH');
   const [newChild, setNewChild]         = useState({ name: '', description: '', type: '' });
   const [newChildTemplate, setNewChildTemplate] = useState('');
+  const [newChildPlatform, setNewChildPlatform] = useState<'DATASPHERE' | 'DATABRICKS' | 'BOTH'>('BOTH');
   const [newAttr, setNewAttr]           = useState({ field: '', value: '' });
   const [newChildFields, setNewChildFields] = useState<string[]>([]);
   const [loading, setLoading]           = useState(false);
@@ -204,12 +213,16 @@ const NodeRow = memo(function NodeRow({
       if (showRoleTemplateName) {
         payload.roleTemplateName = newChildTemplate;
       }
+      if (showTargetPlatformSelector) {
+        payload.targetPlatform = newChildPlatform || 'BOTH';
+      }
       const created = await createNode(payload);
       if (showRestrictionFields && newChildFields.length > 0 && createRestrictionField && created?.ID) {
         await Promise.all(newChildFields.map((fId) => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewChild({ name: '', description: '', type: '' });
       setNewChildTemplate('');
+      setNewChildPlatform('BOTH');
       setNewChildFields([]);
       setShowAddChild(false);
       await onRefresh(true);
@@ -254,6 +267,9 @@ const NodeRow = memo(function NodeRow({
       }
       if (showRoleTemplateName) {
         payload.roleTemplateName = editTemplate;
+      }
+      if (showTargetPlatformSelector) {
+        payload.targetPlatform = editPlatform || 'BOTH';
       }
       await updateNode(node.ID, payload);
       setEditing(false);
@@ -390,6 +406,15 @@ const NodeRow = memo(function NodeRow({
                     sx={{ '& input': { py: 0.5, px: 1, fontSize: 13 }, width: 220 }}
                   />
                 )}
+                {showTargetPlatformSelector && (
+                  <SearchableSelect
+                    options={ACCESS_DOMAIN_PLATFORM_OPTIONS}
+                    value={editPlatform}
+                    onChange={(val) => setEditPlatform(val as any)}
+                    label="Platform"
+                    sx={{ width: 160 }}
+                  />
+                )}
                 {showRoleTemplateName && (
                   <Box sx={{ width: '100%', mt: 1, mb: 1 }}>
                     <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>Role template name:</Typography>
@@ -409,8 +434,23 @@ const NodeRow = memo(function NodeRow({
               </Box>
             ) : (
               <>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                   {node.name}
+                  {(showTargetPlatformSelector || node.targetPlatform) && (
+                    <Chip
+                      label={
+                        node.targetPlatform === 'DATASPHERE' ? 'Datasphere' :
+                        node.targetPlatform === 'DATABRICKS' ? 'Databricks' : 'Both Platforms'
+                      }
+                      size="small"
+                      color={
+                        node.targetPlatform === 'DATASPHERE' ? 'info' :
+                        node.targetPlatform === 'DATABRICKS' ? 'warning' : 'secondary'
+                      }
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '10px', fontWeight: 600, ml: 1 }}
+                    />
+                  )}
                   {showDescriptionField && node.description && (
                     <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', ml: 1.5, fontSize: 12 }}>
                       — {node.description}
@@ -590,6 +630,15 @@ const NodeRow = memo(function NodeRow({
                 sx={{ width: 140 }}
               />
             )}
+            {showTargetPlatformSelector && (
+              <SearchableSelect
+                options={ACCESS_DOMAIN_PLATFORM_OPTIONS}
+                value={newChildPlatform}
+                onChange={(val) => setNewChildPlatform(val as any)}
+                label="Target Platform"
+                sx={{ width: 160 }}
+              />
+            )}
             {showRestrictionFields && nodeTypes.length > 0 && (
               <SearchableSelect
                 options={typeOptionsOnly}
@@ -611,7 +660,7 @@ const NodeRow = memo(function NodeRow({
               </Box>
             )}
             <Button variant="contained" size="small" onClick={handleAddChild} disabled={loading}>Add</Button>
-            <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); setNewChildTemplate(''); }}><X size={15} /></IconButton>
+            <IconButton size="small" onClick={() => { setShowAddChild(false); setNewChildFields([]); setNewChildTemplate(''); setNewChildPlatform('BOTH'); }}><X size={15} /></IconButton>
           </Card>
         )}
 
@@ -642,6 +691,7 @@ const NodeRow = memo(function NodeRow({
             createRestrictionField={createRestrictionField}
             deleteRestrictionField={deleteRestrictionField}
             showRoleTemplateName={showRoleTemplateName}
+            showTargetPlatformSelector={showTargetPlatformSelector}
           />
         ))}
 
@@ -723,6 +773,7 @@ interface HierarchicalManagerProps {
   createRestrictionField?: (body: any) => Promise<any>;
   deleteRestrictionField?: (id: string) => Promise<any>;
   showRoleTemplateName?: boolean;
+  showTargetPlatformSelector?: boolean;
 }
 
 // ─── Main Hierarchical Manager Component ─────────────────────────────────────
@@ -761,6 +812,7 @@ export default function HierarchicalManager({
   createRestrictionField,
   deleteRestrictionField,
   showRoleTemplateName = false,
+  showTargetPlatformSelector = false,
 }: HierarchicalManagerProps) {
   const initialCachePath = fetchNodesFlat === api.getAllOrgNodesFlat
     ? api.ORG_NODES_FLAT_PATH
@@ -778,6 +830,7 @@ export default function HierarchicalManager({
   const [newRoot, setNewRoot]     = useState({ name: '', description: '', type: '' });
   const [newRootTemplate, setNewRootTemplate] = useState('');
   const [newRootFields, setNewRootFields] = useState<string[]>([]);
+  const [newRootPlatform, setNewRootPlatform] = useState<'DATASPHERE' | 'DATABRICKS' | 'BOTH'>('BOTH');
   const [snackbar, setSnackbar]   = useState<{
     open: boolean;
     message: string;
@@ -850,12 +903,16 @@ export default function HierarchicalManager({
       if (showRoleTemplateName) {
         payload.roleTemplateName = newRootTemplate;
       }
+      if (showTargetPlatformSelector) {
+        payload.targetPlatform = newRootPlatform || 'BOTH';
+      }
       const created = await createNode(payload);
       if (showRestrictionFields && newRootFields.length > 0 && createRestrictionField && created?.ID) {
         await Promise.all(newRootFields.map((fId) => createRestrictionField({ domain_ID: created.ID, field_ID: fId })));
       }
       setNewRoot({ name: '', description: '', type: '' });
       setNewRootTemplate('');
+      setNewRootPlatform('BOTH');
       setNewRootFields([]);
       setShowAdd(false);
       await load(true);
@@ -963,6 +1020,15 @@ export default function HierarchicalManager({
               sx={{ width: 160 }}
             />
           )}
+          {showTargetPlatformSelector && (
+            <SearchableSelect
+              options={ACCESS_DOMAIN_PLATFORM_OPTIONS}
+              value={newRootPlatform}
+              onChange={(val) => setNewRootPlatform(val as any)}
+              label="Target Platform"
+              sx={{ width: 170 }}
+            />
+          )}
           {showRestrictionFields && nodeTypes.length > 0 && (
             <SearchableSelect
               options={typeOptionsOnly}
@@ -984,7 +1050,7 @@ export default function HierarchicalManager({
             </Box>
           )}
           <Button variant="contained" onClick={handleAddRoot}>Add</Button>
-          <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); setNewRootTemplate(''); }} size="small"><X size={16} /></IconButton>
+          <IconButton onClick={() => { setShowAdd(false); setNewRootFields([]); setNewRootTemplate(''); setNewRootPlatform('BOTH'); }} size="small"><X size={16} /></IconButton>
         </Card>
       )}
 
@@ -1026,6 +1092,7 @@ export default function HierarchicalManager({
                 createRestrictionField={createRestrictionField}
                 deleteRestrictionField={deleteRestrictionField}
                 showRoleTemplateName={showRoleTemplateName}
+                showTargetPlatformSelector={showTargetPlatformSelector}
               />
             ))}
           </Box>

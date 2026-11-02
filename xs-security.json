@@ -1,5 +1,13 @@
 {
-  "scopes": [],
+  "xsappname": "fanrio-cortex",
+  "tenant-mode": "dedicated",
+  "description": "Security profile for SAP BDC Authorization Wizard",
+  "scopes": [
+    {
+      "name": "uaa.user",
+      "description": "Standard authorized user"
+    }
+  ],
   "attributes": [],
   "role-templates": []
 }

@@ -223,6 +223,13 @@ export const RoleCard = memo(function RoleCard({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Chip size="small" label={ENV_LABEL[role.environment_ID] || role.environment_ID} color={ENV_COLOR[role.environment_ID] || 'default'} variant="outlined" />
+            <Chip
+              size="small"
+              label={role.targetPlatform === 'BOTH' ? 'Both' : role.targetPlatform === 'DATABRICKS' ? 'Databricks' : 'Datasphere'}
+              color={role.targetPlatform === 'BOTH' ? 'secondary' : role.targetPlatform === 'DATABRICKS' ? 'warning' : 'info'}
+              variant="outlined"
+              sx={{ fontSize: '0.7rem' }}
+            />
             {isCritical && <Chip size="small" icon={<AlertTriangle size={12} />} label="Critical" color="error" />}
           </Box>
         </Card>
@@ -280,6 +287,19 @@ export const RoleCard = memo(function RoleCard({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>{role.name}</Typography>
                 <Chip size="small" label={role.type} color={isOrgRole ? 'primary' : isDerived ? 'secondary' : 'default'} />
+                <Chip
+                  size="small"
+                  label={
+                    role.targetPlatform === 'BOTH' ? 'Datasphere + Databricks' :
+                    role.targetPlatform === 'DATABRICKS' ? 'Databricks' : 'Datasphere'
+                  }
+                  color={
+                    role.targetPlatform === 'BOTH' ? 'secondary' :
+                    role.targetPlatform === 'DATABRICKS' ? 'warning' : 'info'
+                  }
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                />
                 {role.critical && <Chip size="small" label="Critical (Manual)" color="error" />}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>{role.description || 'No description provided.'}</Typography>
@@ -300,6 +320,9 @@ export const RoleCard = memo(function RoleCard({
                   <strong>Derived from:</strong> {role.parentRoles[0].parent.name}
                 </Typography>
               )}
+              <Typography variant="caption" color="text.secondary">
+                <strong>Platform:</strong> {role.targetPlatform === 'BOTH' ? 'Both' : (role.targetPlatform || 'DATASPHERE')}
+              </Typography>
               <Typography variant="caption" color="text.secondary">
                 <strong>Modified:</strong> {formatDateTime(role.modifiedAt)}
               </Typography>

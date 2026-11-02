@@ -1,6 +1,5 @@
-import React from 'react';
-import { Box, Card, Typography, TextField, FormControlLabel, Checkbox } from '@mui/material';
-import { Check, Shield, Zap, GitFork } from 'lucide-react';
+import { Box, Card, Typography, TextField, FormControlLabel, Checkbox, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Check, Shield, Zap, GitFork, Cloud, Flame, Layers } from 'lucide-react';
 import EnvironmentSelection from '../../EnvironmentSelection';
 import SearchableSelect from '../../SearchableSelect';
 
@@ -12,10 +11,11 @@ export default function StepOrigin({
   description, setDescription,
   environmentId, setEnvironmentId, filteredEnvironments,
   accessDomainId, setAccessDomainId, accessDomains,
+  targetPlatform = 'DATASPHERE', setTargetPlatform,
   critical, setCritical, setIsCriticalManuallySet,
   isEditMode, permissions, context = {} as any, isReadOnly,
   allAccessDomains
-}) {
+}: any) {
 
   return (
     <Card sx={{ p: 3 }}>
@@ -141,6 +141,59 @@ export default function StepOrigin({
             required
             disabled={isReadOnly || (selectedParentIds && selectedParentIds.length > 0)}
           />
+        </Box>
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5, color: 'text.secondary' }}>
+            Target Platform
+          </Typography>
+          <ToggleButtonGroup
+            value={targetPlatform}
+            exclusive
+            onChange={(_e, val) => { if (val && setTargetPlatform) setTargetPlatform(val); }}
+            size="small"
+            disabled={isReadOnly}
+            fullWidth
+            sx={{ height: 38 }}
+          >
+            <ToggleButton
+              value="DATASPHERE"
+              sx={{
+                fontWeight: 600,
+                textTransform: 'none',
+                gap: 1,
+                '&.Mui-selected': { bgcolor: 'info.lighter', color: 'info.main', borderColor: 'info.main' }
+              }}
+            >
+              <Cloud size={16} /> SAP Datasphere
+            </ToggleButton>
+            <ToggleButton
+              value="DATABRICKS"
+              sx={{
+                fontWeight: 600,
+                textTransform: 'none',
+                gap: 1,
+                '&.Mui-selected': { bgcolor: 'warning.lighter', color: 'warning.main', borderColor: 'warning.main' }
+              }}
+            >
+              <Flame size={16} /> Databricks
+            </ToggleButton>
+            <ToggleButton
+              value="BOTH"
+              sx={{
+                fontWeight: 600,
+                textTransform: 'none',
+                gap: 1,
+                '&.Mui-selected': { bgcolor: 'secondary.lighter', color: 'secondary.main', borderColor: 'secondary.main' }
+              }}
+            >
+              <Layers size={16} /> Both Platforms
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {targetPlatform === 'DATASPHERE' && 'Generates flat HANA authorization tables for SAP Datasphere.'}
+            {targetPlatform === 'DATABRICKS' && 'Generates Unity Catalog row-level filters and access grants for Databricks.'}
+            {targetPlatform === 'BOTH' && 'Synchronizes policies simultaneously to both SAP Datasphere and Databricks.'}
+          </Typography>
         </Box>
         <FormControlLabel
           control={

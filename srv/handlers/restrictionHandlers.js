@@ -1,6 +1,7 @@
 'use strict';
 
-const { getSessionPermissions, requirePermission, requireEnvironment } = require('../lib/authGuard');
+const { getUserId, getSessionPermissions, requirePermission, requireEnvironment } = require('../lib/authGuard');
+const defaultDispatcher = require('../services/directSyncDispatcher');
 
 /**
  * Restriction Handlers
@@ -16,8 +17,9 @@ const { getSessionPermissions, requirePermission, requireEnvironment } = require
  * @param {object} entities - { Roles, Restrictions, AuditLogs }
  * @param {{ cds, queueReplication, syncRoleAssignmentsToHana }} deps
  */
-function registerRestrictionHandlers(service, entities, deps) {
-  const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
+function registerRestrictionHandlers(service, entities, deps = {}) {
+  const { cds } = deps;
+  const dispatcher = deps.directSyncDispatcher || defaultDispatcher;
   const { Roles, Restrictions, AuditLogs, AppAuthorizations } = entities;
 
   // -------------------------------------------------------------------------
@@ -121,13 +123,22 @@ function registerRestrictionHandlers(service, entities, deps) {
         targetName: roleName,
         details:    JSON.stringify(details)
       }));
-      await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+
     } catch (err) {
       console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions CREATE:', err.message);
     }
 
-    // Run HANA re-sync synchronously (lets errors propagate to frontend)
-    await syncRoleAssignmentsToHana(roleId);
+    // Run multi-target direct sync in background to prevent blocking HTTP thread
+    cds.spawn({ user: req?.user }, async () => {
+      try {
+        await dispatcher.dispatchRoleSync({
+          roleId,
+          actorUser: getUserId(req) || req?.user?.id
+        });
+      } catch (err) {
+        console.error('[RestrictionHandlers] Background direct sync failed for Restrictions CREATE:', err.message);
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -182,7 +193,7 @@ function registerRestrictionHandlers(service, entities, deps) {
           targetName: roleName,
           details:    JSON.stringify(details)
         }));
-        await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+
       } catch (err) {
         console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions UPDATE:', err.message);
       }
@@ -190,7 +201,10 @@ function registerRestrictionHandlers(service, entities, deps) {
       // Run HANA re-sync in background to prevent blocking HTTP thread
       cds.spawn({ user: req?.user }, async () => {
         try {
-          await syncRoleAssignmentsToHana(beforeState.role_ID);
+          await dispatcher.dispatchRoleSync({
+            roleId: beforeState.role_ID,
+            actorUser: getUserId(req) || req?.user?.id
+          });
         } catch (err) {
           console.error('[RestrictionHandlers] Background HANA sync failed for Restrictions UPDATE:', err.message);
         }
@@ -225,7 +239,7 @@ function registerRestrictionHandlers(service, entities, deps) {
         targetName: roleName,
         details:    JSON.stringify(details)
       }));
-      await queueReplication(roleName, role ? role.environment_ID : 'D', req?.user?.id);
+
     } catch (err) {
       console.error('[RestrictionHandlers] Audit Log/queue failed for Restrictions DELETE:', err.message);
     }
@@ -233,7 +247,10 @@ function registerRestrictionHandlers(service, entities, deps) {
     // Run HANA re-sync in background to prevent blocking HTTP thread
     cds.spawn({ user: req?.user }, async () => {
       try {
-        await syncRoleAssignmentsToHana(beforeState.role_ID);
+        await dispatcher.dispatchRoleSync({
+          roleId: beforeState.role_ID,
+          actorUser: getUserId(req) || req?.user?.id
+        });
       } catch (err) {
         console.error('[RestrictionHandlers] Background HANA sync failed for Restrictions DELETE:', err.message);
       }

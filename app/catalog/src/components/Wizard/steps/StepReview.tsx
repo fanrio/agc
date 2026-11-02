@@ -7,11 +7,11 @@ export default function StepReview({
   roleName, roleType, selectedParentIds,
   environmentId, environments, approvers, description,
   inherited, restrictions,
-
+  targetPlatform = 'DATASPHERE',
   assignUserId, setAssignUserId, assignUserName, setAssignUserName,
   isEditMode, loading, permissions,
   canManageThisDerivedWizard, handleSaveClick, isReadOnly
-}) {
+}: any) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Summary */}
@@ -24,7 +24,7 @@ export default function StepReview({
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Type & Environment</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
                 label={roleType === 'ORG_BASED' ? 'Org Role' : (selectedParentIds.length > 0 ? 'Derived' : 'Single')}
                 size="small"
@@ -34,6 +34,19 @@ export default function StepReview({
                 label={environments.find(e => e.ID === environmentId)?.name || environmentId}
                 size="small"
                 color={ENV_COLOR[environmentId] || 'default'}
+              />
+              <Chip
+                label={
+                  targetPlatform === 'BOTH' ? 'Both Platforms' :
+                  targetPlatform === 'DATABRICKS' ? 'Databricks' : 'SAP Datasphere'
+                }
+                size="small"
+                color={
+                  targetPlatform === 'BOTH' ? 'secondary' :
+                  targetPlatform === 'DATABRICKS' ? 'warning' : 'info'
+                }
+                variant="outlined"
+                sx={{ fontWeight: 600 }}
               />
             </Box>
           </Box>

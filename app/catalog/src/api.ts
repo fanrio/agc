@@ -223,10 +223,41 @@ export const createAppAuthorization = (body: any) => request('POST', '/AppAuthor
 export const updateAppAuthorization = (id: string, body: any) => request('PATCH', `/AppAuthorizations('${id}')`, body);
 export const deleteAppAuthorization = (id: string) => request('DELETE', `/AppAuthorizations('${id}')`);
 
-// Replications
-export const getReplications = () => request('GET', '/Replications?$orderby=replicationDate desc');
-export const triggerReplication = () => request('POST', '/triggerReplication', {});
-export const checkReplicationStatuses = () => request('POST', '/checkReplicationStatuses', {});
+// Databricks Settings
+export interface DatabricksSettingPayload {
+  systemName: string;
+  environment_ID?: string;
+  workspaceUrl: string;
+  authType: 'TOKEN' | 'SERVICE_PRINCIPAL';
+  apiToken?: string;
+  clientId?: string;
+  clientSecret?: string;
+  targetCatalog?: string;
+  targetSchema?: string;
+  sqlWarehouseId?: string;
+  isActive?: boolean;
+}
+
+export interface TestDatabricksConnectionResult {
+  success: boolean;
+  message: string;
+  httpStatus: number;
+}
+
+export const getDatabricksSettings = () =>
+  request('GET', '/DatabricksSettings?$expand=environment');
+
+export const createDatabricksSetting = (body: DatabricksSettingPayload | Record<string, any>) =>
+  request('POST', '/DatabricksSettings', body);
+
+export const updateDatabricksSetting = (id: string, body: Partial<DatabricksSettingPayload> | Record<string, any>) =>
+  request('PATCH', `/DatabricksSettings('${id}')`, body);
+
+export const deleteDatabricksSetting = (id: string) =>
+  request('DELETE', `/DatabricksSettings('${id}')`);
+
+export const testDatabricksConnection = (settingId: string): Promise<TestDatabricksConnectionResult> =>
+  request('POST', '/testDatabricksConnection', { settingId });
 
 // Dynamic Rules & Customers
 export const getDynamicRules = () => request('GET', '/DynamicGenerationRules?$expand=templateRole,mappings,bdcConnection');

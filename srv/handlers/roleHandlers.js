@@ -1,6 +1,7 @@
 'use strict';
 
-const { getSessionPermissions, requirePermission, requireEnvironment, requireAccessDomain, filterRolesByBackendPermissions } = require('../lib/authGuard');
+const { getUserId, getSessionPermissions, requirePermission, requireEnvironment, requireAccessDomain, filterRolesByBackendPermissions } = require('../lib/authGuard');
+const defaultDispatcher = require('../services/directSyncDispatcher');
 const {
   syncCollectionDelta,
   checkDuplicateInheritedRestrictions,
@@ -26,8 +27,9 @@ const {
  * @param {object} entities                 - { Roles, Restrictions, RoleAssignments, RoleInheritance, AuditLogs, Replications }
  * @param {{ cds, queueReplication, syncRoleAssignmentsToHana }} deps
  */
-function registerRoleHandlers(service, entities, deps) {
-  const { cds, queueReplication, syncRoleAssignmentsToHana } = deps;
+function registerRoleHandlers(service, entities, deps = {}) {
+  const { cds } = deps;
+  const dispatcher = deps.directSyncDispatcher || defaultDispatcher;
   const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations } = entities;
 
   // -------------------------------------------------------------------------
@@ -289,7 +291,18 @@ function registerRoleHandlers(service, entities, deps) {
         targetName: targetName,
         details: JSON.stringify(role || req.data)
       }));
-      await queueReplication(targetName, environment_ID, req?.user?.id);
+      if (Array.isArray(req.data?.assignments) && req.data.assignments.length > 0) {
+        cds.spawn({ user: req?.user }, async () => {
+          try {
+            await dispatcher.dispatchRoleSync({
+              roleId: recordId,
+              actorUser: req?.user?.id
+            });
+          } catch (err) {
+            console.error('[RoleHandlers] Background direct sync failed for Roles CREATE with assignments:', err.message);
+          }
+        });
+      }
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles CREATE:', err.message);
     }
@@ -416,11 +429,11 @@ function registerRoleHandlers(service, entities, deps) {
         details: JSON.stringify(auditDetails)
       }));
 
-      await queueReplication(
-        afterState?.name || beforeState?.name || 'Unknown Role',
-        afterState?.environment_ID || beforeState?.environment_ID || 'D',
-        req?.user?.id
-      );
+      // queueReplication retired in M3; direct sync dispatched below
+
+
+
+
     } catch (err) {
       console.error('[RoleHandlers] Audit Log failed for Roles UPDATE:', err.message);
     }
@@ -428,7 +441,10 @@ function registerRoleHandlers(service, entities, deps) {
     // Run HANA re-sync in background to prevent blocking HTTP request thread
     cds.spawn({ user: req?.user }, async () => {
       try {
-        await syncRoleAssignmentsToHana(id);
+        await dispatcher.dispatchRoleSync({
+          roleId: id,
+          actorUser: getUserId(req) || req?.user?.id
+        });
       } catch (err) {
         console.error('[RoleHandlers] Background HANA sync failed for Roles UPDATE:', err.message);
       }
@@ -454,7 +470,7 @@ function registerRoleHandlers(service, entities, deps) {
         targetName: beforeState.name,
         details: JSON.stringify(beforeState)
       }));
-      await queueReplication(`${beforeState.name} (DELETED)`, beforeState.environment_ID, req?.user?.id);
+
 
       req.context = req.context || {};
       if (!req.context.inCascadingDelete) {
@@ -474,7 +490,10 @@ function registerRoleHandlers(service, entities, deps) {
     if (roleId) {
       cds.spawn({ user: req?.user }, async () => {
         try {
-          await syncRoleAssignmentsToHana(roleId);
+          await dispatcher.dispatchRoleSync({
+            roleId,
+            actorUser: getUserId(req) || req?.user?.id
+          });
         } catch (err) {
           console.error('[RoleHandlers] Background HANA sync failed for RoleInheritance CREATE:', err.message);
         }
@@ -502,7 +521,10 @@ function registerRoleHandlers(service, entities, deps) {
     if (roleId) {
       cds.spawn({ user: req?.user }, async () => {
         try {
-          await syncRoleAssignmentsToHana(roleId);
+          await dispatcher.dispatchRoleSync({
+            roleId,
+            actorUser: getUserId(req) || req?.user?.id
+          });
         } catch (err) {
           console.error('[RoleHandlers] Background HANA sync failed for RoleInheritance DELETE:', err.message);
         }

@@ -22,22 +22,54 @@ function getUserId(req) {
     req.user = new cds.User({ id: 'admin', roles: ['authenticated-user'] });
     return 'admin';
   }
-  return req.user?.id || 'anonymous';
+
+  // Production / Authenticated User:
+  // In SAP BTP with XSUAA / IAS, the user identity may be in req.user.id or in token attributes (e.g. email)
+  const user = req.user;
+  if (user) {
+    if (user.id && user.id !== 'anonymous') return user.id;
+    if (user.attr?.email) return user.attr.email;
+    if (user.attr?.logon_name) return user.attr.logon_name;
+  }
+  return 'anonymous';
 }
 
 
 async function getSessionPermissions(req, db, AppAuthorizations) {
   const userId = getUserId(req);
+  const user = req.user;
+  const userEmail = user?.attr?.email;
 
-  const userAuth = await db.run(
+  // Search by exact userId or email match (case-insensitive for robustness)
+  const conditions = [{ userId, isActive: true }];
+  if (userEmail && userEmail !== userId) {
+    conditions.push({ userId: userEmail, isActive: true });
+  }
+
+  let userAuth = await db.run(
     SELECT.one.from(AppAuthorizations).where({ userId, isActive: true })
   );
+
+  if (!userAuth && userEmail && userEmail !== userId) {
+    userAuth = await db.run(
+      SELECT.one.from(AppAuthorizations).where({ userId: userEmail, isActive: true })
+    );
+  }
+
+  // Fallback: check case-insensitively if needed
+  if (!userAuth && userId && userId !== 'anonymous') {
+    const allActive = await db.run(SELECT.from(AppAuthorizations).where({ isActive: true }));
+    userAuth = allActive.find(a => 
+      a.userId?.toLowerCase() === userId.toLowerCase() || 
+      (userEmail && a.userId?.toLowerCase() === userEmail.toLowerCase())
+    );
+  }
 
   if (userAuth) {
     return userAuth;
   }
 
-  const err = new Error('Access Denied: You must have authorizations to access the system.');
+  const err = new Error(`Access Denied: User '${userId}' has no active authorizations configured in the application.`);
   err.status = 403;
   throw err;
 }

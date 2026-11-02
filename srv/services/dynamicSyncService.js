@@ -1,7 +1,7 @@
 const HanaClient = require('../lib/hanaClient');
 const BdcClient = require('../lib/bdcClient');
-const { syncAssignmentToHana } = require('./hanaReplicationService');
-const { queueReplication } = require('./replicationQueueService');
+
+const directSyncDispatcher = require('./directSyncDispatcher');
 const { safeJsonParse } = require('../lib/utils');
 
 /**
@@ -255,7 +255,15 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
   }
 
   // Always sync consolidated assignment to HANA since restrictions are replaced on every reconciliation
-  await syncAssignmentToHana(
+  // Always sync consolidated assignment to target platforms via direct sync
+  await directSyncDispatcher.dispatchAssignmentSync({
+    assignmentId,
+    userId,
+    roleId,
+    actorUser: 'SYSTEM_DYN',
+    environmentId: envId
+  }, { cds, HanaClient, entities: { Roles, Restrictions, RoleInheritance, BdcSettings }, preloaded });
+  /*
     cds,
     HanaClient,
     { Roles, Restrictions, RoleInheritance, BdcSettings },
@@ -264,10 +272,10 @@ async function _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activ
     roleId,
     false,
     preloaded
-  );
+  ); */
 
   // Queue for OData replication to SAP Datasphere
-  await queueReplication(cds, Replications, roleName, envId, 'SYSTEM_DYN');
+
 
   // Update GeneratedResourceMap ledger and audit logs
   const newMaps = [];
@@ -352,7 +360,15 @@ async function _syncTemplateAssignment(db, rule, mappings, userId, keys, activeM
     existingAssignments.push(newAssignment);
 
     // Sync template role assignment to HANA
-    await syncAssignmentToHana(
+    // Sync template role assignment to target platforms via direct sync
+    await directSyncDispatcher.dispatchAssignmentSync({
+      assignmentId,
+      userId,
+      roleId: rule.templateRole_ID,
+      actorUser: 'SYSTEM_DYN',
+      environmentId: envId
+    }, { cds, HanaClient, entities: { Roles, Restrictions, RoleInheritance, BdcSettings }, preloaded });
+    /*
       cds,
       HanaClient,
       { Roles, Restrictions, RoleInheritance, BdcSettings },
@@ -361,12 +377,12 @@ async function _syncTemplateAssignment(db, rule, mappings, userId, keys, activeM
       rule.templateRole_ID,
       false,
       preloaded
-    );
+    ); */
 
     // Queue for OData replication
     const templateRole = preloaded.allRoles.find(r => r.ID === rule.templateRole_ID);
     if (templateRole) {
-      await queueReplication(cds, Replications, templateRole.name, templateRole.environment_ID || envId, 'SYSTEM_DYN');
+
     }
   }
 
@@ -445,7 +461,15 @@ async function _removeGeneratedAccess(db, rule, mapping, AuditLogs, cds, envId, 
         || await db.run(SELECT.one.from(RoleAssignments).where({ ID: mapping.generatedAssignment_ID }));
       if (assignment) {
         // Sync delete to HANA
-        await syncAssignmentToHana(
+        // Sync removal to target platforms via direct sync
+        await directSyncDispatcher.dispatchAssignmentRemoval({
+          assignmentId: mapping.generatedAssignment_ID,
+          userId: mapping.userId,
+          roleId: assignment.role_ID,
+          actorUser: 'SYSTEM_DYN',
+          environmentId: envId
+        }, { cds, HanaClient, entities: { Roles, Restrictions, RoleInheritance, BdcSettings }, preloaded });
+        /*
           cds,
           HanaClient,
           { Roles, Restrictions, RoleInheritance, BdcSettings },
@@ -454,13 +478,13 @@ async function _removeGeneratedAccess(db, rule, mapping, AuditLogs, cds, envId, 
           assignment.role_ID,
           true,
           preloaded
-        );
+        ); */
 
         // Fetch the role's details from preload or DB to get its name for queueReplication
         const role = preloaded.allRoles.find(r => r.ID === assignment.role_ID)
           || await db.run(SELECT.one.from(Roles).where({ ID: assignment.role_ID }));
         if (role) {
-          await queueReplication(cds, Replications, role.name, role.environment_ID || envId, 'SYSTEM_DYN');
+
         }
       }
       await db.run(DELETE.from(RoleAssignments).where({ ID: mapping.generatedAssignment_ID }));
@@ -485,7 +509,7 @@ async function _removeGeneratedAccess(db, rule, mapping, AuditLogs, cds, envId, 
       preloaded.allRestrictions = preloaded.allRestrictions.filter(r => r.role_ID !== mapping.generatedRole_ID);
 
       if (role) {
-        await queueReplication(cds, Replications, `${role.name} (DELETED)`, role.environment_ID || envId, 'SYSTEM_DYN');
+
       }
     }
   }

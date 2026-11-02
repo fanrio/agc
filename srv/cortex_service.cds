@@ -27,12 +27,12 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
   entity Environments           as projection on db.Environments;
   entity AuditLogs              as projection on db.AuditLogs;
   entity AppAuthorizations      as projection on db.AppAuthorizations;
-  entity Replications           as projection on db.Replications;
   entity Customers              as projection on db.Customers;
   entity DynamicGenerationRules as projection on db.DynamicGenerationRules;
   entity DynamicRuleFieldMappings as projection on db.DynamicRuleFieldMappings;
   entity GeneratedResourceMap   as projection on db.GeneratedResourceMap;
   entity BdcSettings            as projection on db.BdcSettings;
+  entity DatabricksSettings     as projection on db.DatabricksSettings;
 
 
   action searchScimUsers(query: String)                                         returns array of {
@@ -102,6 +102,12 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
     message : String;
   };
 
+  action testDatabricksConnection(settingId: UUID)                              returns {
+    success    : Boolean;
+    message    : String;
+    httpStatus : Integer;
+  };
+
   // fetchBdcSpaces: dual signature — connectionId (saved connection) OR direct credentials (during creation)
   action fetchBdcSpaces(connectionId: String, url: String, tokenUrl: String, clientId: String, clientSecret: String) returns array of String;
 
@@ -143,19 +149,6 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
 
   action fetchRawHanaViews(settingId: UUID)                                    returns LargeString;
 
-  // -------------------------------------------------------------------------
-  // Replication Actions
-  // -------------------------------------------------------------------------
-
-  action triggerReplication()                                                   returns {
-    success : Boolean;
-    message : String;
-  };
-
-  action checkReplicationStatuses()                                             returns {
-    success : Boolean;
-    message : String;
-  };
 
   function getCurrentUserPermissions()                                         returns AppAuthorizations;
   function getDashboardKpis()                                                   returns LargeString;

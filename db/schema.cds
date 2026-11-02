@@ -2,6 +2,12 @@ namespace fanrio.auth;
 
 using { cuid, managed } from '@sap/cds/common';
 
+type TargetPlatform : String(20) enum {
+  DATASPHERE;
+  DATABRICKS;
+  BOTH;
+};
+
 // ---------------------------------------------------------------------------
 // Organizational Structure
 // ---------------------------------------------------------------------------
@@ -43,6 +49,7 @@ entity AccessDomains : managed {
   attributes  : Composition of many AccessDomainAttributes on attributes.node = $self;
   restrictionFields : Composition of many AccessDomainFields on restrictionFields.domain = $self;
   roleTemplateName  : String(255);
+  targetPlatform    : TargetPlatform default 'BOTH';
 }
 
 entity AccessDomainAttributes : cuid {
@@ -66,6 +73,7 @@ entity Roles : managed {
   type            : String(20)  not null;  // ORG_BASED | DERIVED
   description     : String(500);
   critical        : Boolean @default : false;
+  targetPlatform  : TargetPlatform default 'DATASPHERE';
   environment     : Association to Environments;
   orgNode         : Association to OrgNodes;  // for ORG_BASED roles
   accessDomain    : Association to AccessDomains;
@@ -131,6 +139,20 @@ entity BdcSettings {
   isActive     : Boolean @default: true;
 }
 
+entity DatabricksSettings : cuid, managed {
+  systemName     : String(100) not null;
+  environment    : Association to Environments;
+  workspaceUrl   : String(255);
+  authType       : String(20) enum { TOKEN; SERVICE_PRINCIPAL; } default 'TOKEN';
+  apiToken       : String(500);
+  clientId       : String(100);
+  clientSecret   : String(500);
+  targetCatalog  : String(100);
+  targetSchema   : String(100);
+  sqlWarehouseId : String(100);
+  isActive       : Boolean default true;
+}
+
 entity AuditLogs : cuid, managed {
   entityName : String(100) not null; // 'Roles' or 'RoleAssignments'
   action     : String(20) not null;  // 'CREATE' | 'UPDATE' | 'DELETE'
@@ -164,16 +186,6 @@ entity Environments {
   name   : String(100) not null;
 }
 
-entity Replications : cuid {
-  replicationDate  : DateTime;
-  status           : String(20) not null; // e.g. 'Open', 'Running', 'Success', 'Failed'
-  replicationRoles : String(1000) not null;
-  environment      : Association to Environments;
-  startTime        : DateTime;
-  endTime          : DateTime;
-  user             : String(200);
-  runId            : String(100);
-}
 
 // ---------------------------------------------------------------------------
 // Dynamic Role & Assignment Generation

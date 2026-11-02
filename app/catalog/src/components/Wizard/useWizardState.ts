@@ -9,6 +9,7 @@ export interface WizardContext {
   roleId?: string;
   allowFreeNavigation?: boolean;
   accessDomainId?: string;
+  targetPlatform?: 'DATASPHERE' | 'DATABRICKS' | 'BOTH';
   [key: string]: any;
 }
 
@@ -36,6 +37,9 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [isEditMode, setIsEditMode] = useState(!!context.roleId);
+  const [targetPlatform, setTargetPlatform] = useState<'DATASPHERE' | 'DATABRICKS' | 'BOTH'>(
+    context.targetPlatform || 'DATASPHERE'
+  );
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -118,8 +122,11 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
       if (parent && parent.accessDomain_ID) {
         setAccessDomainId(parent.accessDomain_ID);
       }
+      if (parent && parent.targetPlatform && !isEditMode) {
+        setTargetPlatform(parent.targetPlatform);
+      }
     }
-  }, [selectedParentIds, allRoles]);
+  }, [selectedParentIds, allRoles, isEditMode]);
 
   useEffect(() => {
     if (step > maxStepReached) {
@@ -244,6 +251,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
             setOriginalCritical(!!role.critical);
             setEnvironmentId(role.environment_ID || 'D');
             setAccessDomainId(role.accessDomain_ID || '');
+            setTargetPlatform(role.targetPlatform || 'DATASPHERE');
           } catch (err) {
             console.error('Error populating role details in wizard:', err);
           }
@@ -455,6 +463,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
+          targetPlatform,
           type: computedType,
           ownRestrictions,
           parentRoles,
@@ -479,6 +488,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
+          targetPlatform,
           ownRestrictions,
           parentRoles,
           approvers: formattedApprovers,
@@ -498,6 +508,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
           critical,
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
+          targetPlatform,
           ownRestrictions,
           parentRoles,
           approvers: formattedApprovers,
@@ -605,6 +616,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
     loading,
     done,
     isEditMode,
+    targetPlatform, setTargetPlatform,
     snackbar, setSnackbar,
     scimOptions,
     scimLoading,
