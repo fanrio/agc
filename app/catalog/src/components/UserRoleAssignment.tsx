@@ -252,7 +252,8 @@ export default function UserRoleAssignment({
         sx: {
           borderRadius: 2.5,
           minHeight: 620,
-          backgroundImage: 'none'
+          backgroundImage: 'none',
+          overflowX: 'hidden'
         }
       }}
     >
@@ -288,10 +289,10 @@ export default function UserRoleAssignment({
       </DialogTitle>
 
       {/* 2-Column Content Body */}
-      <DialogContent sx={{ p: 3, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
+      <DialogContent sx={{ p: 3, overflowX: 'hidden', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
         
-        {/* LEFT COLUMN: User Selection & Assignment Summary (38% width) */}
-        <Box sx={{ width: { xs: '100%', md: '38%' }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* LEFT COLUMN: User Selection & Assignment Summary (330px fixed width on desktop) */}
+        <Box sx={{ width: { xs: '100%', md: 330 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
               <Users size={16} /> 1. Select User
@@ -437,8 +438,8 @@ export default function UserRoleAssignment({
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
         <Divider sx={{ display: { xs: 'block', md: 'none' } }} />
 
-        {/* RIGHT COLUMN: Roles Selection & Catalog (62% width) */}
-        <Box sx={{ width: { xs: '100%', md: '62%' }, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {/* RIGHT COLUMN: Roles Selection & Catalog */}
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {role ? (
             /* Single Role View (when opened from RoleCard) */
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -592,6 +593,7 @@ export default function UserRoleAssignment({
                   borderRadius: 2,
                   maxHeight: 360,
                   overflowY: 'auto',
+                  overflowX: 'hidden',
                   p: 1,
                   display: 'flex',
                   flexDirection: 'column',
@@ -632,6 +634,7 @@ export default function UserRoleAssignment({
                           borderColor: isSelected ? 'primary.main' : 'divider',
                           bgcolor: isSelected ? 'action.selected' : 'background.paper',
                           opacity: isDisabled ? 0.6 : 1,
+                          overflow: 'hidden',
                           transition: 'all 0.15s ease',
                           '&:hover': {
                             borderColor: isDisabled ? 'divider' : 'primary.main',
@@ -645,18 +648,18 @@ export default function UserRoleAssignment({
                           disabled={isDisabled}
                           onChange={() => handleToggleRole(r.ID)}
                           onClick={e => e.stopPropagation()}
-                          sx={{ p: 0.5 }}
+                          sx={{ p: 0.5, flexShrink: 0 }}
                         />
 
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {r.name}
                             </Typography>
                             <Chip
                               size="small"
                               label={r.environment_ID || 'D'}
-                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}
                             />
                           </Box>
 
@@ -676,7 +679,7 @@ export default function UserRoleAssignment({
                           )}
                         </Box>
 
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexShrink: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: { xs: '100%', sm: '50%' } }}>
                           <Chip
                             size="small"
                             label={r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}
@@ -696,7 +699,7 @@ export default function UserRoleAssignment({
                               <Chip
                                 size="small"
                                 icon={<CheckCircle2 size={12} />}
-                                label="Already Assigned"
+                                label="Assigned"
                                 color="default"
                                 sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
                               />
