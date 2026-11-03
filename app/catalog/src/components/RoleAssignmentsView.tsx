@@ -389,6 +389,7 @@ export default function RoleAssignmentsView({ onInspectUser }) {
         open={assignDialogOpen}
         roles={roles}
         allRoles={allRoles}
+        existingAssignments={assignments}
         onClose={() => setAssignDialogOpen(false)}
         onSuccess={async (msg) => {
           setAssignDialogOpen(false);
