@@ -64,12 +64,12 @@ const mockRoles = [
   }
 ];
 
-describe('UserRoleAssignment M:N Component', () => {
+describe('UserRoleAssignment Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders M:N modal layout with multi-user selection, role catalog, and filter dropdowns', () => {
+  it('renders modal layout with multi-user selection, role catalog, and filter dropdowns', () => {
     render(
       <UserRoleAssignment
         open={true}
@@ -79,7 +79,7 @@ describe('UserRoleAssignment M:N Component', () => {
       />
     );
 
-    expect(screen.getByText('M:N Role Assignment')).toBeInTheDocument();
+    expect(screen.getByText('Assign Authorization Roles')).toBeInTheDocument();
     expect(screen.getByText(/1\. Select Users/)).toBeInTheDocument();
     expect(screen.getByText(/2\. Select Roles/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search roles by name or description...')).toBeInTheDocument();

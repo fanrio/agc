@@ -5,7 +5,7 @@ import * as api from '../api';
 /**
  * Reusable Autocomplete component for searching and selecting SCIM users.
  * Handles internal debounced data fetching from the SCIM user service.
- * Supports both single-user and multi-user selection (M:N).
+ * Supports both single-user and multi-user selection.
  *
  * @param {object} props
  * @param {object|array|null} props.value - Selected SCIM user object or array of users (when multiple=true)
@@ -15,7 +15,7 @@ import * as api from '../api';
  * @param {string} [props.size] - MUI size variant ('small' or 'medium')
  * @param {boolean} [props.fullWidth] - Should the component take full width
  * @param {boolean} [props.disabled] - Disabled state
- * @param {boolean} [props.multiple] - Enable multi-user selection (M:N)
+ * @param {boolean} [props.multiple] - Enable multi-user selection
  */
 interface UserSelectionProps {
   value: any;

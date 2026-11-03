@@ -83,7 +83,7 @@ export default function UserRoleAssignment({
   onSuccess,
   onError
 }: UserRoleAssignmentProps) {
-  // M:N state: multiple users (M) and multiple roles (N)
+  // State: multiple users and multiple roles
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
@@ -128,7 +128,7 @@ export default function UserRoleAssignment({
     }
   }, [open, role]);
 
-  // Load existing assignments for all selected users to detect duplicates in M:N matrix
+  // Load existing assignments for all selected users to detect duplicates in assignment matrix
   useEffect(() => {
     if (selectedUsers.length === 0) {
       setAllExistingAssignments([]);
@@ -236,7 +236,7 @@ export default function UserRoleAssignment({
     return roles.filter(r => selectedRoleIds.includes(r.ID));
   }, [role, roles, selectedRoleIds]);
 
-  // Compute all M:N (user, role) pairs to create, automatically skipping existing assignments
+  // Compute all (user, role) pairs to create, automatically skipping existing assignments
   const pairsToCreate = useMemo(() => {
     const pairs: { userId: string; userName: string; role_ID: string }[] = [];
     for (const u of selectedUsers) {
@@ -363,12 +363,12 @@ export default function UserRoleAssignment({
           </Avatar>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              {role ? `Assign Role: ${role.name}` : 'M:N Role Assignment'}
+              {role ? `Assign Role: ${role.name}` : 'Assign Authorization Roles'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {role
                 ? 'Assign this authorization role to one or multiple users simultaneously.'
-                : 'Select multiple users (M) and multiple authorization roles (N) for direct real-time synchronization.'}
+                : 'Select users and authorization roles for direct real-time synchronization.'}
             </Typography>
           </Box>
         </Box>
@@ -406,7 +406,7 @@ export default function UserRoleAssignment({
             )}
           </Box>
 
-          {/* UserSelection Autocomplete with multi-select (M:N) */}
+          {/* UserSelection Autocomplete with multi-select */}
           <UserSelection
             multiple
             value={selectedUsers}
@@ -435,7 +435,7 @@ export default function UserRoleAssignment({
                 No users selected
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Search and add one or multiple users (M:N) above to assign roles simultaneously.
+                Search and add one or multiple users above to assign roles simultaneously.
               </Typography>
             </Box>
           ) : selectedUsers.length === 1 ? (
@@ -561,7 +561,7 @@ export default function UserRoleAssignment({
             </Card>
           )}
 
-          {/* Real-Time Sync & M:N Impact Summary */}
+          {/* Real-Time Sync & Direct Sync Impact Summary */}
           <Card
             sx={{
               p: 2,
@@ -573,7 +573,7 @@ export default function UserRoleAssignment({
             }}
           >
             <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-              <Zap size={13} color="#f59e0b" /> M:N Direct Sync Impact
+              <Zap size={13} color="#f59e0b" /> Direct Sync Impact
             </Typography>
 
             <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
