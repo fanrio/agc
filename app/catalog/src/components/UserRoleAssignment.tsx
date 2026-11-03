@@ -17,7 +17,11 @@ import {
   Tooltip,
   CircularProgress,
   IconButton,
-  Alert
+  Alert,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   Shield,
@@ -61,6 +65,7 @@ interface UserRoleAssignmentProps {
   roles?: any[];
   allRoles?: any[];
   existingAssignments?: any[];
+  accessDomains?: any[];
   onClose: () => void;
   onSuccess?: (msg: string) => void | Promise<void>;
   onError?: (msg: string) => void;
@@ -72,6 +77,7 @@ export default function UserRoleAssignment({
   roles = [],
   allRoles = roles,
   existingAssignments,
+  accessDomains: propAccessDomains,
   onClose,
   onSuccess,
   onError
@@ -82,11 +88,29 @@ export default function UserRoleAssignment({
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
   const [filterPlatform, setFilterPlatform] = useState<'ALL' | 'DATASPHERE' | 'DATABRICKS' | 'BOTH'>('ALL');
   const [filterType, setFilterType] = useState<'ALL' | 'SINGLE' | 'DERIVED' | 'ORG_BASED'>('ALL');
+  const [filterAccessDomain, setFilterAccessDomain] = useState<string>('ALL');
+  const [accessDomains, setAccessDomains] = useState<any[]>(propAccessDomains || []);
   const [loading, setLoading] = useState(false);
 
   // Existing assignments for the selected user
   const [userExistingAssignments, setUserExistingAssignments] = useState<any[]>([]);
   const [existingUserRoleIds, setExistingUserRoleIds] = useState<Set<string>>(new Set());
+
+  // Fetch access domains when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (propAccessDomains && propAccessDomains.length > 0) {
+        setAccessDomains(propAccessDomains);
+      } else {
+        api.getAccessDomainsFlat()
+          .then((res: any) => {
+            const list = Array.isArray(res) ? res : (res?.value || []);
+            setAccessDomains(list);
+          })
+          .catch(() => {});
+      }
+    }
+  }, [open, propAccessDomains]);
 
   // Reset state on open/close
   useEffect(() => {
@@ -97,6 +121,7 @@ export default function UserRoleAssignment({
       setRoleSearchQuery('');
       setFilterPlatform('ALL');
       setFilterType('ALL');
+      setFilterAccessDomain('ALL');
       setUserExistingAssignments([]);
       setExistingUserRoleIds(new Set());
       setLoading(false);
@@ -129,7 +154,27 @@ export default function UserRoleAssignment({
     }
   }, [assignForm.userId, existingAssignments]);
 
-  // Filtered roles list based on search, platform, and type filters
+  // Map of access domains for name lookup and dropdown options
+  const accessDomainMap = useMemo(() => {
+    const map = new Map<string, string>();
+    accessDomains.forEach(d => {
+      if (d.ID) map.set(d.ID, d.name || d.description || d.ID);
+    });
+    roles.forEach(r => {
+      const dId = r.accessDomain_ID || r.accessDomain?.ID;
+      const dName = r.accessDomain?.name || (dId ? map.get(dId) : undefined);
+      if (dId && !map.has(dId)) {
+        map.set(dId, dName || dId);
+      }
+    });
+    return map;
+  }, [accessDomains, roles]);
+
+  const accessDomainOptions = useMemo(() => {
+    return Array.from(accessDomainMap.entries()).map(([id, label]) => ({ id, label }));
+  }, [accessDomainMap]);
+
+  // Filtered roles list based on search, platform, type, and access domain filters
   const filteredRoles = useMemo(() => {
     return roles.filter(r => {
       // Platform filter
@@ -152,6 +197,12 @@ export default function UserRoleAssignment({
         if (filterType !== actualType) return false;
       }
 
+      // Access Domain filter
+      if (filterAccessDomain !== 'ALL') {
+        const roleDomainId = r.accessDomain_ID || r.accessDomain?.ID;
+        if (roleDomainId !== filterAccessDomain) return false;
+      }
+
       // Search query filter
       if (roleSearchQuery.trim()) {
         const q = roleSearchQuery.toLowerCase().trim();
@@ -162,7 +213,7 @@ export default function UserRoleAssignment({
 
       return true;
     });
-  }, [roles, filterPlatform, filterType, roleSearchQuery]);
+  }, [roles, filterPlatform, filterType, filterAccessDomain, roleSearchQuery]);
 
   // Selected roles objects and target platforms impact
   const selectedRoles = useMemo(() => {
@@ -550,39 +601,60 @@ export default function UserRoleAssignment({
                 }}
               />
 
-              {/* Filter Chips Bar */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, alignItems: 'center' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                  Platform:
-                </Typography>
-                {(['ALL', 'DATASPHERE', 'DATABRICKS', 'BOTH'] as const).map(p => (
-                  <Chip
-                    key={p}
-                    size="small"
-                    clickable
-                    label={p === 'ALL' ? 'All' : p === 'DATASPHERE' ? 'Datasphere' : p === 'DATABRICKS' ? 'Databricks' : 'Both'}
-                    color={filterPlatform === p ? (p === 'DATABRICKS' ? 'warning' : p === 'BOTH' ? 'secondary' : 'info') : 'default'}
-                    variant={filterPlatform === p ? 'filled' : 'outlined'}
-                    onClick={() => setFilterPlatform(p)}
-                    sx={{ height: 24, fontSize: '0.75rem' }}
-                  />
-                ))}
+              {/* Filter Dropdowns Bar: Platform, Type, Access Domain */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 1 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="filter-platform-label">Platform</InputLabel>
+                  <Select
+                    labelId="filter-platform-label"
+                    id="filter-platform-select"
+                    value={filterPlatform}
+                    label="Platform"
+                    onChange={e => setFilterPlatform(e.target.value as any)}
+                    sx={{ fontSize: '0.8125rem' }}
+                  >
+                    <MenuItem value="ALL">All Platforms</MenuItem>
+                    <MenuItem value="DATASPHERE">Datasphere</MenuItem>
+                    <MenuItem value="DATABRICKS">Databricks</MenuItem>
+                    <MenuItem value="BOTH">Both</MenuItem>
+                  </Select>
+                </FormControl>
 
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, ml: 1 }}>
-                  Type:
-                </Typography>
-                {(['ALL', 'SINGLE', 'DERIVED', 'ORG_BASED'] as const).map(t => (
-                  <Chip
-                    key={t}
-                    size="small"
-                    clickable
-                    label={t === 'ALL' ? 'All' : t === 'SINGLE' ? 'Single' : t === 'DERIVED' ? 'Derived' : 'Org'}
-                    color={filterType === t ? 'primary' : 'default'}
-                    variant={filterType === t ? 'filled' : 'outlined'}
-                    onClick={() => setFilterType(t)}
-                    sx={{ height: 24, fontSize: '0.75rem' }}
-                  />
-                ))}
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="filter-type-label">Type</InputLabel>
+                  <Select
+                    labelId="filter-type-label"
+                    id="filter-type-select"
+                    value={filterType}
+                    label="Type"
+                    onChange={e => setFilterType(e.target.value as any)}
+                    sx={{ fontSize: '0.8125rem' }}
+                  >
+                    <MenuItem value="ALL">All Types</MenuItem>
+                    <MenuItem value="SINGLE">Single</MenuItem>
+                    <MenuItem value="DERIVED">Derived</MenuItem>
+                    <MenuItem value="ORG_BASED">Org-Based</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="filter-domain-label">Access Domain</InputLabel>
+                  <Select
+                    labelId="filter-domain-label"
+                    id="filter-domain-select"
+                    value={filterAccessDomain}
+                    label="Access Domain"
+                    onChange={e => setFilterAccessDomain(e.target.value)}
+                    sx={{ fontSize: '0.8125rem' }}
+                  >
+                    <MenuItem value="ALL">All Access Domains</MenuItem>
+                    {accessDomainOptions.map(dom => (
+                      <MenuItem key={dom.id} value={dom.id}>
+                        {dom.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Box>
 
               {/* Scrollable Role Cards List */}
@@ -616,6 +688,8 @@ export default function UserRoleAssignment({
                     const isAlreadyAssigned = existingUserRoleIds.has(r.ID);
                     const hasRestrictions = hasAnyRestrictions(r, allRoles);
                     const isDisabled = isAlreadyAssigned || !hasRestrictions || loading;
+                    const domainId = r.accessDomain_ID || r.accessDomain?.ID;
+                    const domainLabel = domainId ? accessDomainMap.get(domainId) || domainId : null;
 
                     return (
                       <Card
@@ -680,6 +754,15 @@ export default function UserRoleAssignment({
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: { xs: '100%', sm: '50%' } }}>
+                          {domainLabel && (
+                            <Chip
+                              size="small"
+                              label={domainLabel}
+                              variant="outlined"
+                              sx={{ height: 22, fontSize: '0.7rem' }}
+                            />
+                          )}
+
                           <Chip
                             size="small"
                             label={r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}
