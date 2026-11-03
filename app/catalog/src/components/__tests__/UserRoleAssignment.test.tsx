@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import UserRoleAssignment from '../UserRoleAssignment';
 import * as api from '../../api';
 
@@ -16,7 +16,8 @@ vi.mock('../../api', () => ({
   ]),
   searchScimUsers: vi.fn().mockResolvedValue([
     { username: 'bob@fanrio.com', displayName: 'Bob Martin', email: 'bob@fanrio.com', department: 'Sales' },
-    { username: 'alice@fanrio.com', displayName: 'Alice Smith', email: 'alice@fanrio.com', department: 'Finance' }
+    { username: 'alice@fanrio.com', displayName: 'Alice Smith', email: 'alice@fanrio.com', department: 'Finance' },
+    { username: 'charlie@fanrio.com', displayName: 'Charlie Brown', email: 'charlie@fanrio.com', department: 'IT' }
   ])
 }));
 
@@ -63,12 +64,12 @@ const mockRoles = [
   }
 ];
 
-describe('UserRoleAssignment 2-Column Modal Component', () => {
+describe('UserRoleAssignment M:N Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders 2-column modal layout with user selection, role catalog, and filter dropdowns', () => {
+  it('renders M:N modal layout with multi-user selection, role catalog, and filter dropdowns', () => {
     render(
       <UserRoleAssignment
         open={true}
@@ -78,8 +79,8 @@ describe('UserRoleAssignment 2-Column Modal Component', () => {
       />
     );
 
-    expect(screen.getByText('Assign Authorization Roles')).toBeInTheDocument();
-    expect(screen.getByText(/1\. Select User/)).toBeInTheDocument();
+    expect(screen.getByText('M:N Role Assignment')).toBeInTheDocument();
+    expect(screen.getByText(/1\. Select Users/)).toBeInTheDocument();
     expect(screen.getByText(/2\. Select Roles/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search roles by name or description...')).toBeInTheDocument();
 
@@ -173,28 +174,94 @@ describe('UserRoleAssignment 2-Column Modal Component', () => {
     expect(screen.getByText('No Restrictions')).toBeInTheDocument();
   });
 
-  it('handles search input and role toggling cleanly', async () => {
+  it('supports M:N assignment workflow: multiple users assigned to multiple roles', async () => {
+    const onSuccessMock = vi.fn();
+    const onCloseMock = vi.fn();
+
     render(
       <UserRoleAssignment
         open={true}
         roles={mockRoles}
         allRoles={mockRoles}
-        onClose={vi.fn()}
+        existingAssignments={[
+          { ID: 'ass-1', userId: 'alice@fanrio.com', role_ID: 'role-1' }
+        ]}
+        onSuccess={onSuccessMock}
+        onClose={onCloseMock}
       />
     );
 
-    // Filter roles by search query
-    const roleSearchInput = screen.getByPlaceholderText('Search roles by name or description...');
-    fireEvent.change(roleSearchInput, { target: { value: 'First' } });
+    // Select User 1: Search 'bob'
+    const userInput = screen.getByPlaceholderText('Type name, email, or username...');
+    fireEvent.focus(userInput);
+    fireEvent.change(userInput, { target: { value: 'bob' } });
+    await new Promise(resolve => setTimeout(resolve, 350));
 
-    expect(screen.getByText('Role One')).toBeInTheDocument();
-    expect(screen.queryByText('Role Two')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(api.searchScimUsers).toHaveBeenCalledWith('bob');
+    });
 
-    // Toggle Role One
-    const roleOneCard = screen.getByText('Role One');
-    fireEvent.click(roleOneCard);
+    const bobOption = await screen.findByText('Bob Martin');
+    fireEvent.click(bobOption);
 
-    // Chip counter shows 1 selected
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    // Select User 2: Search 'alice'
+    fireEvent.focus(userInput);
+    fireEvent.change(userInput, { target: { value: 'alice' } });
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    await waitFor(() => {
+      expect(api.searchScimUsers).toHaveBeenCalledWith('alice');
+    });
+
+    const aliceOption = await screen.findByText('Alice Smith');
+    fireEvent.click(aliceOption);
+
+    // Both users should now be selected (2 selected)
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    // Select Role Two and Role Three (N = 2 roles)
+    const roleTwoCard = screen.getByText('Role Two');
+    fireEvent.click(roleTwoCard);
+
+    const roleThreeCard = screen.getByText('Role Three');
+    fireEvent.click(roleThreeCard);
+
+    // Role One should show partial assignment (Assigned 1/2) because Alice already has role-1
+    expect(screen.getByText('Assigned 1/2')).toBeInTheDocument();
+
+    // Submit button shows "Assign 4 Role Assignments" (2 users x 2 roles = 4 assignments)
+    const submitBtn = screen.getByRole('button', { name: /Assign 4 Role Assignments/i });
+    expect(submitBtn).toBeEnabled();
+
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.createAssignment).toHaveBeenCalledTimes(4);
+    });
+
+    // Check that createAssignment was called for all (user, role) combinations
+    expect(api.createAssignment).toHaveBeenCalledWith({
+      userId: 'bob@fanrio.com',
+      userName: 'Bob Martin',
+      role_ID: 'role-2'
+    });
+    expect(api.createAssignment).toHaveBeenCalledWith({
+      userId: 'bob@fanrio.com',
+      userName: 'Bob Martin',
+      role_ID: 'role-3'
+    });
+    expect(api.createAssignment).toHaveBeenCalledWith({
+      userId: 'alice@fanrio.com',
+      userName: 'Alice Smith',
+      role_ID: 'role-2'
+    });
+    expect(api.createAssignment).toHaveBeenCalledWith({
+      userId: 'alice@fanrio.com',
+      userName: 'Alice Smith',
+      role_ID: 'role-3'
+    });
+
+    expect(onSuccessMock).toHaveBeenCalledWith(expect.stringContaining('Successfully created 4 assignments (2 users × 2 roles)'));
+    expect(onCloseMock).toHaveBeenCalled();
   });
 });

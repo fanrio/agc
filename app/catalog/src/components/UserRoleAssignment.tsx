@@ -36,7 +36,8 @@ import {
   AlertCircle,
   Zap,
   CheckCircle2,
-  Lock
+  Lock,
+  UserCheck
 } from 'lucide-react';
 import UserSelection from './UserSelection';
 import * as api from '../api';
@@ -82,8 +83,8 @@ export default function UserRoleAssignment({
   onSuccess,
   onError
 }: UserRoleAssignmentProps) {
-  const [selectedScimUser, setSelectedScimUser] = useState<any>(null);
-  const [assignForm, setAssignForm] = useState({ userId: '', userName: '' });
+  // M:N state: multiple users (M) and multiple roles (N)
+  const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
   const [filterPlatform, setFilterPlatform] = useState<'ALL' | 'DATASPHERE' | 'DATABRICKS' | 'BOTH'>('ALL');
@@ -92,9 +93,8 @@ export default function UserRoleAssignment({
   const [accessDomains, setAccessDomains] = useState<any[]>(propAccessDomains || []);
   const [loading, setLoading] = useState(false);
 
-  // Existing assignments for the selected user
-  const [userExistingAssignments, setUserExistingAssignments] = useState<any[]>([]);
-  const [existingUserRoleIds, setExistingUserRoleIds] = useState<Set<string>>(new Set());
+  // Existing assignments for all selected users
+  const [allExistingAssignments, setAllExistingAssignments] = useState<any[]>([]);
 
   // Fetch access domains when dialog opens
   useEffect(() => {
@@ -115,44 +115,59 @@ export default function UserRoleAssignment({
   // Reset state on open/close
   useEffect(() => {
     if (!open) {
-      setSelectedScimUser(null);
-      setAssignForm({ userId: '', userName: '' });
+      setSelectedUsers([]);
       setSelectedRoleIds(role ? [role.ID] : []);
       setRoleSearchQuery('');
       setFilterPlatform('ALL');
       setFilterType('ALL');
       setFilterAccessDomain('ALL');
-      setUserExistingAssignments([]);
-      setExistingUserRoleIds(new Set());
+      setAllExistingAssignments([]);
       setLoading(false);
     } else if (role) {
       setSelectedRoleIds([role.ID]);
     }
   }, [open, role]);
 
-  // Load existing assignments for the selected user to prevent duplicate assignments
+  // Load existing assignments for all selected users to detect duplicates in M:N matrix
   useEffect(() => {
-    if (!assignForm.userId.trim()) {
-      setUserExistingAssignments([]);
-      setExistingUserRoleIds(new Set());
+    if (selectedUsers.length === 0) {
+      setAllExistingAssignments([]);
+      return;
+    }
+
+    const selectedUserIds = new Set(selectedUsers.map(u => (u.username || '').trim()).filter(Boolean));
+    if (selectedUserIds.size === 0) {
+      setAllExistingAssignments([]);
       return;
     }
 
     if (existingAssignments && existingAssignments.length > 0) {
-      const userAss = existingAssignments.filter(a => a.userId === assignForm.userId.trim());
-      setUserExistingAssignments(userAss);
-      setExistingUserRoleIds(new Set(userAss.map(a => a.role_ID || a.role?.ID).filter(Boolean)));
+      const userAss = existingAssignments.filter(a => selectedUserIds.has((a.userId || '').trim()));
+      setAllExistingAssignments(userAss);
     } else {
       api.getAssignments()
         .then((res: any) => {
           const list = Array.isArray(res) ? res : (res?.value || []);
-          const userAss = list.filter((a: any) => a.userId === assignForm.userId.trim());
-          setUserExistingAssignments(userAss);
-          setExistingUserRoleIds(new Set(userAss.map((a: any) => a.role_ID || a.role?.ID).filter(Boolean)));
+          const userAss = list.filter((a: any) => selectedUserIds.has((a.userId || '').trim()));
+          setAllExistingAssignments(userAss);
         })
         .catch(() => {});
     }
-  }, [assignForm.userId, existingAssignments]);
+  }, [selectedUsers, existingAssignments]);
+
+  // Map of userId -> Set of assigned role IDs
+  const existingAssignmentsByUser = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    allExistingAssignments.forEach(a => {
+      const uid = (a.userId || '').trim();
+      const rid = a.role_ID || a.role?.ID;
+      if (uid && rid) {
+        if (!map.has(uid)) map.set(uid, new Set());
+        map.get(uid)!.add(rid);
+      }
+    });
+    return map;
+  }, [allExistingAssignments]);
 
   // Map of access domains for name lookup and dropdown options
   const accessDomainMap = useMemo(() => {
@@ -215,22 +230,45 @@ export default function UserRoleAssignment({
     });
   }, [roles, filterPlatform, filterType, filterAccessDomain, roleSearchQuery]);
 
-  // Selected roles objects and target platforms impact
-  const selectedRoles = useMemo(() => {
+  // Selected roles objects
+  const rolesToAssign = useMemo(() => {
     if (role) return [role];
     return roles.filter(r => selectedRoleIds.includes(r.ID));
   }, [role, roles, selectedRoleIds]);
 
+  // Compute all M:N (user, role) pairs to create, automatically skipping existing assignments
+  const pairsToCreate = useMemo(() => {
+    const pairs: { userId: string; userName: string; role_ID: string }[] = [];
+    for (const u of selectedUsers) {
+      const uid = (u.username || '').trim();
+      if (!uid) continue;
+      const uname = (u.displayName || u.username || '').trim();
+      const userAssigned = existingAssignmentsByUser.get(uid) || new Set();
+
+      for (const r of rolesToAssign) {
+        if (!userAssigned.has(r.ID)) {
+          pairs.push({
+            userId: uid,
+            userName: uname,
+            role_ID: r.ID
+          });
+        }
+      }
+    }
+    return pairs;
+  }, [selectedUsers, rolesToAssign, existingAssignmentsByUser]);
+
+  // Target platforms impact
   const targetImpact = useMemo(() => {
     let hasDatasphere = false;
     let hasDatabricks = false;
-    for (const r of selectedRoles) {
+    for (const r of rolesToAssign) {
       const plat = r.targetPlatform || 'DATASPHERE';
       if (plat === 'DATASPHERE' || plat === 'BOTH') hasDatasphere = true;
       if (plat === 'DATABRICKS' || plat === 'BOTH') hasDatabricks = true;
     }
-    return { hasDatasphere, hasDatabricks, count: selectedRoles.length };
-  }, [selectedRoles]);
+    return { hasDatasphere, hasDatabricks, count: rolesToAssign.length };
+  }, [rolesToAssign]);
 
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds(prev =>
@@ -239,8 +277,16 @@ export default function UserRoleAssignment({
   };
 
   const handleSelectAllFiltered = () => {
+    // Select all filtered roles that have restrictions and are not already assigned to all selected users
     const selectableIds = filteredRoles
-      .filter(r => hasAnyRestrictions(r, allRoles) && !existingUserRoleIds.has(r.ID))
+      .filter(r => {
+        if (!hasAnyRestrictions(r, allRoles)) return false;
+        if (selectedUsers.length > 0) {
+          const assignedCount = selectedUsers.filter(u => existingAssignmentsByUser.get(u.username)?.has(r.ID)).length;
+          if (assignedCount === selectedUsers.length) return false;
+        }
+        return true;
+      })
       .map(r => r.ID);
     setSelectedRoleIds(prev => Array.from(new Set([...prev, ...selectableIds])));
   };
@@ -249,39 +295,31 @@ export default function UserRoleAssignment({
     setSelectedRoleIds([]);
   };
 
+  const handleRemoveUser = (username: string) => {
+    setSelectedUsers(prev => prev.filter(u => u.username !== username));
+  };
+
   const handleSubmit = async () => {
-    if (!assignForm.userId.trim()) return;
+    if (selectedUsers.length === 0 || rolesToAssign.length === 0) return;
+    if (pairsToCreate.length === 0) {
+      if (onSuccess) {
+        onSuccess('All selected users already have the chosen roles assigned.');
+      }
+      onClose();
+      return;
+    }
 
     setLoading(true);
     try {
-      if (role) {
-        // Single role assignment flow
-        await api.createAssignment({
-          userId: assignForm.userId.trim(),
-          userName: assignForm.userName.trim() || assignForm.userId.trim(),
-          role_ID: role.ID
-        });
-        if (onSuccess) {
-          onSuccess(`Successfully assigned role "${role.name}" to ${assignForm.userId}`);
-        }
-      } else {
-        // Multiple roles assignment flow
-        const rolesToAssign = roles.filter(r => selectedRoleIds.includes(r.ID));
-        if (rolesToAssign.length === 0) return;
+      await Promise.all(pairsToCreate.map(pair => api.createAssignment(pair)));
 
-        await Promise.all(rolesToAssign.map(r =>
-          api.createAssignment({
-            userId: assignForm.userId.trim(),
-            userName: assignForm.userName.trim() || assignForm.userId.trim(),
-            role_ID: r.ID
-          })
-        ));
-
-        if (onSuccess) {
-          const names = rolesToAssign.map(r => r.name).join(', ');
-          onSuccess(`Successfully assigned ${rolesToAssign.length} roles to ${assignForm.userId}`);
-        }
+      if (onSuccess) {
+        const uCount = selectedUsers.length;
+        const rCount = rolesToAssign.length;
+        const pCount = pairsToCreate.length;
+        onSuccess(`Successfully created ${pCount} assignment${pCount > 1 ? 's' : ''} (${uCount} user${uCount > 1 ? 's' : ''} × ${rCount} role${rCount > 1 ? 's' : ''})`);
       }
+      onClose();
     } catch (e: any) {
       if (onError) {
         onError(e.message || 'Failed to assign roles');
@@ -291,7 +329,7 @@ export default function UserRoleAssignment({
     }
   };
 
-  const isSubmitDisabled = !assignForm.userId.trim() || (role ? false : selectedRoleIds.length === 0) || loading;
+  const isSubmitDisabled = selectedUsers.length === 0 || rolesToAssign.length === 0 || pairsToCreate.length === 0 || loading;
 
   return (
     <Dialog
@@ -325,12 +363,12 @@ export default function UserRoleAssignment({
           </Avatar>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              {role ? `Assign Role: ${role.name}` : 'Assign Authorization Roles'}
+              {role ? `Assign Role: ${role.name}` : 'M:N Role Assignment'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {role
-                ? 'Assign this authorization role to a user or group.'
-                : 'Select a user and choose authorization roles for real-time synchronization.'}
+                ? 'Assign this authorization role to one or multiple users simultaneously.'
+                : 'Select multiple users (M) and multiple authorization roles (N) for direct real-time synchronization.'}
             </Typography>
           </Box>
         </Box>
@@ -342,33 +380,66 @@ export default function UserRoleAssignment({
       {/* 2-Column Content Body */}
       <DialogContent sx={{ p: 3, overflowX: 'hidden', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
         
-        {/* LEFT COLUMN: User Selection & Assignment Summary (330px fixed width on desktop) */}
+        {/* LEFT COLUMN: M Users Selection & Overview (330px fixed width on desktop) */}
         <Box sx={{ width: { xs: '100%', md: 330 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-              <Users size={16} /> 1. Select User
+          {/* Header */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Users size={16} /> 1. Select Users
+              <Chip
+                size="small"
+                color={selectedUsers.length > 0 ? 'primary' : 'default'}
+                label={`${selectedUsers.length} selected`}
+                sx={{ fontWeight: 700, height: 22, ml: 1 }}
+              />
             </Typography>
-            <UserSelection
-              value={selectedScimUser}
-              onChange={(e, v) => {
-                setSelectedScimUser(v);
-                if (v) {
-                  setAssignForm({
-                    userId: v.username,
-                    userName: v.displayName || v.username
-                  });
-                } else {
-                  setAssignForm({ userId: '', userName: '' });
-                }
-              }}
-              label="Search User (SCIM)"
-              placeholder="Type name, email, or username..."
-              disabled={loading}
-            />
+            {selectedUsers.length > 0 && (
+              <Button
+                size="small"
+                variant="text"
+                color="inherit"
+                onClick={() => setSelectedUsers([])}
+                sx={{ fontSize: '0.75rem', py: 0.2 }}
+              >
+                Clear
+              </Button>
+            )}
           </Box>
 
-          {/* User Profile Card */}
-          {assignForm.userId ? (
+          {/* UserSelection Autocomplete with multi-select (M:N) */}
+          <UserSelection
+            multiple
+            value={selectedUsers}
+            onChange={(e, v) => {
+              setSelectedUsers(Array.isArray(v) ? v : v ? [v] : []);
+            }}
+            label="Search & Add Users (SCIM)"
+            placeholder="Type name, email, or username..."
+            disabled={loading}
+          />
+
+          {/* Selected Users Cards / List */}
+          {selectedUsers.length === 0 ? (
+            <Box
+              sx={{
+                p: 2.5,
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: 2,
+                textAlign: 'center',
+                color: 'text.secondary'
+              }}
+            >
+              <Users size={28} style={{ opacity: 0.4, marginBottom: 8 }} />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                No users selected
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Search and add one or multiple users (M:N) above to assign roles simultaneously.
+              </Typography>
+            </Box>
+          ) : selectedUsers.length === 1 ? (
+            /* Single User Detail View */
             <Card
               sx={{
                 p: 2,
@@ -378,28 +449,33 @@ export default function UserRoleAssignment({
                 borderRadius: 2
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                <Avatar sx={{ bgcolor: 'primary.dark', width: 34, height: 34, fontSize: '0.9rem', fontWeight: 700 }}>
-                  {(assignForm.userName || assignForm.userId).charAt(0).toUpperCase()}
-                </Avatar>
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {assignForm.userName || assignForm.userId}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {assignForm.userId}
-                  </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                  <Avatar sx={{ bgcolor: 'primary.dark', width: 34, height: 34, fontSize: '0.9rem', fontWeight: 700 }}>
+                    {(selectedUsers[0].displayName || selectedUsers[0].username).charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedUsers[0].displayName || selectedUsers[0].username}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedUsers[0].username}
+                    </Typography>
+                  </Box>
                 </Box>
+                <IconButton size="small" onClick={() => setSelectedUsers([])} aria-label="Remove user">
+                  <X size={14} />
+                </IconButton>
               </Box>
 
               {/* Already Assigned Roles */}
               <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', mb: 1 }}>
-                  Currently Assigned Roles ({userExistingAssignments.length}):
+                  Currently Assigned Roles ({allExistingAssignments.length}):
                 </Typography>
-                {userExistingAssignments.length > 0 ? (
+                {allExistingAssignments.length > 0 ? (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, maxHeight: 110, overflowY: 'auto' }}>
-                    {userExistingAssignments.map(a => (
+                    {allExistingAssignments.map(a => (
                       <Chip
                         key={a.ID}
                         size="small"
@@ -417,27 +493,75 @@ export default function UserRoleAssignment({
               </Box>
             </Card>
           ) : (
-            <Box
+            /* Multiple Users List View */
+            <Card
               sx={{
-                p: 2.5,
-                border: '1px dashed',
+                p: 1.5,
+                bgcolor: 'background.default',
+                border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 2,
-                textAlign: 'center',
-                color: 'text.secondary'
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1
               }}
             >
-              <Users size={28} style={{ opacity: 0.4, marginBottom: 8 }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                No user selected
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Search and pick a user above to see their details and existing role assignments.
-              </Typography>
-            </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary' }}>
+                  Selected Users ({selectedUsers.length})
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {allExistingAssignments.length} total existing roles
+                </Typography>
+              </Box>
+
+              <Box sx={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.8, pr: 0.5 }}>
+                {selectedUsers.map(u => {
+                  const userRolesCount = existingAssignmentsByUser.get(u.username)?.size || 0;
+                  return (
+                    <Box
+                      key={u.username}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        p: 0.8,
+                        px: 1,
+                        borderRadius: 1.5,
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+                        <Avatar sx={{ bgcolor: 'primary.dark', width: 26, height: 26, fontSize: '0.75rem', fontWeight: 700 }}>
+                          {(u.displayName || u.username).charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {u.displayName || u.username}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {u.username}{userRolesCount > 0 ? ` • ${userRolesCount} role${userRolesCount > 1 ? 's' : ''}` : ''}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemoveUser(u.username)}
+                        aria-label={`Remove ${u.displayName || u.username}`}
+                        sx={{ p: 0.4, ml: 0.5 }}
+                      >
+                        <X size={13} />
+                      </IconButton>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Card>
           )}
 
-          {/* Real-Time Sync & Impact Summary */}
+          {/* Real-Time Sync & M:N Impact Summary */}
           <Card
             sx={{
               p: 2,
@@ -449,11 +573,19 @@ export default function UserRoleAssignment({
             }}
           >
             <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-              <Zap size={13} color="#f59e0b" /> Real-Time Direct Sync
+              <Zap size={13} color="#f59e0b" /> M:N Direct Sync Impact
             </Typography>
 
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-              {targetImpact.count === 0 ? 'No roles selected' : `${targetImpact.count} role(s) to assign`}
+            <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              {selectedUsers.length === 0 || rolesToAssign.length === 0
+                ? 'Select users and roles'
+                : `${selectedUsers.length} User${selectedUsers.length > 1 ? 's' : ''} × ${rolesToAssign.length} Role${rolesToAssign.length > 1 ? 's' : ''}`}
+            </Typography>
+
+            <Typography variant="caption" sx={{ color: pairsToCreate.length > 0 ? 'primary.main' : 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
+              {pairsToCreate.length === 0
+                ? '0 new assignments to create'
+                : `${pairsToCreate.length} new assignment${pairsToCreate.length > 1 ? 's' : ''} will be created`}
             </Typography>
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, mb: 1 }}>
@@ -480,7 +612,7 @@ export default function UserRoleAssignment({
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-              Assignments write directly to target authorization platforms without background batch delays.
+              Assignments write directly to target authorization platforms in real-time.
             </Typography>
           </Card>
         </Box>
@@ -532,16 +664,10 @@ export default function UserRoleAssignment({
                     <Chip size="small" label="Critical" color="error" />
                   )}
                 </Box>
-
-                {existingUserRoleIds.has(role.ID) && (
-                  <Alert severity="warning" sx={{ mt: 2, py: 0.5, fontSize: '0.8125rem' }}>
-                    This user is already assigned to role <strong>{role.name}</strong>.
-                  </Alert>
-                )}
               </Card>
             </Box>
           ) : (
-            /* Multi-Role Catalog Selection */
+            /* Multi-Role Catalog Selection (N) */
             <>
               {/* Header & Counters */}
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -685,9 +811,13 @@ export default function UserRoleAssignment({
                 ) : (
                   filteredRoles.map(r => {
                     const isSelected = selectedRoleIds.includes(r.ID);
-                    const isAlreadyAssigned = existingUserRoleIds.has(r.ID);
+                    const assignedUsersCount = selectedUsers.filter(u =>
+                      existingAssignmentsByUser.get(u.username)?.has(r.ID)
+                    ).length;
+                    const isAssignedToAll = selectedUsers.length > 0 && assignedUsersCount === selectedUsers.length;
+                    const isPartiallyAssigned = assignedUsersCount > 0 && !isAssignedToAll;
                     const hasRestrictions = hasAnyRestrictions(r, allRoles);
-                    const isDisabled = isAlreadyAssigned || !hasRestrictions || loading;
+                    const isDisabled = isAssignedToAll || !hasRestrictions || loading;
                     const domainId = r.accessDomain_ID || r.accessDomain?.ID;
                     const domainLabel = domainId ? accessDomainMap.get(domainId) || domainId : null;
 
@@ -777,13 +907,26 @@ export default function UserRoleAssignment({
                             sx={{ height: 22, fontSize: '0.7rem' }}
                           />
 
-                          {isAlreadyAssigned && (
-                            <Tooltip title="This role is already assigned to the selected user">
+                          {isAssignedToAll && (
+                            <Tooltip title="This role is already assigned to all selected users">
                               <Chip
                                 size="small"
                                 icon={<CheckCircle2 size={12} />}
-                                label="Assigned"
+                                label={selectedUsers.length > 1 ? `Assigned to all (${assignedUsersCount})` : 'Assigned'}
                                 color="default"
+                                sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
+                              />
+                            </Tooltip>
+                          )}
+
+                          {isPartiallyAssigned && (
+                            <Tooltip title={`Already assigned to ${assignedUsersCount} of ${selectedUsers.length} selected users. Selecting this role will assign it to the remaining ${selectedUsers.length - assignedUsersCount} user(s).`}>
+                              <Chip
+                                size="small"
+                                icon={<UserCheck size={12} />}
+                                label={`Assigned ${assignedUsersCount}/${selectedUsers.length}`}
+                                color="warning"
+                                variant="outlined"
                                 sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
                               />
                             </Tooltip>
@@ -823,10 +966,14 @@ export default function UserRoleAssignment({
         }}
       >
         <Typography variant="body2" color="text.secondary">
-          {assignForm.userId ? (
-            <>Assigning to <strong>{assignForm.userName || assignForm.userId}</strong></>
+          {selectedUsers.length === 0 ? (
+            'Select users and roles to proceed'
           ) : (
-            'Select a user to proceed'
+            <>
+              <strong>{selectedUsers.length}</strong> user{selectedUsers.length > 1 ? 's' : ''} &bull;{' '}
+              <strong>{rolesToAssign.length}</strong> role{rolesToAssign.length > 1 ? 's' : ''} &bull;{' '}
+              <strong style={{ color: pairsToCreate.length > 0 ? '#1976d2' : undefined }}>{pairsToCreate.length}</strong> new assignment{pairsToCreate.length > 1 ? 's' : ''}
+            </>
           )}
         </Typography>
 
@@ -843,10 +990,8 @@ export default function UserRoleAssignment({
           >
             {loading
               ? 'Assigning...'
-              : role
-              ? 'Assign Role'
-              : selectedRoleIds.length > 0
-              ? `Assign ${selectedRoleIds.length} Role${selectedRoleIds.length > 1 ? 's' : ''}`
+              : pairsToCreate.length > 0
+              ? `Assign ${pairsToCreate.length} Role Assignment${pairsToCreate.length > 1 ? 's' : ''}`
               : 'Assign Roles'}
           </Button>
         </Box>

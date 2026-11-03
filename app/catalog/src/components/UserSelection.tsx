@@ -1,18 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Autocomplete, TextField, CircularProgress, Box, Typography, Alert } from '@mui/material';
 import * as api from '../api';
 
 /**
  * Reusable Autocomplete component for searching and selecting SCIM users.
  * Handles internal debounced data fetching from the SCIM user service.
+ * Supports both single-user and multi-user selection (M:N).
  *
  * @param {object} props
- * @param {object|null} props.value - Selected SCIM user object or null
+ * @param {object|array|null} props.value - Selected SCIM user object or array of users (when multiple=true)
  * @param {function} props.onChange - Event handler callback when value changes: (event, newValue) => void
  * @param {string} [props.label] - Input label string
  * @param {string} [props.placeholder] - Input placeholder string
  * @param {string} [props.size] - MUI size variant ('small' or 'medium')
  * @param {boolean} [props.fullWidth] - Should the component take full width
+ * @param {boolean} [props.disabled] - Disabled state
+ * @param {boolean} [props.multiple] - Enable multi-user selection (M:N)
  */
 interface UserSelectionProps {
   value: any;
@@ -22,6 +25,7 @@ interface UserSelectionProps {
   size?: 'small' | 'medium';
   fullWidth?: boolean;
   disabled?: boolean;
+  multiple?: boolean;
 }
 
 export default function UserSelection({
@@ -31,10 +35,11 @@ export default function UserSelection({
   placeholder = 'Type username or email...',
   size = 'small',
   fullWidth = true,
-  disabled = false
+  disabled = false,
+  multiple = false
 }: UserSelectionProps) {
   const [scimInput, setScimInput] = useState('');
-  const [scimOptions, setScimOptions] = useState([]);
+  const [scimOptions, setScimOptions] = useState<any[]>([]);
   const [scimLoading, setScimLoading] = useState(false);
   const [scimError, setScimError] = useState<string | null>(null);
 
@@ -64,22 +69,43 @@ export default function UserSelection({
     return () => clearTimeout(t);
   }, [scimInput]);
 
+  const normalizedValue = multiple
+    ? (Array.isArray(value) ? value : value ? [value] : [])
+    : (value || null);
+
+  const selectedUsernames = useMemo(() => {
+    if (!multiple || !Array.isArray(value)) return new Set<string>();
+    return new Set<string>(value.map((u: any) => u?.username).filter(Boolean));
+  }, [multiple, value]);
+
+  const displayOptions = useMemo(() => {
+    if (!multiple || selectedUsernames.size === 0) return scimOptions;
+    return scimOptions.filter((opt: any) => !selectedUsernames.has(opt.username));
+  }, [multiple, selectedUsernames, scimOptions]);
+
   return (
     <Box sx={{ width: fullWidth ? '100%' : 'auto' }}>
       <Autocomplete
-        value={value}
-        onChange={onChange}
+        multiple={multiple}
+        value={normalizedValue}
+        onChange={(e, v) => {
+          onChange(e, v);
+          if (multiple) {
+            setScimInput('');
+          }
+        }}
         inputValue={scimInput}
         onInputChange={(e, v) => {
           setScimInput(v);
           if (scimError) setScimError(null);
         }}
-        options={scimOptions}
+        options={displayOptions}
         filterOptions={(options) => options}
         loading={scimLoading}
         disabled={disabled}
         getOptionLabel={(option) => option.displayName || option.username || ''}
         isOptionEqualToValue={(option, val) => option.username === val?.username}
+        renderTags={multiple ? () => null : undefined}
         renderInput={(params) => (
           <TextField
             {...params}
@@ -109,7 +135,7 @@ export default function UserSelection({
                 </Typography>
                 {(option.email || option.department) && (
                   <Typography variant="caption" color="text.secondary">
-                    {option.department}
+                    {option.username}{option.department ? ` • ${option.department}` : ''}
                   </Typography>
                 )}
               </Box>
