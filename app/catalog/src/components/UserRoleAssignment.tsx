@@ -336,11 +336,13 @@ export default function UserRoleAssignment({
       open={open}
       onClose={() => { if (!loading) onClose(); }}
       fullWidth
-      maxWidth="md"
+      maxWidth="lg"
       PaperProps={{
         sx: {
           borderRadius: 2.5,
-          minHeight: 620,
+          width: '100%',
+          maxWidth: 990, // Increased by 10% from standard 900px
+          minHeight: 682, // Increased by 10% from 620px
           backgroundImage: 'none',
           overflowX: 'hidden'
         }
@@ -380,8 +382,8 @@ export default function UserRoleAssignment({
       {/* 2-Column Content Body */}
       <DialogContent sx={{ p: 3, overflowX: 'hidden', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
         
-        {/* LEFT COLUMN: M Users Selection & Overview (330px fixed width on desktop) */}
-        <Box sx={{ width: { xs: '100%', md: 330 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* LEFT COLUMN: Users Selection & Overview (360px width on desktop) */}
+        <Box sx={{ width: { xs: '100%', md: 360 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Header */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.8 }}>
@@ -515,7 +517,7 @@ export default function UserRoleAssignment({
                 </Typography>
               </Box>
 
-              <Box sx={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.8, pr: 0.5 }}>
+              <Box sx={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.8, pr: 0.5 }}>
                 {selectedUsers.map(u => {
                   const userRolesCount = existingAssignmentsByUser.get(u.username)?.size || 0;
                   return (
@@ -629,41 +631,10 @@ export default function UserRoleAssignment({
               <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.8 }}>
                 <Shield size={16} /> Role Details
               </Typography>
-              <Card sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {role.name}
-                    </Typography>
-                    {role.description && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {role.description}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Chip
-                    size="small"
-                    label={role.environment_ID || 'D'}
-                    sx={{ fontWeight: 700, height: 22 }}
-                  />
-                </Box>
-
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
-                  <Chip
-                    size="small"
-                    label={role.type === 'ORG_BASED' ? 'Org-Based' : (role.parentRoles && role.parentRoles.length > 0 ? 'Derived Role' : 'Single Role')}
-                    color="primary"
-                    variant="outlined"
-                  />
-                  <Chip
-                    size="small"
-                    label={role.targetPlatform === 'BOTH' ? 'Both Platforms' : role.targetPlatform === 'DATABRICKS' ? 'Databricks' : 'Datasphere'}
-                    color={role.targetPlatform === 'BOTH' ? 'secondary' : role.targetPlatform === 'DATABRICKS' ? 'warning' : 'info'}
-                  />
-                  {role.critical && (
-                    <Chip size="small" label="Critical" color="error" />
-                  )}
-                </Box>
+              <Card sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {role.name}
+                </Typography>
               </Card>
             </Box>
           ) : (
@@ -789,7 +760,7 @@ export default function UserRoleAssignment({
                   border: '1px solid',
                   borderColor: 'divider',
                   borderRadius: 2,
-                  maxHeight: 360,
+                  maxHeight: 400,
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   p: 1,
@@ -821,14 +792,21 @@ export default function UserRoleAssignment({
                     const domainId = r.accessDomain_ID || r.accessDomain?.ID;
                     const domainLabel = domainId ? accessDomainMap.get(domainId) || domainId : null;
 
-                    return (
+                    const tooltipText = isAssignedToAll
+                      ? (selectedUsers.length > 1 ? `Already assigned to all selected users (${assignedUsersCount})` : 'Already assigned to selected user')
+                      : !hasRestrictions
+                      ? 'Cannot assign: role has no restrictions configured'
+                      : '';
+
+                    const cardContent = (
                       <Card
                         key={r.ID}
                         onClick={() => {
                           if (!isDisabled) handleToggleRole(r.ID);
                         }}
                         sx={{
-                          p: 1.5,
+                          p: 1.2,
+                          px: 1.5,
                           cursor: isDisabled ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -855,97 +833,27 @@ export default function UserRoleAssignment({
                           sx={{ p: 0.5, flexShrink: 0 }}
                         />
 
-                        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {r.name}
-                            </Typography>
-                            <Chip
-                              size="small"
-                              label={r.environment_ID || 'D'}
-                              sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}
-                            />
-                          </Box>
-
-                          {r.description && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{
-                                display: '-webkit-box',
-                                WebkitLineClamp: 1,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                              }}
-                            >
-                              {r.description}
-                            </Typography>
-                          )}
-                        </Box>
-
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: { xs: '100%', sm: '50%' } }}>
-                          {domainLabel && (
-                            <Chip
-                              size="small"
-                              label={domainLabel}
-                              variant="outlined"
-                              sx={{ height: 22, fontSize: '0.7rem' }}
-                            />
-                          )}
-
-                          <Chip
-                            size="small"
-                            label={r.type === 'ORG_BASED' ? 'Org' : (r.parentRoles && r.parentRoles.length > 0 ? 'Derived' : 'Single')}
-                            variant="outlined"
-                            sx={{ height: 22, fontSize: '0.7rem' }}
-                          />
-
-                          <Chip
-                            size="small"
-                            label={r.targetPlatform === 'BOTH' ? 'Both' : r.targetPlatform === 'DATABRICKS' ? 'Databricks' : 'Datasphere'}
-                            color={r.targetPlatform === 'BOTH' ? 'secondary' : r.targetPlatform === 'DATABRICKS' ? 'warning' : 'info'}
-                            sx={{ height: 22, fontSize: '0.7rem' }}
-                          />
-
-                          {isAssignedToAll && (
-                            <Tooltip title="This role is already assigned to all selected users">
-                              <Chip
-                                size="small"
-                                icon={<CheckCircle2 size={12} />}
-                                label={selectedUsers.length > 1 ? `Assigned to all (${assignedUsersCount})` : 'Assigned'}
-                                color="default"
-                                sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
-                              />
-                            </Tooltip>
-                          )}
-
-                          {isPartiallyAssigned && (
-                            <Tooltip title={`Already assigned to ${assignedUsersCount} of ${selectedUsers.length} selected users. Selecting this role will assign it to the remaining ${selectedUsers.length - assignedUsersCount} user(s).`}>
-                              <Chip
-                                size="small"
-                                icon={<UserCheck size={12} />}
-                                label={`Assigned ${assignedUsersCount}/${selectedUsers.length}`}
-                                color="warning"
-                                variant="outlined"
-                                sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
-                              />
-                            </Tooltip>
-                          )}
-
-                          {!hasRestrictions && (
-                            <Tooltip title="Cannot assign: role has no restrictions configured">
-                              <Chip
-                                size="small"
-                                icon={<Lock size={12} />}
-                                label="No Restrictions"
-                                color="error"
-                                variant="outlined"
-                                sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600 }}
-                              />
-                            </Tooltip>
-                          )}
-                        </Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: isSelected ? 700 : 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1
+                          }}
+                        >
+                          {r.name}
+                        </Typography>
                       </Card>
+                    );
+
+                    return tooltipText ? (
+                      <Tooltip key={r.ID} title={tooltipText} placement="top">
+                        {cardContent}
+                      </Tooltip>
+                    ) : (
+                      cardContent
                     );
                   })
                 )}

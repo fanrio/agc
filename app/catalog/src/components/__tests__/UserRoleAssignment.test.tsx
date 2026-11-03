@@ -161,7 +161,7 @@ describe('UserRoleAssignment Component', () => {
     expect(screen.queryByText('Role Three')).not.toBeInTheDocument();
   });
 
-  it('disables roles without restrictions and shows "No Restrictions" badge', () => {
+  it('disables roles without restrictions', () => {
     render(
       <UserRoleAssignment
         open={true}
@@ -171,7 +171,11 @@ describe('UserRoleAssignment Component', () => {
       />
     );
 
-    expect(screen.getByText('No Restrictions')).toBeInTheDocument();
+    // Empty Role has no restrictions, so its checkbox is disabled
+    const emptyRoleText = screen.getByText('Empty Role');
+    const emptyRoleCard = emptyRoleText.closest('.MuiCard-root');
+    const checkbox = emptyRoleCard?.querySelector('input[type="checkbox"]');
+    expect(checkbox).toBeDisabled();
   });
 
   it('supports M:N assignment workflow: multiple users assigned to multiple roles', async () => {
@@ -225,9 +229,6 @@ describe('UserRoleAssignment Component', () => {
 
     const roleThreeCard = screen.getByText('Role Three');
     fireEvent.click(roleThreeCard);
-
-    // Role One should show partial assignment (Assigned 1/2) because Alice already has role-1
-    expect(screen.getByText('Assigned 1/2')).toBeInTheDocument();
 
     // Submit button shows "Assign 4 Role Assignments" (2 users x 2 roles = 4 assignments)
     const submitBtn = screen.getByRole('button', { name: /Assign 4 Role Assignments/i });
