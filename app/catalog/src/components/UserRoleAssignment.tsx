@@ -61,7 +61,8 @@ function hasAnyRestrictions(role: any, allRoles: any[] = []): boolean {
 }
 
 interface UserRoleAssignmentProps {
-  open: boolean;
+  open?: boolean;
+  asDialog?: boolean;
   role?: any;
   roles?: any[];
   allRoles?: any[];
@@ -73,16 +74,37 @@ interface UserRoleAssignmentProps {
 }
 
 export default function UserRoleAssignment({
-  open,
+  open = true,
+  asDialog = false,
   role,
-  roles = [],
-  allRoles = roles,
+  roles: propRoles = [],
+  allRoles: propAllRoles,
   existingAssignments,
   accessDomains: propAccessDomains,
   onClose,
   onSuccess,
   onError
 }: UserRoleAssignmentProps) {
+  // If explicitly closed and not in dialog mode, do not render
+  const isComponentOpen = open !== false;
+
+  // Internal state for roles if not provided via props
+  const [internalRoles, setInternalRoles] = useState<any[]>([]);
+
+  useEffect(() => {
+    if ((!propRoles || propRoles.length === 0) && !role) {
+      api.getRoles()
+        .then((res: any) => {
+          const list = Array.isArray(res) ? res : (res?.value || []);
+          setInternalRoles(list);
+        })
+        .catch(err => console.error('Failed to load roles in UserRoleAssignment:', err));
+    }
+  }, [propRoles, role]);
+
+  const roles = (propRoles && propRoles.length > 0) ? propRoles : (role ? [role] : internalRoles);
+  const allRoles = (propAllRoles && propAllRoles.length > 0) ? propAllRoles : roles;
+
   // State: multiple users and multiple roles
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
@@ -96,9 +118,9 @@ export default function UserRoleAssignment({
   // Existing assignments for all selected users
   const [allExistingAssignments, setAllExistingAssignments] = useState<any[]>([]);
 
-  // Fetch access domains when dialog opens
+  // Fetch access domains when component opens
   useEffect(() => {
-    if (open) {
+    if (isComponentOpen) {
       if (propAccessDomains && propAccessDomains.length > 0) {
         setAccessDomains(propAccessDomains);
       } else {
@@ -110,11 +132,11 @@ export default function UserRoleAssignment({
           .catch(() => {});
       }
     }
-  }, [open, propAccessDomains]);
+  }, [isComponentOpen, propAccessDomains]);
 
   // Reset state on open/close
   useEffect(() => {
-    if (!open) {
+    if (!isComponentOpen) {
       setSelectedUsers([]);
       setSelectedRoleIds(role ? [role.ID] : []);
       setRoleSearchQuery('');
@@ -126,7 +148,7 @@ export default function UserRoleAssignment({
     } else if (role) {
       setSelectedRoleIds([role.ID]);
     }
-  }, [open, role]);
+  }, [isComponentOpen, role]);
 
   // Load existing assignments for all selected users to detect duplicates in assignment matrix
   useEffect(() => {
@@ -331,82 +353,35 @@ export default function UserRoleAssignment({
 
   const isSubmitDisabled = selectedUsers.length === 0 || rolesToAssign.length === 0 || pairsToCreate.length === 0 || loading;
 
-  return (
-    <Dialog
-      open={open}
-      onClose={() => { if (!loading) onClose(); }}
-      fullWidth
-      maxWidth="lg"
-      PaperProps={{
-        sx: {
-          borderRadius: 2.5,
-          width: '100%',
-          maxWidth: 990, // Increased by 10% from standard 900px
-          minHeight: 682, // Increased by 10% from 620px
-          backgroundImage: 'none',
-          overflowX: 'hidden'
-        }
-      }}
-    >
-      {/* Header */}
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          pb: 1.5,
-          borderBottom: '1px solid',
-          borderColor: 'divider'
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar sx={{ bgcolor: 'primary.main', width: 38, height: 38 }}>
-            <UserPlus size={20} />
-          </Avatar>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              {role ? `Assign Role: ${role.name}` : 'Assign Authorization Roles'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {role
-                ? 'Assign this authorization role to one or multiple users simultaneously.'
-                : 'Select users and authorization roles for direct real-time synchronization.'}
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton size="small" onClick={onClose} disabled={loading} aria-label="Close dialog">
-          <X size={18} />
-        </IconButton>
-      </DialogTitle>
+  if (!isComponentOpen) return null;
 
-      {/* 2-Column Content Body */}
-      <DialogContent sx={{ p: 3, overflowX: 'hidden', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-        
-        {/* LEFT COLUMN: Users Selection & Overview (360px width on desktop) */}
-        <Box sx={{ width: { xs: '100%', md: 360 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* Header */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-              <Users size={16} /> 1. Select Users
-              <Chip
-                size="small"
-                color={selectedUsers.length > 0 ? 'primary' : 'default'}
-                label={`${selectedUsers.length} selected`}
-                sx={{ fontWeight: 700, height: 22, ml: 1 }}
-              />
-            </Typography>
-            {selectedUsers.length > 0 && (
-              <Button
-                size="small"
-                variant="text"
-                color="inherit"
-                onClick={() => setSelectedUsers([])}
-                sx={{ fontSize: '0.75rem', py: 0.2 }}
-              >
-                Clear
-              </Button>
-            )}
-          </Box>
+  const contentBody = (
+    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, overflowX: 'hidden' }}>
+      {/* LEFT COLUMN: Users Selection & Overview (360px width on desktop) */}
+      <Box sx={{ width: { xs: '100%', md: 360 }, flexShrink: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+            <Users size={16} /> 1. Select Users
+            <Chip
+              size="small"
+              color={selectedUsers.length > 0 ? 'primary' : 'default'}
+              label={`${selectedUsers.length} selected`}
+              sx={{ fontWeight: 700, height: 22, ml: 1 }}
+            />
+          </Typography>
+          {selectedUsers.length > 0 && (
+            <Button
+              size="small"
+              variant="text"
+              color="inherit"
+              onClick={() => setSelectedUsers([])}
+              sx={{ fontSize: '0.75rem', py: 0.2 }}
+            >
+              Clear
+            </Button>
+          )}
+        </Box>
 
           {/* UserSelection Autocomplete with multi-select */}
           <UserSelection
@@ -861,18 +836,21 @@ export default function UserRoleAssignment({
             </>
           )}
         </Box>
-      </DialogContent>
+      </Box>
+  );
 
-      {/* Footer / Actions */}
-      <DialogActions
-        sx={{
-          p: 2,
-          px: 3,
-          borderTop: '1px solid',
-          borderColor: 'divider',
-          justifyContent: 'space-between'
-        }}
+  const footerActions = (
+    <>
+      <Button
+        variant={asDialog ? 'text' : 'outlined'}
+        color={asDialog ? 'inherit' : 'error'}
+        onClick={onClose}
+        disabled={loading}
       >
+        Cancel
+      </Button>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Typography variant="body2" color="text.secondary">
           {selectedUsers.length === 0 ? (
             'Select users and roles to proceed'
@@ -885,25 +863,131 @@ export default function UserRoleAssignment({
           )}
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button onClick={onClose} disabled={loading} color="inherit">
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={isSubmitDisabled}
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <UserPlus size={16} />}
-            sx={{ px: 2.5 }}
-          >
-            {loading
-              ? 'Assigning...'
-              : pairsToCreate.length > 0
-              ? `Assign ${pairsToCreate.length} Role Assignment${pairsToCreate.length > 1 ? 's' : ''}`
-              : 'Assign Roles'}
-          </Button>
-        </Box>
-      </DialogActions>
-    </Dialog>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={isSubmitDisabled}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <UserPlus size={16} />}
+          sx={{ px: 2.5 }}
+        >
+          {loading
+            ? 'Assigning...'
+            : pairsToCreate.length > 0
+            ? `Assign ${pairsToCreate.length} Role Assignment${pairsToCreate.length > 1 ? 's' : ''}`
+            : 'Assign Roles'}
+        </Button>
+      </Box>
+    </>
+  );
+
+  if (asDialog) {
+    return (
+      <Dialog
+        open={isComponentOpen}
+        onClose={() => { if (!loading) onClose(); }}
+        fullWidth
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            borderRadius: 2.5,
+            width: '100%',
+            maxWidth: 990,
+            minHeight: 682,
+            backgroundImage: 'none',
+            overflowX: 'hidden'
+          }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            pb: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 38, height: 38 }}>
+              <UserPlus size={20} />
+            </Avatar>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                {role ? `Assign Role: ${role.name}` : 'Assign Authorization Roles'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {role
+                  ? 'Assign this authorization role to one or multiple users simultaneously.'
+                  : 'Select users and authorization roles for direct real-time synchronization.'}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton size="small" onClick={onClose} disabled={loading} aria-label="Close dialog">
+            <X size={18} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, overflowX: 'hidden' }}>
+          {contentBody}
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 2,
+            px: 3,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            justifyContent: 'space-between'
+          }}
+        >
+          {footerActions}
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  // Default: Full-page view matching Role Creation Wizard
+  return (
+    <Box sx={{ animation: 'fadeIn 0.3s' }}>
+      {/* Header matching Wizard */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+          {role ? `Assign Role: ${role.name}` : 'Assign Authorization Roles'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {role
+            ? 'Assign this authorization role to one or multiple users simultaneously'
+            : 'Assign authorization roles to users and groups with real-time direct synchronization'}
+        </Typography>
+      </Box>
+
+      {/* Main 2-Column Content Card */}
+      <Card
+        sx={{
+          p: 3,
+          mb: 3,
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          backgroundImage: 'none'
+        }}
+      >
+        {contentBody}
+      </Card>
+
+      {/* Action Bar matching Wizard */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mt: 2
+        }}
+      >
+        {footerActions}
+      </Box>
+    </Box>
   );
 }

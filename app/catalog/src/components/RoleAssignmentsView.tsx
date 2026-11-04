@@ -8,7 +8,12 @@ import SearchableSelect from './SearchableSelect';
 
 // Helper to recursively check if a role or any of its parents has restrictions
 
-export default function RoleAssignmentsView({ onInspectUser }) {
+interface RoleAssignmentsViewProps {
+  onInspectUser?: (uid: string) => void;
+  onOpenAssign?: () => void;
+}
+
+export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: RoleAssignmentsViewProps) {
   const { permissions } = usePermissions();
   const [assignments, setAssignments] = useState([]);
 
@@ -17,7 +22,7 @@ export default function RoleAssignmentsView({ onInspectUser }) {
   const [roles, setRoles] = useState([]);
   const [allRoles, setAllRoles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [error, setError] = useState(''); // Kept for reference but using snackbar instead
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -118,6 +123,25 @@ export default function RoleAssignmentsView({ onInspectUser }) {
     });
   }
 
+  if (isAssigning) {
+    return (
+      <UserRoleAssignment
+        roles={roles}
+        allRoles={allRoles}
+        existingAssignments={assignments}
+        onClose={() => setIsAssigning(false)}
+        onSuccess={async (msg) => {
+          setIsAssigning(false);
+          setSnackbar({ open: true, message: msg, severity: 'success' });
+          await load();
+        }}
+        onError={(msg) => {
+          setSnackbar({ open: true, message: msg, severity: 'error' });
+        }}
+      />
+    );
+  }
+
   return (
     <Box sx={{ animation: 'fadeIn 0.3s' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -127,7 +151,14 @@ export default function RoleAssignmentsView({ onInspectUser }) {
         </Box>
         <Button
           variant="contained"
-          onClick={() => { setAssignDialogOpen(true); setSnackbar(prev => ({ ...prev, open: false })); }}
+          onClick={() => {
+            setSnackbar(prev => ({ ...prev, open: false }));
+            if (onOpenAssign) {
+              onOpenAssign();
+            } else {
+              setIsAssigning(true);
+            }
+          }}
           disabled={permissions?.isSuperAdmin ? false : (permissions && !permissions.canAssignRoles && roles.length === 0)}
           startIcon={<Plus size={15} />}
         >
@@ -384,22 +415,6 @@ export default function RoleAssignmentsView({ onInspectUser }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <UserRoleAssignment
-        open={assignDialogOpen}
-        roles={roles}
-        allRoles={allRoles}
-        existingAssignments={assignments}
-        onClose={() => setAssignDialogOpen(false)}
-        onSuccess={async (msg) => {
-          setAssignDialogOpen(false);
-          setSnackbar({ open: true, message: msg, severity: 'success' });
-          await load();
-        }}
-        onError={(msg) => {
-          setSnackbar({ open: true, message: msg, severity: 'error' });
-        }}
-      />
     </Box>
   );
 }

@@ -39,7 +39,7 @@ const PLATFORM_FILTER_OPTIONS = [
   { value: 'BOTH', label: 'Both Platforms' }
 ];
 
-export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, initialFilter, setInitialFilter }: any) {
+export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole, onAssignRole, initialFilter, setInitialFilter }: any) {
   const { permissions } = usePermissions();
   const [allRoles, setAllRoles] = useState<any[]>(() => {
     const cached = api.peekCachedGet(api.ROLES_EXPAND_PATH);
@@ -379,6 +379,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
                   depth={0}
                   onDerive={onDeriveRole}
                   onEdit={onEditRole}
+                  onAssign={onAssignRole}
                   onRefresh={load}
                   onError={handleError}
                   onSuccess={handleSuccess}

@@ -370,7 +370,7 @@ export const RoleCard = memo(function RoleCard({
                 <Button size="small" variant="outlined" startIcon={<GitBranch size={12} />} onClick={() => onDerive(role)} disabled={disableDerive} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
                   Derive
                 </Button>
-                <Button size="small" variant="contained" startIcon={<Users size={12} />} onClick={() => setAssignDialogOpen(true)} disabled={disableAssign} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
+                <Button size="small" variant="contained" startIcon={<Users size={12} />} onClick={() => onAssign ? onAssign(role) : setAssignDialogOpen(true)} disabled={disableAssign} sx={{ fontSize: '0.68rem', py: 0.2, px: 1, borderRadius: 1.5 }}>
                   Assign
                 </Button>
               </Box>
@@ -476,6 +476,7 @@ export const RoleCard = memo(function RoleCard({
       {assignDialogOpen && (
         <UserRoleAssignment
           open={assignDialogOpen}
+          asDialog={true}
           role={role}
           allRoles={allRoles}
           onClose={() => setAssignDialogOpen(false)}

@@ -37,6 +37,7 @@ import OrgStructureView from './components/OrgStructureView';
 import RolesDashboard from './components/RolesDashboard';
 import { PermissionsProvider, usePermissions } from './context/PermissionsContext';
 
+import UserRoleAssignment from './components/UserRoleAssignment';
 const Wizard = lazy(() => import('./components/Wizard'));
 const RoleAssignmentsView = lazy(() => import('./components/RoleAssignmentsView'));
 const SystemView = lazy(() => import('./components/SystemView'));
@@ -65,7 +66,7 @@ function getNavFromHash() {
   if (['security-profiles', 'security_profiles', 'profiles', 'securityprofiles', 'access-profiles', 'access_profiles', 'accessprofiles'].includes(hash)) {
     return 'access-profiles';
   }
-  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'access-profiles', 'users', 'system', 'wizard'];
+  const validNavs = ['home', 'org', 'roles', 'assignments', 'audit', 'access-profiles', 'users', 'system', 'wizard', 'assignment'];
   return validNavs.includes(hash) ? hash : 'home';
 }
 
@@ -73,6 +74,7 @@ function AppContent({ simulatedUser, onLogout }) {
   const [activeNav, setActiveNavState] = useState(getNavFromHash);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [wizardContext, setWizardContext] = useState(null);
+  const [assignmentContext, setAssignmentContext] = useState(null);
   const [rolesFilter, setRolesFilter] = useState(null);
   const [inspectingUserId, setInspectingUserId] = useState(null);
   const isNavigatingRef = useRef(false);
@@ -125,6 +127,11 @@ function AppContent({ simulatedUser, onLogout }) {
   function openWizard(ctx = {}) {
     setWizardContext(ctx);
     setActiveNav('wizard');
+  }
+
+  function openAssignment(ctx = {}) {
+    setAssignmentContext(ctx);
+    setActiveNav('assignment');
   }
 
   if (loading) {
@@ -245,7 +252,11 @@ function AppContent({ simulatedUser, onLogout }) {
                 <ListItem key={item.id} disablePadding sx={{ display: 'block' }}>
                   <Tooltip title={!drawerOpen ? item.label : ''} placement="right" arrow>
                     <ListItemButton
-                      onClick={() => { setActiveNav(item.id); if (item.id !== 'wizard') setWizardContext(null); }}
+                      onClick={() => {
+                        setActiveNav(item.id);
+                        if (item.id !== 'wizard') setWizardContext(null);
+                        if (item.id !== 'assignment') setAssignmentContext(null);
+                      }}
                       sx={{
                         minHeight: 44,
                         borderRadius: 1.5,
@@ -317,9 +328,41 @@ function AppContent({ simulatedUser, onLogout }) {
         >
           {activeNav === 'home' && <HomeView setActiveNav={setActiveNav} navigateToRoles={navigateToRoles} onCreateRole={() => openWizard()} />}
           {activeNav === 'org' && (permissions?.isSuperAdmin || permissions?.canManageOrgRoles) && <OrgStructureView onGenerateRole={(nodeId) => openWizard({ orgNodeId: nodeId })} />}
-          {activeNav === 'roles' && <RolesDashboard onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })} onEditRole={(role) => openWizard({ roleId: role.ID })} onCreateRole={() => openWizard()} initialFilter={rolesFilter} setInitialFilter={setRolesFilter} />}
+          {activeNav === 'roles' && (
+            <RolesDashboard
+              onDeriveRole={(role) => openWizard({ parentRoleId: role.ID })}
+              onEditRole={(role) => openWizard({ roleId: role.ID })}
+              onCreateRole={() => openWizard()}
+              onAssignRole={(role) => openAssignment({ role, from: 'roles' })}
+              initialFilter={rolesFilter}
+              setInitialFilter={setRolesFilter}
+            />
+          )}
           {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
-          {activeNav === 'assignments' && <RoleAssignmentsView onInspectUser={(uid) => setInspectingUserId(uid)} />}
+          {activeNav === 'assignment' && (
+            <UserRoleAssignment
+              role={assignmentContext?.role}
+              roles={assignmentContext?.roles}
+              allRoles={assignmentContext?.allRoles}
+              existingAssignments={assignmentContext?.existingAssignments}
+              onClose={() => {
+                const returnNav = assignmentContext?.from || 'assignments';
+                setActiveNav(returnNav);
+                setAssignmentContext(null);
+              }}
+              onSuccess={async (msg) => {
+                const returnNav = assignmentContext?.from || 'assignments';
+                setActiveNav(returnNav);
+                setAssignmentContext(null);
+              }}
+            />
+          )}
+          {activeNav === 'assignments' && (
+            <RoleAssignmentsView
+              onInspectUser={(uid) => setInspectingUserId(uid)}
+              onOpenAssign={() => openAssignment({ from: 'assignments' })}
+            />
+          )}
           {activeNav === 'audit' && <AuditLogsView />}
           {activeNav === 'access-profiles' && <UsersView onInspectUser={(uid) => setInspectingUserId(uid)} />}
           {activeNav === 'users' && <AppAuthorizationsView />}
