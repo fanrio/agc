@@ -62,7 +62,7 @@ export function formatDateTime(isoString?: string | null): string {
 export function isCriticalRestriction(r: Restriction, orgNodes: OrgNode[] = []): boolean {
   const type = r.filterType;
   const val = r.value || '';
-  if (type === 'SINGLE_VALUE') {
+  if (type === 'SINGLE_VALUE' || type === 'EQ') {
     return val.toUpperCase() === 'ALL';
   }
   if (type === 'MULTI_VALUE') {

@@ -305,6 +305,15 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       `Role name should start with ZOTC_${plantNode.name}, got: ${genRes.data.roleName}`
     );
 
+    // Verify restrictions created by generateOrgRole have filterType 'EQ'
+    const roleRes = await GET(`/odata/v4/auth/Roles('${genRes.data.roleId}')?$expand=ownRestrictions`);
+    assert.strictEqual(roleRes.status, 200);
+    const nonCpRestrictions = (roleRes.data.ownRestrictions || []).filter(r => r.filterType !== 'CP');
+    assert.ok(nonCpRestrictions.length > 0, 'Should have generated at least one exact restriction');
+    for (const r of nonCpRestrictions) {
+      assert.strictEqual(r.filterType, 'EQ', `Generated restriction for ${r.field} should have filterType EQ, got ${r.filterType}`);
+    }
+
     // Call generateOrgRole on non-existent OrgNode (should return 404)
     await assertODataError(
       POST('/odata/v4/auth/generateOrgRole', { orgNodeId: '00000000-0000-0000-0000-000000000000' }),

@@ -203,11 +203,11 @@ async function generateForNodeInDomain(
   // Otherwise, we build restrictions for all fields (root node case).
   let restrictionEntries = [];
   if (parentRoleId) {
-    restrictionEntries = [{ field: myFieldName, filterType: 'SINGLE_VALUE', value: node.name }];
+    restrictionEntries = [{ field: myFieldName, filterType: 'EQ', value: node.name }];
   } else {
     restrictionEntries = domain.fields.map(f => {
       const val = context[f.fieldName];
-      if (val != null) return { field: f.fieldName, filterType: 'SINGLE_VALUE', value: val };
+      if (val != null) return { field: f.fieldName, filterType: 'EQ', value: val };
       return { field: f.fieldName, filterType: 'CP', value: '%' };
     });
   }

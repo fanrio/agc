@@ -10,6 +10,7 @@ expect.extend(matchers);
 // Mock the API module
 vi.mock('../../api', () => ({
   getRoles: vi.fn(),
+  getRole: vi.fn(),
   getAllOrgNodesFlat: vi.fn(),
   getEnvironments: vi.fn(),
   getRestrictionFields: vi.fn(),
@@ -114,6 +115,7 @@ describe('Wizard Component - Expanded Tests', () => {
     mockPermissions.isSuperAdmin = true;
     mockPermissions.managedDerivedRolesScope = '[]';
     api.getRoles.mockResolvedValue(mockRoles);
+    api.getRole.mockImplementation((id) => Promise.resolve(mockRoles.find(r => r.ID === id)));
     api.getEnvironments.mockResolvedValue(mockEnvironments);
     api.getAllOrgNodesFlat.mockResolvedValue(mockOrgNodes);
     api.getRestrictionFields.mockResolvedValue(mockRestrictionFields);
@@ -409,7 +411,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
     await waitFor(() => {
       const accessDomainSelect = screen.getByLabelText(/Access Domain/i);
-      expect(accessDomainSelect).toHaveAttribute('aria-disabled', 'true');
+      expect(accessDomainSelect).toBeDisabled();
     });
 
     fireEvent.change(screen.getByLabelText(/Role Name/i), { target: { value: 'ROLE_CHILD' } });
@@ -474,7 +476,7 @@ describe('Wizard Component - Expanded Tests', () => {
 
     await waitFor(() => {
       const accessDomainSelect = screen.getByLabelText(/Access Domain/i);
-      expect(accessDomainSelect).toHaveAttribute('aria-disabled', 'true');
+      expect(accessDomainSelect).toBeDisabled();
     });
 
     fireEvent.change(screen.getByLabelText(/Role Name/i), { target: { value: 'ROLE_CHILD' } });

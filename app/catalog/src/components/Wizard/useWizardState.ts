@@ -299,12 +299,22 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
     if (isEditMode) return;
     if (roleType === 'ORG_BASED' && selectedOrgNodeId) {
       const node = orgNodes.find(n => n.ID === selectedOrgNodeId);
-      if (node) setRoleName(`ROLE_ORG_${node.name.replace(/\s+/g, '_').toUpperCase()}`);
+      if (node) {
+        setRoleName(`ROLE_ORG_${node.name.replace(/\s+/g, '_').toUpperCase()}`);
+        if (restrictions.length === 0) {
+          setRestrictions([{
+            field: (node as any).type?.name || (node as any).type_ID || 'ORG_UNIT',
+            filterType: 'EQ',
+            value: node.name,
+            sourceLabel: 'Own'
+          }]);
+        }
+      }
     } else if (roleType === 'SINGLE' && selectedParentIds.length > 0) {
       const parent = allRoles.find(r => r.ID === selectedParentIds[0]);
       if (parent) setRoleName(`${parent.name}_CUSTOM`);
     }
-  }, [roleType, selectedOrgNodeId, selectedParentIds, orgNodes, allRoles, isEditMode]);
+  }, [roleType, selectedOrgNodeId, selectedParentIds, orgNodes, allRoles, isEditMode, restrictions.length]);
 
   function addApprover() {
     const v = approverInput.trim();
@@ -489,7 +499,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
           environment_ID: environmentId,
           accessDomain_ID: accessDomainId,
           targetPlatform,
-          ownRestrictions,
+          ...(ownRestrictions.length > 0 ? { ownRestrictions } : {}),
           parentRoles,
           approvers: formattedApprovers,
           ...(assignUserId.trim() ? {
