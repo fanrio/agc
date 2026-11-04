@@ -60,7 +60,7 @@ describe('RoleAssignmentsView Component - Grouping', () => {
     (api.getRoles as any).mockResolvedValue(mockRoles);
   });
 
-  it('groups role assignments by user by default', async () => {
+  it('groups role assignments by user and is collapsed by default', async () => {
     render(<RoleAssignmentsView />);
 
     await waitFor(() => {
@@ -72,16 +72,22 @@ describe('RoleAssignmentsView Component - Grouping', () => {
     const userToggle = screen.getByRole('button', { name: /^User$/i });
     expect(userToggle).toHaveAttribute('aria-pressed', 'true');
 
-    // Alice has 2 roles, Bob has 1 role
+    // Group count chips are visible on the headers
     expect(screen.getByText('2 roles')).toBeInTheDocument();
     expect(screen.getByText('1 role')).toBeInTheDocument();
 
-    // Verify role rows under Alice
-    expect(screen.getAllByText('Sales Manager').length).toBeGreaterThan(0);
+    // Per default the groups are COLLAPSED: child role rows are not rendered
+    expect(screen.queryByText('Finance Viewer')).not.toBeInTheDocument();
+
+    // Click on Alice Smith header to expand
+    fireEvent.click(screen.getByText('Alice Smith'));
+
+    // Now Finance Viewer and Sales Manager are visible under Alice
     expect(screen.getByText('Finance Viewer')).toBeInTheDocument();
+    expect(screen.getByText('Sales Manager')).toBeInTheDocument();
   });
 
-  it('switches grouping to role when "Role" toggle is clicked', async () => {
+  it('switches grouping to role and remains collapsed by default until expanded', async () => {
     render(<RoleAssignmentsView />);
 
     await waitFor(() => {
@@ -92,43 +98,49 @@ describe('RoleAssignmentsView Component - Grouping', () => {
     const roleToggle = screen.getByRole('button', { name: /^Role$/i });
     fireEvent.click(roleToggle);
 
-    // Now group headers should be roles
     expect(roleToggle).toHaveAttribute('aria-pressed', 'true');
 
-    // Sales Manager has 2 users, Finance Viewer has 1 user
+    // Role group headers are visible
+    expect(screen.getByText('Sales Manager')).toBeInTheDocument();
+    expect(screen.getByText('Finance Viewer')).toBeInTheDocument();
     expect(screen.getByText('2 users')).toBeInTheDocument();
     expect(screen.getByText('1 user')).toBeInTheDocument();
 
-    // Verify user rows under Sales Manager and Finance Viewer (Alice has 2 roles, Bob has 1)
-    expect(screen.getAllByText('alice@fanrio.com').length).toBe(2);
+    // Per default collapsed: user rows are not rendered initially
+    expect(screen.queryByText('alice@fanrio.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('bob@fanrio.com')).not.toBeInTheDocument();
+
+    // Click "Sales Manager" header to expand it
+    fireEvent.click(screen.getByText('Sales Manager'));
+
+    // Now users under Sales Manager are visible
+    expect(screen.getByText('alice@fanrio.com')).toBeInTheDocument();
     expect(screen.getByText('bob@fanrio.com')).toBeInTheDocument();
   });
 
-  it('toggles collapsing and expanding of groups', async () => {
+  it('supports Expand All and Collapse All', async () => {
     render(<RoleAssignmentsView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Finance Viewer')).toBeInTheDocument();
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
     });
 
-    // Click Alice Smith group row to collapse
-    const aliceHeader = screen.getByText('Alice Smith');
-    fireEvent.click(aliceHeader);
-
-    // Finance Viewer should now be collapsed/hidden
+    // Groups are collapsed by default
     expect(screen.queryByText('Finance Viewer')).not.toBeInTheDocument();
 
-    // Click Alice Smith again to expand
-    fireEvent.click(aliceHeader);
-    expect(screen.getByText('Finance Viewer')).toBeInTheDocument();
-
-    // Test Collapse All / Expand All
-    const collapseAllBtn = screen.getByText('Collapse All');
-    fireEvent.click(collapseAllBtn);
-    expect(screen.queryByText('Finance Viewer')).not.toBeInTheDocument();
-
+    // Click "Expand All"
     const expandAllBtn = screen.getByText('Expand All');
     fireEvent.click(expandAllBtn);
+
+    // All child items should be visible
     expect(screen.getByText('Finance Viewer')).toBeInTheDocument();
+    expect(screen.getAllByText('Sales Manager').length).toBeGreaterThan(0);
+
+    // Click "Collapse All"
+    const collapseAllBtn = screen.getByText('Collapse All');
+    fireEvent.click(collapseAllBtn);
+
+    // All child items should be hidden again
+    expect(screen.queryByText('Finance Viewer')).not.toBeInTheDocument();
   });
 });

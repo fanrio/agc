@@ -74,7 +74,8 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
 
   // Grouping State: 'user' | 'role' (default is 'user')
   const [groupBy, setGroupBy] = useState<'user' | 'role'>('user');
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  // Per default the group is collapsed: expandedGroups starts empty {}
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Filtering States
   const [filterUser, setFilterUser] = useState('');
@@ -187,23 +188,23 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
   }, [filteredAssignments, groupBy]);
 
   const toggleGroup = (key: string) => {
-    setCollapsedGroups(prev => ({
+    setExpandedGroups(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
   };
 
   const handleExpandAll = () => {
-    setCollapsedGroups({});
-  };
-
-  const handleCollapseAll = () => {
     const next: Record<string, boolean> = {};
     groupedData.groups.forEach(g => {
       const key = groupBy === 'user' ? (g as any).userId : (g as any).roleId;
       next[key] = true;
     });
-    setCollapsedGroups(next);
+    setExpandedGroups(next);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedGroups({});
   };
 
   const handleResetFilters = () => {
@@ -326,7 +327,12 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
             <ToggleButtonGroup
               value={groupBy}
               exclusive
-              onChange={(e, val) => { if (val) setGroupBy(val); }}
+              onChange={(e, val) => {
+                if (val) {
+                  setGroupBy(val);
+                  setExpandedGroups({});
+                }
+              }}
               size="small"
               sx={{ height: 34 }}
             >
@@ -538,7 +544,8 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
               <TableBody>
                 {groupedData.type === 'user' ? (
                   groupedData.groups.map(group => {
-                    const isCollapsed = !!collapsedGroups[group.userId];
+                    const isExpanded = !!expandedGroups[group.userId];
+                    const isCollapsed = !isExpanded;
                     return (
                       <React.Fragment key={group.userId}>
                         {/* Group Header Row for User */}
@@ -625,7 +632,7 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
                         </TableRow>
 
                         {/* Child Rows: Assigned Roles */}
-                        {!isCollapsed && group.items.map(a => (
+                        {isExpanded && group.items.map(a => (
                           <TableRow key={a.ID} hover sx={{ '& td': { borderColor: 'rgba(0, 0, 0, 0.06)' } }}>
                             <TableCell sx={{ pl: 4, width: 48 }} />
                             <TableCell>
@@ -683,7 +690,8 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
                   })
                 ) : (
                   groupedData.groups.map(group => {
-                    const isCollapsed = !!collapsedGroups[group.roleId];
+                    const isExpanded = !!expandedGroups[group.roleId];
+                    const isCollapsed = !isExpanded;
                     return (
                       <React.Fragment key={group.roleId}>
                         {/* Group Header Row for Role */}
@@ -762,7 +770,7 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
                         </TableRow>
 
                         {/* Child Rows: Assigned Users */}
-                        {!isCollapsed && group.items.map(a => (
+                        {isExpanded && group.items.map(a => (
                           <TableRow key={a.ID} hover sx={{ '& td': { borderColor: 'rgba(0, 0, 0, 0.06)' } }}>
                             <TableCell sx={{ pl: 4, width: 48 }} />
                             <TableCell sx={{ fontWeight: 600 }}>
