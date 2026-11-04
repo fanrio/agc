@@ -61,6 +61,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   const [impactData, setImpactData] = useState({ derivedRoles: [], affectedUsers: [] });
   const [originalCritical, setOriginalCritical] = useState(false);
   const [originalRestrictions, setOriginalRestrictions] = useState([]);
+  const [originalParentIds, setOriginalParentIds] = useState([]);
   const [isCriticalManuallySet, setIsCriticalManuallySet] = useState(!!context.roleId);
   const [maxStepReached, setMaxStepReached] = useState(context.roleId ? 3 : 0);
 
@@ -243,9 +244,11 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
               ? role.parentRoles.map(pr => pr.parent?.ID || pr.parent_ID).filter(Boolean)
               : [];
             setSelectedParentIds(parentIds);
+            setOriginalParentIds(parentIds);
 
-            setRestrictions(role.ownRestrictions || []);
-            setOriginalRestrictions(role.ownRestrictions || []);
+            const clonedRest = JSON.parse(JSON.stringify(role.ownRestrictions || []));
+            setRestrictions(clonedRest);
+            setOriginalRestrictions(JSON.parse(JSON.stringify(clonedRest)));
             setApprovers(role.approvers || []);
             setCritical(!!role.critical);
             setOriginalCritical(!!role.critical);
@@ -353,7 +356,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
       visited.add(currentId);
 
       const children = rolesList.filter(r =>
-        r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === currentId)
+        r.parentRoles && r.parentRoles.some(pr => pr.parent_ID === currentId || pr.parent?.ID === currentId)
       );
       for (const child of children) {
         if (!visited.has(child.ID)) {
@@ -386,21 +389,37 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
 
     const criticalChanged = critical !== originalCritical;
     const restChanged = restrictionsChanged(restrictions, originalRestrictions);
-
-    if (!criticalChanged && !restChanged) {
-      await handleDeploy();
-      return;
-    }
+    const parentChanged = JSON.stringify([...selectedParentIds].sort()) !== JSON.stringify([...originalParentIds].sort());
 
     setLoading(true);
     try {
-      const latestRoles = await api.getRoles();
+      const [latestRoles, allAssignments] = await Promise.all([
+        api.getRoles(),
+        typeof api.getAssignments === 'function' ? api.getAssignments().catch(() => []) : Promise.resolve([])
+      ]);
       setAllRoles(latestRoles);
 
       const currentRole = latestRoles.find(r => r.ID === context.roleId);
       const derived = getDerivedRolesRecursive(context.roleId, latestRoles);
 
+      const roleIdsToCheck = new Set([context.roleId, ...derived.map(d => d.ID)]);
       const users = [];
+
+      for (const a of (allAssignments || [])) {
+        const aRoleId = a.role_ID || a.role?.ID;
+        if (roleIdsToCheck.has(aRoleId)) {
+          if (!users.some(u => u.userId === a.userId)) {
+            const roleObj = latestRoles.find(r => r.ID === aRoleId);
+            users.push({
+              userId: a.userId,
+              userName: a.userName || a.userId || 'Unknown User',
+              assignedRole: roleObj?.name || currentRole?.name || 'Assigned Role'
+            });
+          }
+        }
+      }
+
+      // Fallback for pre-populated / mocked assignments on roles
       const rolesToCheck = [currentRole, ...derived].filter(Boolean);
       for (const r of rolesToCheck) {
         if (r.assignments) {
@@ -408,7 +427,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
             if (!users.some(u => u.userId === a.userId)) {
               users.push({
                 userId: a.userId,
-                userName: a.userName || 'Unknown User',
+                userName: a.userName || a.userId || 'Unknown User',
                 assignedRole: r.name
               });
             }
@@ -416,7 +435,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
         }
       }
 
-      if (derived.length === 0 && users.length === 0) {
+      if (!criticalChanged && !restChanged && !parentChanged && derived.length === 0 && users.length === 0) {
         await handleDeploy();
         return;
       }

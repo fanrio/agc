@@ -11,6 +11,7 @@ expect.extend(matchers);
 vi.mock('../../api', () => ({
   getRoles: vi.fn(),
   getRole: vi.fn(),
+  getAssignments: vi.fn(() => Promise.resolve([])),
   getAllOrgNodesFlat: vi.fn(),
   getEnvironments: vi.fn(),
   getRestrictionFields: vi.fn(),

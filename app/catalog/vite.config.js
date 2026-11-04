@@ -58,5 +58,18 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  preview: {
+    port: 5173,
+    proxy: {
+      '/odata': {
+        target: 'http://localhost:4004',
+        changeOrigin: true
+      },
+      '/api': {
+        target: 'http://localhost:4004',
+        changeOrigin: true
+      }
+    }
   }
 })
