@@ -147,7 +147,7 @@ function TagInput({ values, onChange }) {
   );
 }
 
-function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], restrictionFields = [] }) {
+function RestrictionInput({ field, filterType, value, onChange, onEnter, orgNodes = [], restrictionFields = [] }) {
   const matchingNodes = orgNodes.filter(n => (n.type?.name || '').toUpperCase() === (field || '').toUpperCase());
   const hasOrgOptions = matchingNodes.length > 0;
 
@@ -274,6 +274,7 @@ function RestrictionInput({ field, filterType, value, onChange, orgNodes = [], r
         placeholder="e.g. Germany"
         value={value}
         onChange={e => onChange(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && onEnter) { e.preventDefault(); onEnter(); } }}
       />
     );
   }
@@ -637,7 +638,15 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
   };
 
   function addRestriction() {
-    if (!draft.field.trim() || !draft.value) return;
+    if (!draft.field.trim()) {
+      setSnackbar({ open: true, message: 'Please select a field for this restriction.', severity: 'warning' });
+      return;
+    }
+    const isValuelessType = ['ALL', 'N', 'NN'].includes(draft.filterType);
+    if (!isValuelessType && !draft.value) {
+      setSnackbar({ open: true, message: 'Please provide a value for this restriction.', severity: 'warning' });
+      return;
+    }
 
     if (draft.filterType === 'RANGE' || draft.filterType === 'BT') {
       try {
@@ -756,6 +765,7 @@ export default function RestrictionBuilder({ restrictions, onChange, inheritedRe
                 filterType={draft.filterType}
                 value={draft.value}
                 onChange={v => setDraft(d => ({ ...d, value: v }))}
+                onEnter={addRestriction}
                 orgNodes={orgNodes}
                 restrictionFields={restrictionFields}
               />
