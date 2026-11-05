@@ -345,7 +345,8 @@ describe('Wizard Component - Expanded Tests', () => {
 
     // Verify that derived roles and affected users are displayed
     expect(screen.getAllByText('ROLE_DERIVED')[0]).toBeInTheDocument();
-    expect(screen.getByText('Affected User')).toBeInTheDocument();
+    expect(screen.getByText('Affected')).toBeInTheDocument();
+    expect(screen.getByText('User')).toBeInTheDocument();
 
     // Click Cancel
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));

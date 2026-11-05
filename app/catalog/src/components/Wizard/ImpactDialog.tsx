@@ -1,6 +1,86 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, Typography, Box, Card, Chip } from '@mui/material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  Typography,
+  Box,
+  Card,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
+} from '@mui/material';
 import { AlertTriangle, GitBranch, Users } from 'lucide-react';
+
+export function parseUserDetails(user: any): { firstName: string; lastName: string; email: string } {
+  if (!user) return { firstName: '-', lastName: '-', email: '-' };
+
+  let firstName = user.firstName || '';
+  let lastName = user.lastName || '';
+  let email = user.email || '';
+
+  const rawUserId = String(user.userId || '').trim();
+  const rawUserName = String(user.userName || '').trim();
+
+  // 1. Resolve email
+  if (!email) {
+    if (rawUserId.includes('@')) {
+      email = rawUserId;
+    } else if (rawUserName.includes('@')) {
+      email = rawUserName;
+    }
+  }
+
+  // 2. Resolve firstName and lastName
+  if (!firstName || !lastName) {
+    let nameCandidate = rawUserName;
+    // If rawUserName is an email or empty, derive from email or rawUserId
+    if (!nameCandidate || nameCandidate.includes('@')) {
+      if (email && email.includes('@')) {
+        const localPart = email.split('@')[0];
+        nameCandidate = localPart
+          .split(/[._-]/)
+          .filter(Boolean)
+          .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+          .join(' ');
+      } else {
+        nameCandidate = rawUserId;
+      }
+    }
+
+    if (nameCandidate) {
+      if (nameCandidate.includes(',')) {
+        // "Nachname, Vorname"
+        const parts = nameCandidate.split(',').map(s => s.trim()).filter(Boolean);
+        lastName = lastName || parts[0] || '';
+        firstName = firstName || parts.slice(1).join(' ') || '';
+      } else {
+        // "Vorname Nachname"
+        const parts = nameCandidate.split(/\s+/).filter(Boolean);
+        if (parts.length > 1) {
+          firstName = firstName || parts[0];
+          lastName = lastName || parts.slice(1).join(' ');
+        } else if (parts.length === 1) {
+          firstName = firstName || parts[0];
+          lastName = lastName || '-';
+        }
+      }
+    }
+  }
+
+  return {
+    firstName: firstName || '-',
+    lastName: lastName || '-',
+    email: email || rawUserId || '-'
+  };
+}
 
 export default function ImpactDialog({ open, roleName, impactData, onClose, onConfirm }) {
   return (
@@ -47,7 +127,7 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
                 No derived roles will be affected.
               </Typography>
             ) : (
-              <Box sx={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {impactData.derivedRoles.map(r => (
                   <Card key={r.ID} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{r.name}</Typography>
@@ -77,19 +157,29 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
                 No assigned users will be affected.
               </Typography>
             ) : (
-              <Box sx={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {impactData.affectedUsers.map(u => (
-                  <Card key={u.userId} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{u.userName}</Typography>
-                      <Chip label={u.userId} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Assigned via: <strong>{u.assignedRole}</strong>
-                    </Typography>
-                  </Card>
-                ))}
-              </Box>
+              <TableContainer sx={{ maxHeight: 220, bgcolor: 'background.paper', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>Vorname</TableCell>
+                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>E-Mail</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {impactData.affectedUsers.map((u, idx) => {
+                      const userDetails = parseUserDetails(u);
+                      return (
+                        <TableRow key={u.userId || idx} hover>
+                          <TableCell sx={{ py: 0.75, fontWeight: 500 }}>{userDetails.firstName}</TableCell>
+                          <TableCell sx={{ py: 0.75, fontWeight: 500 }}>{userDetails.lastName}</TableCell>
+                          <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.8125rem' }}>{userDetails.email}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Card>
         </Box>
