@@ -9,13 +9,7 @@ import {
   Typography,
   Box,
   Card,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
+  Chip
 } from '@mui/material';
 import { AlertTriangle, GitBranch, Users } from 'lucide-react';
 
@@ -157,29 +151,34 @@ export default function ImpactDialog({ open, roleName, impactData, onClose, onCo
                 No assigned users will be affected.
               </Typography>
             ) : (
-              <TableContainer sx={{ maxHeight: 220, bgcolor: 'background.paper', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>Vorname</TableCell>
-                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700, py: 1, bgcolor: 'background.paper' }}>E-Mail</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {impactData.affectedUsers.map((u, idx) => {
-                      const userDetails = parseUserDetails(u);
-                      return (
-                        <TableRow key={u.userId || idx} hover>
-                          <TableCell sx={{ py: 0.75, fontWeight: 500 }}>{userDetails.firstName}</TableCell>
-                          <TableCell sx={{ py: 0.75, fontWeight: 500 }}>{userDetails.lastName}</TableCell>
-                          <TableCell sx={{ py: 0.75, color: 'text.secondary', fontSize: '0.8125rem' }}>{userDetails.email}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Box sx={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {impactData.affectedUsers.map((u, idx) => {
+                  const userDetails = parseUserDetails(u);
+                  return (
+                    <Card
+                      key={u.userId || idx}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        boxShadow: 'none',
+                        bgcolor: 'background.paper',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.25
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <span>{userDetails.firstName}</span> <span>{userDetails.lastName}</span>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {userDetails.email}
+                      </Typography>
+                    </Card>
+                  );
+                })}
+              </Box>
             )}
           </Card>
         </Box>
