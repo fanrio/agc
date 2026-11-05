@@ -30,7 +30,7 @@ const {
 function registerRoleHandlers(service, entities, deps = {}) {
   const { cds } = deps;
   const dispatcher = deps.directSyncDispatcher || defaultDispatcher;
-  const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations, RoleApprovers } = entities;
+  const { Roles, RoleAssignments, RoleInheritance, Restrictions, AuditLogs, AppAuthorizations } = entities;
 
   // -------------------------------------------------------------------------
   // Roles READ filtering & assignmentsCount CAP CQL aggregation

@@ -36,7 +36,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   const [restrictionFields, setFields] = useState([]);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const isEditMode = Boolean(context.roleId);
+  const [isEditMode, setIsEditMode] = useState(!!context.roleId);
   const [targetPlatform, setTargetPlatform] = useState<'DATASPHERE' | 'DATABRICKS' | 'BOTH'>(
     context.targetPlatform || 'DATASPHERE'
   );
@@ -433,6 +433,11 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
             }
           }
         }
+      }
+
+      if (!criticalChanged && !restChanged && !parentChanged && derived.length === 0 && users.length === 0) {
+        await handleDeploy();
+        return;
       }
 
       setImpactData({

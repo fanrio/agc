@@ -338,13 +338,7 @@ function AppContent({ simulatedUser, onLogout }) {
               setInitialFilter={setRolesFilter}
             />
           )}
-          {activeNav === 'wizard' && (
-            <Wizard
-              key={wizardContext?.roleId || (wizardContext?.orgNodeId ? `org-${wizardContext.orgNodeId}` : 'new')}
-              context={wizardContext ?? {}}
-              onDone={() => setActiveNav('roles')}
-            />
-          )}
+          {activeNav === 'wizard' && <Wizard context={wizardContext ?? {}} onDone={() => setActiveNav('roles')} />}
           {activeNav === 'assignment' && (
             <UserRoleAssignment
               role={assignmentContext?.role}
