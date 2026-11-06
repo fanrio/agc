@@ -400,6 +400,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('auth_user');
+    api.clearApiCache();
     setSimulatedUser('');
     setIsLoggedIn(false);
   };

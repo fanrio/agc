@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -353,7 +353,13 @@ export default function AppAuthorizationsView() {
   }>({ open: false, message: '', severity: 'success' });
 
   // ─── Data loading ───────────────────────────────────────────────────────────
-  const loadData = async () => {
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [authData, rolesData, fieldsData, accessDomainsData] = await Promise.all([
@@ -362,6 +368,7 @@ export default function AppAuthorizationsView() {
         api.getRestrictionFields(),
         api.getAccessDomainsFlat()
       ]);
+      if (!isMountedRef.current) return;
       const validAuths = (authData || []).filter(Boolean);
       setAuthorizations(validAuths);
       const initialRoleMap: Record<string, AppRoleId[]> = {};
@@ -375,13 +382,16 @@ export default function AppAuthorizationsView() {
       setRestrictionFields(fieldsData || []);
       setAccessDomains((accessDomainsData || []).filter((s: any) => !s.parent));
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setSnackbar({ open: true, message: err.message || 'Failed to load data', severity: 'error' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getEffectiveRolesForRow = (auth: any): AppRoleId[] => {
     if (auth?.ID && userRoleOverrides[auth.ID]?.length) {

@@ -45,6 +45,7 @@ export default function UserSelection({
 
   // SCIM debounced search calling API when input has >= 3 characters
   useEffect(() => {
+    let active = true;
     const trimmed = scimInput.trim();
     if (trimmed.length < 3) {
       setScimOptions([]);
@@ -56,17 +57,22 @@ export default function UserSelection({
       setScimError(null);
       api.searchScimUsers(trimmed)
         .then(res => {
+          if (!active) return;
           setScimOptions(res || []);
           setScimError(null);
           setScimLoading(false);
         })
         .catch(err => {
+          if (!active) return;
           setScimOptions([]);
           setScimError(err.message || 'SCIM integration query failed');
           setScimLoading(false);
         });
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
   }, [scimInput]);
 
   const normalizedValue = multiple

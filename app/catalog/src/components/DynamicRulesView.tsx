@@ -25,6 +25,7 @@ export default function DynamicRulesView() {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [syncingRuleId, setSyncingRuleId] = useState(null);
+  const [deletingRuleId, setDeletingRuleId] = useState(null);
 
   // Dialog state
   const [open, setOpen] = useState(false);
@@ -250,17 +251,22 @@ export default function DynamicRulesView() {
   };
 
   const handleDelete = async (id) => {
+    if (deletingRuleId) return;
     if (!window.confirm('Are you sure you want to delete this rule?')) return;
+    setDeletingRuleId(id);
     try {
       await api.deleteDynamicRule(id);
       setSnackbar({ open: true, message: 'Rule deleted successfully', severity: 'success' });
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
+    } finally {
+      setDeletingRuleId(null);
     }
   };
 
   const handleSyncRule = async (id) => {
+    if (syncingRuleId) return;
     setSyncingRuleId(id);
     try {
       const res = await api.syncDynamicRule(id);
@@ -269,10 +275,11 @@ export default function DynamicRulesView() {
       } else {
         setSnackbar({ open: true, message: res.message || 'Synchronization failed', severity: 'error' });
       }
-    } catch (err) {
+    } catch (err: any) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
+    } finally {
+      setSyncingRuleId(null);
     }
-    setSyncingRuleId(null);
   };
 
   return (

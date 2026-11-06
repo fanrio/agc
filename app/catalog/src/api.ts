@@ -14,6 +14,11 @@ export function setSimulatedUser(userId: string): void {
 const inflightGetRequests = new Map<string, Promise<any>>();
 const getResponseCache = new Map<string, any>();
 
+export function clearApiCache(): void {
+  getResponseCache.clear();
+  inflightGetRequests.clear();
+}
+
 export function peekCachedGet(path: string): any | undefined {
   const cacheKey = `${activeSimulatedUser || ''}::${path}`;
   return getResponseCache.get(cacheKey);

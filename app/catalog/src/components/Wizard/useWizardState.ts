@@ -199,6 +199,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
 
   // Debounced SCIM user search calling API when input has >= 3 characters
   useEffect(() => {
+    let active = true;
     const trimmed = approverInput.trim();
     if (trimmed.length < 3) {
       setScimOptions([]);
@@ -208,15 +209,20 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
       setScimLoading(true);
       api.searchScimUsers(trimmed)
         .then(res => {
+          if (!active) return;
           setScimOptions(res || []);
           setScimLoading(false);
         })
         .catch(err => {
+          if (!active) return;
           console.error(err);
           setScimLoading(false);
         });
     }, 250);
-    return () => clearTimeout(delayDebounce);
+    return () => {
+      active = false;
+      clearTimeout(delayDebounce);
+    };
   }, [approverInput]);
 
   // Load reference data and combine restriction fields with node types
@@ -266,9 +272,11 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
 
   // Load inherited restrictions when selectedParentIds changes
   useEffect(() => {
+    let active = true;
     if (selectedParentIds.length > 0) {
       Promise.all(selectedParentIds.map(id => api.resolveEffective(id)))
         .then(results => {
+          if (!active) return;
           const merged = [];
           const seen = new Set();
           for (const resList of results) {
@@ -285,6 +293,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
     } else {
       setInherited([]);
     }
+    return () => { active = false; };
   }, [selectedParentIds, roleType]);
 
   // Auto-calculate critical status based on restrictions
@@ -382,6 +391,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   };
 
   async function handleSaveClick() {
+    if (loading) return;
     if (!isEditMode) {
       await handleDeploy();
       return;
@@ -448,6 +458,7 @@ export function useWizardState({ context = {}, permissions }: UseWizardStateProp
   }
 
   async function handleDeploy() {
+    if (loading) return;
     setLoading(true);
     try {
       const computedType = roleType === 'DRAGE'

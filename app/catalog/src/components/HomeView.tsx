@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Card, Typography, Grid, CircularProgress, Alert } from '@mui/material';
 import * as api from '../api';
 import { usePermissions } from '../context/PermissionsContext';
@@ -26,7 +26,13 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function loadStats() {
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  const loadStats = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -34,7 +40,7 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
         api.getDashboardKpis(),
         api.getRecentRoles()
       ]);
-
+      if (!isMountedRef.current) return;
       const kpis = JSON.parse(kpisResponse);
       const recentRoles = rawRecentRoles;
 
@@ -42,15 +48,17 @@ export default function HomeView({ setActiveNav, navigateToRoles, onCreateRole }
         ...kpis,
         recentRoles
       });
-    } catch (e) {
+    } catch (e: any) {
+      if (!isMountedRef.current) return;
       setError(`Failed to load dashboard statistics: ${e.message}`);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
     }
-    setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [loadStats]);
 
   if (loading) {
     return (

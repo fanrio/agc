@@ -62,8 +62,7 @@ export default function TemplateNameEditor({
   };
 
   const handleTextChange = (index, newVal) => {
-    const next = [...segments];
-    next[index].value = newVal;
+    const next = segments.map((seg, idx) => idx === index ? { ...seg, value: newVal } : { ...seg });
     setSegments(next);
     onChange(serialize(next));
   };
@@ -87,7 +86,7 @@ export default function TemplateNameEditor({
       const prevChipIndex = index - 1;
       if (segments[prevChipIndex].type === 'chip') {
         e.preventDefault();
-        const next = [...segments];
+        const next = segments.map(seg => ({ ...seg }));
         next.splice(prevChipIndex, 1); // remove chip
 
         // Now merge the text segments before and after the deleted chip
@@ -97,7 +96,7 @@ export default function TemplateNameEditor({
         const targetFocusIndex = textBeforeIdx;
         const targetCaret = next[textBeforeIdx].value.length;
 
-        next[textBeforeIdx].value = mergeVal;
+        next[textBeforeIdx] = { ...next[textBeforeIdx], value: mergeVal };
         next.splice(textAfterIdx, 1);
 
         setSegments(next);
@@ -146,14 +145,17 @@ export default function TemplateNameEditor({
   };
 
   const handleDeleteChip = (chipIdx) => {
-    const next = [...segments];
+    const next = segments.map(seg => ({ ...seg }));
     next.splice(chipIdx, 1);
     
     // Merge the text inputs on both sides of the deleted chip
     const textBeforeIdx = chipIdx - 1;
     const textAfterIdx = chipIdx;
     if (next[textBeforeIdx] && next[textAfterIdx]) {
-      next[textBeforeIdx].value = next[textBeforeIdx].value + next[textAfterIdx].value;
+      next[textBeforeIdx] = {
+        ...next[textBeforeIdx],
+        value: next[textBeforeIdx].value + next[textAfterIdx].value
+      };
       next.splice(textAfterIdx, 1);
     }
 

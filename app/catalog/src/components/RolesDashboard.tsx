@@ -67,6 +67,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     severity: 'success' | 'info' | 'warning' | 'error';
   }>({ open: false, message: '', severity: 'error' });
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; role: any }>({ open: false, role: null });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Toggle representation states ('tree', 'grid', 'table')
   const [viewMode, setViewMode] = useState<'tree' | 'grid' | 'table'>('table');
@@ -109,7 +110,8 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
 
   const handleDeleteConfirm = async () => {
     const roleId = deleteConfirm.role?.ID;
-    if (!roleId) return;
+    if (!roleId || isDeleting) return;
+    setIsDeleting(true);
     try {
       await api.deleteRole(roleId);
       setAllRoles((prev) => prev.filter((r) => r.ID !== roleId));
@@ -118,6 +120,7 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
     } catch (e: any) {
       setSnackbar({ open: true, message: e.message || 'Failed to delete role', severity: 'error' });
     } finally {
+      setIsDeleting(false);
       setDeleteConfirm({ open: false, role: null });
     }
   };
@@ -420,8 +423,10 @@ export default function RolesDashboard({ onDeriveRole, onEditRole, onCreateRole,
             </Typography>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setDeleteConfirm({ open: false, role: null })} color="inherit">Cancel</Button>
-            <Button onClick={handleDeleteConfirm} color="error" variant="contained">Delete</Button>
+            <Button onClick={() => setDeleteConfirm({ open: false, role: null })} color="inherit" disabled={isDeleting}>Cancel</Button>
+            <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
           </DialogActions>
         </Dialog>
       )}

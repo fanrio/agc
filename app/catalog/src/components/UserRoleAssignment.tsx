@@ -333,7 +333,12 @@ export default function UserRoleAssignment({
 
     setLoading(true);
     try {
-      await Promise.all(pairsToCreate.map(pair => api.createAssignment(pair)));
+      // Process in batches to avoid concurrent database lock contention during background HANA/Databricks sync
+      const BATCH_SIZE = 4;
+      for (let i = 0; i < pairsToCreate.length; i += BATCH_SIZE) {
+        const batch = pairsToCreate.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(pair => api.createAssignment(pair)));
+      }
 
       if (onSuccess) {
         const uCount = selectedUsers.length;

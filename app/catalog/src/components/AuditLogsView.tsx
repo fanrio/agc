@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -55,7 +55,13 @@ export default function AuditLogsView() {
   // Dialog State
   const [selectedLog, setSelectedLog] = useState(null);
 
-  const loadLogs = async () => {
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -64,20 +70,22 @@ export default function AuditLogsView() {
         api.getRoles(),
         api.getAccessDomainsFlat()
       ]);
+      if (!isMountedRef.current) return;
       const consolidated = consolidateAuditLogs(data || []);
       setLogs(consolidated);
       setRoles(Array.isArray(rolesData) ? rolesData : (rolesData?.value || []));
       setAccessDomains(Array.isArray(domainsData) ? domainsData : (domainsData?.value || []));
-    } catch (err) {
+    } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err.message || 'Failed to fetch audit logs');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadLogs();
-  }, []);
+  }, [loadLogs]);
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);

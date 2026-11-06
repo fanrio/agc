@@ -80,9 +80,27 @@ export function PermissionsProvider({ userId, children }: { userId: string; chil
   };
 
   useEffect(() => {
+    let isCurrent = true;
     if (userId) {
-      fetchPermissions();
+      setLoading(true);
+      setError(null);
+      api.setSimulatedUser(userId);
+      api.getCurrentUserPermissions()
+        .then(data => {
+          if (!isCurrent) return;
+          setPermissions(data);
+        })
+        .catch(err => {
+          if (!isCurrent) return;
+          setError(err.message || 'Failed to load permissions');
+        })
+        .finally(() => {
+          if (isCurrent) setLoading(false);
+        });
     }
+    return () => {
+      isCurrent = false;
+    };
   }, [userId]);
 
   return (
