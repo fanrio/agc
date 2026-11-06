@@ -11,6 +11,27 @@
  */
 
 const { resolveEffectiveRestrictions, evaluateRestriction } = require('../lib/resolveEffectiveRestrictions');
+const { getSessionPermissions, filterRolesByBackendPermissions } = require('../lib/authGuard');
+
+async function checkRoleAccess(req, db, entities, roleId, allRoles, allInheritances) {
+  if (!roleId) return true;
+  const { AppAuthorizations } = entities;
+  const perms = await getSessionPermissions(req, db, AppAuthorizations);
+  if (perms.isSuperAdmin) return true;
+
+  const targetRole = (allRoles || []).find(r => r.ID === roleId);
+  if (!targetRole) {
+    req.error(404, `Role with ID '${roleId}' not found`);
+    return false;
+  }
+
+  const visible = filterRolesByBackendPermissions([targetRole], perms, allInheritances);
+  if (!visible || visible.length === 0) {
+    req.reject(403, `Access Denied: You are not authorized to view or simulate access for role '${targetRole.name}'.`);
+    return false;
+  }
+  return true;
+}
 
 /**
  * Factory: returns the resolveEffectiveRestrictions OData action handler.
@@ -25,8 +46,12 @@ function makeResolveEffectiveRestrictionsHandler(cds, entities) {
     const db = cds.db;
 
     const allRoles        = await db.run(SELECT.from(Roles));
-    const allRestrictions = await db.run(SELECT.from(Restrictions));
     const allInheritances = await db.run(SELECT.from(RoleInheritance));
+
+    const isAllowed = await checkRoleAccess(req, db, entities, roleId, allRoles, allInheritances);
+    if (!isAllowed) return;
+
+    const allRestrictions = await db.run(SELECT.from(Restrictions));
 
     try {
       return resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
@@ -59,8 +84,12 @@ function makeSimulateAccessHandler(cds, entities) {
 
     if (roleId) {
       const allRoles        = await db.run(SELECT.from(Roles));
-      const allRestrictions = await db.run(SELECT.from(Restrictions));
       const allInheritances = await db.run(SELECT.from(RoleInheritance));
+
+      const isAllowed = await checkRoleAccess(req, db, entities, roleId, allRoles, allInheritances);
+      if (!isAllowed) return;
+
+      const allRestrictions = await db.run(SELECT.from(Restrictions));
       try {
         effectiveRestrictions = resolveEffectiveRestrictions(roleId, allRoles, allRestrictions, allInheritances);
       } catch (e) {

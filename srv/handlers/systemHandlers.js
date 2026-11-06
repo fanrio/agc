@@ -31,6 +31,18 @@ function registerSystemHandlers(service, entities) {
     requirePermission(perms, 'canManageSettings', req);
   });
 
+  // Strip sensitive credentials on BdcSettings READ
+  service.after('READ', 'BdcSettings', (data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    for (const row of rows) {
+      if (row) {
+        delete row.password;
+        delete row.clientSecret;
+        delete row.apiToken;
+      }
+    }
+  });
+
   // Strip sensitive credentials on DatabricksSettings READ
   service.after('READ', 'DatabricksSettings', (data) => {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
@@ -44,6 +56,18 @@ function registerSystemHandlers(service, entities) {
 
   // Strip sensitive credentials from expanded bdcConnection on RestrictionFields READ
   service.after('READ', 'RestrictionFields', (data) => {
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    for (const row of rows) {
+      if (row && row.bdcConnection && typeof row.bdcConnection === 'object') {
+        delete row.bdcConnection.password;
+        delete row.bdcConnection.clientSecret;
+        delete row.bdcConnection.apiToken;
+      }
+    }
+  });
+
+  // Strip sensitive credentials from expanded bdcConnection on DynamicGenerationRules READ
+  service.after('READ', 'DynamicGenerationRules', (data) => {
     const rows = Array.isArray(data) ? data : data ? [data] : [];
     for (const row of rows) {
       if (row && row.bdcConnection && typeof row.bdcConnection === 'object') {
@@ -138,6 +162,22 @@ function registerSystemHandlers(service, entities) {
         if (req.data.isActive === undefined || req.data.isActive === null) {
           req.data.isActive = true;
         }
+      }
+    });
+  });
+
+  service.before('UPDATE', 'BdcSettings', async (req) => {
+    ['password', 'clientSecret', 'apiToken'].forEach(field => {
+      if (req.data[field] !== undefined && (!req.data[field] || !String(req.data[field]).trim() || String(req.data[field]).includes('•••'))) {
+        delete req.data[field];
+      }
+    });
+  });
+
+  service.before('UPDATE', 'DatabricksSettings', async (req) => {
+    ['apiToken', 'clientSecret'].forEach(field => {
+      if (req.data[field] !== undefined && (!req.data[field] || !String(req.data[field]).trim() || String(req.data[field]).includes('•••'))) {
+        delete req.data[field];
       }
     });
   });

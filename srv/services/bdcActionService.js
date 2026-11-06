@@ -22,7 +22,7 @@
  * F-03 fix: credential console.log removed from testBdcConnection.
  */
 
-const { isMockUrl } = require('../lib/urlUtils');
+const { isMockUrl, validateSafeExternalUrl } = require('../lib/urlUtils');
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -42,6 +42,15 @@ async function _loadConnection(cds, entities, connectionId, req) {
   if (!setting) {
     req.error(404, `BDC Connection with ID ${connectionId} not found`);
     return null;
+  }
+  if (setting.url) {
+    try {
+      validateSafeExternalUrl(setting.url);
+      if (setting.tokenUrl) validateSafeExternalUrl(setting.tokenUrl);
+    } catch (urlErr) {
+      req.error(400, `SSRF Protection: ${urlErr.message}`);
+      return null;
+    }
   }
   return setting;
 }
@@ -69,6 +78,12 @@ function makeTestBdcConnectionHandler(cds, entities, HanaClient, BdcClient) {
     // OData connection — validate config fields
     if (!setting.url || !setting.url.startsWith('http')) {
       return { success: false, message: `Failed: Invalid endpoint URL '${setting.url || ''}'` };
+    }
+    try {
+      validateSafeExternalUrl(setting.url);
+      if (setting.tokenUrl) validateSafeExternalUrl(setting.tokenUrl);
+    } catch (urlErr) {
+      return { success: false, message: `Failed: ${urlErr.message}` };
     }
     if (setting.authType === 'BASIC' && (!setting.username || !setting.password)) {
       return { success: false, message: 'Failed: Missing username or password for Basic Authentication' };
@@ -130,6 +145,13 @@ function makeFetchBdcSpacesHandler(cds, entities, BdcClient) {
       url = directUrl; tokenUrl = directTokenUrl; clientId = directClientId; clientSecret = directClientSecret;
     } else {
       return req.error(400, 'Missing connectionId or direct credentials (url, tokenUrl, clientId, clientSecret)');
+    }
+
+    try {
+      validateSafeExternalUrl(url);
+      validateSafeExternalUrl(tokenUrl);
+    } catch (urlErr) {
+      return req.error(400, urlErr.message);
     }
 
     try {
@@ -408,6 +430,14 @@ function makeSearchScimUsersHandler(cds, entities, BdcClient) {
       );
       if (!setting) {
         return req.error(400, 'No active OData BDC Connection configuration found in BdcSettings');
+      }
+      if (setting.url) {
+        try {
+          validateSafeExternalUrl(setting.url);
+          if (setting.tokenUrl) validateSafeExternalUrl(setting.tokenUrl);
+        } catch (urlErr) {
+          return req.error(400, `SSRF Protection: ${urlErr.message}`);
+        }
       }
 
       // Check if mock URL (used exclusively during automated test suite runs)

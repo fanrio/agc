@@ -670,9 +670,10 @@ test('Backend Authorization Enforcement Suite', async (t) => {
         recordId: 'forged-id',
         targetName: 'Forged Role'
       });
-      assert.fail('Expected POST /AuditLogs to fail with 403');
+      assert.fail('Expected POST /AuditLogs to fail with 403 or 405');
     } catch (err) {
-      assert.strictEqual(err.status || err.response?.status, 403);
+      const status = err.status || err.response?.status;
+      assert.ok(status === 403 || status === 405, `Expected 403 or 405 but got ${status}`);
     }
 
     // 2. Non-admin cannot read BdcSettings directly
@@ -849,6 +850,83 @@ test('Backend Authorization Enforcement Suite', async (t) => {
     await db.run(cds.ql.DELETE(DatabricksSettings).where({ ID: dummySettingId }));
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: restrictedUser }));
     await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: adminUser }));
+  });
+
+  await t.test('BdcSettings credentials sanitization on READ', async () => {
+    const res = await GET('/odata/v4/auth/BdcSettings', {
+      headers: { 'x-simulated-user': 'admin' }
+    });
+    assert.strictEqual(res.status, 200);
+    const settings = Array.isArray(res.data.value) ? res.data.value : [res.data];
+    for (const item of settings) {
+      assert.strictEqual(item.password, undefined, 'password must be stripped from response');
+      assert.strictEqual(item.clientSecret, undefined, 'clientSecret must be stripped from response');
+      assert.strictEqual(item.apiToken, undefined, 'apiToken must be stripped from response');
+    }
+  });
+
+  await t.test('IDOR protection on resolveEffectiveRestrictions and simulateAccess', async () => {
+    const db = await cds.connect.to('db');
+    const { Roles, Restrictions, AppAuthorizations } = db.entities;
+
+    const prodRoleId = cds.utils.uuid();
+    await db.run(INSERT.into(Roles).entries({
+      ID: prodRoleId,
+      name: 'SECRET_PROD_ROLE_' + Date.now(),
+      type: 'SINGLE',
+      environment_ID: 'P',
+      accessDomain_ID: 'app-global'
+    }));
+
+    await db.run(INSERT.into(Restrictions).entries({
+      ID: cds.utils.uuid(),
+      role_ID: prodRoleId,
+      field: 'CompanyCode',
+      filterType: 'SINGLE_VALUE',
+      value: '1000'
+    }));
+
+    const devUser = 'dev-scoped-user-' + Date.now();
+    await db.run(INSERT.into(AppAuthorizations).entries({
+      ID: cds.utils.uuid(),
+      userId: devUser,
+      userName: 'Dev Only User',
+      isSuperAdmin: false,
+      canManageSingleRoles: true,
+      allowedEnvironments: JSON.stringify(['D']),
+      allowedAccessDomains: 'ALL',
+      isActive: true
+    }));
+
+    // Calling resolveEffectiveRestrictions for a role in environment P must fail with 403
+    try {
+      await POST('/odata/v4/auth/resolveEffectiveRestrictions', {
+        roleId: prodRoleId
+      }, {
+        headers: { 'x-simulated-user': devUser }
+      });
+      assert.fail('Expected resolveEffectiveRestrictions to fail with 403 for unauthorized environment');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // Calling simulateAccess for a role in environment P must fail with 403
+    try {
+      await POST('/odata/v4/auth/simulateAccess', {
+        roleId: prodRoleId,
+        sampleData: JSON.stringify([{ CompanyCode: '1000' }])
+      }, {
+        headers: { 'x-simulated-user': devUser }
+      });
+      assert.fail('Expected simulateAccess to fail with 403 for unauthorized environment');
+    } catch (err) {
+      assert.strictEqual(err.status || err.response?.status, 403);
+    }
+
+    // Clean up
+    await db.run(cds.ql.DELETE(Restrictions).where({ role_ID: prodRoleId }));
+    await db.run(cds.ql.DELETE(Roles).where({ ID: prodRoleId }));
+    await db.run(cds.ql.DELETE(AppAuthorizations).where({ userId: devUser }));
   });
 
 });

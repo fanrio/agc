@@ -28,7 +28,7 @@ const { fetchRoleAncestryChain } = require('./hanaReplicationService');
  */
 function escapeSqlString(val) {
   if (val === null || val === undefined) return '';
-  return String(val).replace(/'/g, "''");
+  return String(val).replace(/\\/g, '\\\\').replace(/'/g, "''");
 }
 
 /**
@@ -542,10 +542,12 @@ function resolveTargetNaming(domainName, setting = {}) {
  * @returns {{ fullFuncName: string, fullTableName: string, createFuncSql: string, setFilterSql: string, dropFilterSql: string, dropFuncSql: string, columns: string[] }}
  */
 function buildDatabricksRowFilterDdl({ catalog, schema, domain, filterName, targetTable, columns, columnTypes = {}, assignments, options = {} }) {
-  const cat = catalog || 'main';
-  const sch = schema || 'default';
-  const fullFuncName = `${cat}.${sch}.${filterName}`;
-  const fullTableName = `${cat}.${sch}.${targetTable}`;
+  const cat = escapeIdentifier(catalog || 'main');
+  const sch = escapeIdentifier(schema || 'default');
+  const safeFilterName = escapeIdentifier(filterName);
+  const safeTargetTable = escapeIdentifier(targetTable);
+  const fullFuncName = `${cat}.${sch}.${safeFilterName}`;
+  const fullTableName = `${cat}.${sch}.${safeTargetTable}`;
 
   const cleanColumns = Array.from(new Set((columns || []).filter(c => c && /^[a-zA-Z0-9_]+$/.test(c))));
   const safeColumns = cleanColumns.length > 0 ? cleanColumns : ['id'];

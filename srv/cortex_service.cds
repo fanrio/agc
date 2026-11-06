@@ -25,6 +25,7 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
   entity RoleApprovers          as projection on db.RoleApprovers;
 
   entity Environments           as projection on db.Environments;
+  @readonly
   entity AuditLogs              as projection on db.AuditLogs;
   entity AppAuthorizations      as projection on db.AppAuthorizations;
   entity Customers              as projection on db.Customers;

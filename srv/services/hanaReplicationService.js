@@ -21,9 +21,20 @@ const { resolveEffectiveRestrictions } = require('../lib/resolveEffectiveRestric
  * @param {string}   userId        - the assigned user (written to USER column)
  * @returns {object[]} flat row entries ready for HanaClient.syncAssignment()
  */
+const MAX_CARTESIAN_PRODUCT_ROWS = 50000;
+
 function cartesianProduct(obj) {
   const keys = Object.keys(obj);
   if (keys.length === 0) return [];
+
+  let estimatedCount = 1;
+  for (const key of keys) {
+    const len = Array.isArray(obj[key]) ? obj[key].length : 0;
+    if (len > 0) estimatedCount *= len;
+  }
+  if (estimatedCount > MAX_CARTESIAN_PRODUCT_ROWS) {
+    throw new Error('Cartesian product size (' + estimatedCount + ') exceeds maximum safety limit of ' + MAX_CARTESIAN_PRODUCT_ROWS + ' rows. Please refine role restrictions.');
+  }
 
   let results = [{}];
   for (const key of keys) {
@@ -443,6 +454,7 @@ module.exports = {
   syncRoleAssignmentsToHana,
   fetchRoleAncestryChain,
   buildFlatAuthorizationsForHana,
-  buildHierAuthorizationsForHana
+  buildHierAuthorizationsForHana,
+  cartesianProduct
 };
 

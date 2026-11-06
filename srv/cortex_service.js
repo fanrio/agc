@@ -19,6 +19,7 @@ const HanaClient = require('./lib/hanaClient');
 const BdcClient = require('./lib/bdcClient');
 const DatabricksClient = require('./lib/databricksClient');
 const { syncDynamicRule } = require('./services/dynamicSyncService');
+const { validateSafeExternalUrl } = require('./lib/urlUtils');
 
 const { resolveEffectiveRestrictions } = require('./lib/resolveEffectiveRestrictions');
 const directSyncDispatcher = require('./services/directSyncDispatcher');
@@ -220,6 +221,15 @@ module.exports = cds.service.impl(async function () {
       return {
         success: false,
         message: `Failed: Invalid or missing workspace URL '${setting.workspaceUrl || ''}'. URL must begin with http:// or https://`,
+        httpStatus: 400
+      };
+    }
+    try {
+      validateSafeExternalUrl(setting.workspaceUrl);
+    } catch (urlErr) {
+      return {
+        success: false,
+        message: `Failed: ${urlErr.message}`,
         httpStatus: 400
       };
     }
