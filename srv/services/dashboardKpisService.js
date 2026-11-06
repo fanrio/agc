@@ -1,5 +1,4 @@
-const { getSessionPermissions, isRoleInScope } = require('../lib/authGuard');
-const { filterRolesByBackendPermissions } = require('../lib/authGuard');
+const { getSessionPermissions, filterRolesByBackendPermissions } = require('../lib/authGuard');
 
 async function getDashboardKpis(req, cds) {
   const db = cds.db;
@@ -89,13 +88,11 @@ async function getDashboardKpis(req, cds) {
   });
 
   const rolesMap = new Map(allRoles.map(r => [r.ID, r]));
-  // 3. Filter roles by permissions in O(N) linear time
+  // 3. Filter roles by permissions
   const filteredRoles = filterRolesByBackendPermissions(
     allRoles,
     permissions,
-    inheritancesByRoleMap,
-    rolesMap,
-    userApproverRoleIds
+    allInheritances
   );
 
 
@@ -153,87 +150,6 @@ async function getDashboardKpis(req, cds) {
     fieldCount: Number(fieldCountRes?.count || 0),
     bdcCount: Number(bdcCountRes?.count || 0)
   };
-}
-
-function filterRolesByPermissions(roles, permissions, inheritancesByRoleMap, rolesMap, userApproverRoleIds) {
-  if (!roles) return [];
-  if (!permissions) return roles;
-  if (permissions.isSuperAdmin) return roles;
-
-  // Filter by allowedEnvironments
-  const parseEnvs = (val) => {
-    if (!val || val === 'ALL' || val === '*') return 'ALL';
-    try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {
-      return val.split(',').map(s => s.trim().toUpperCase());
-    }
-    return [];
-  };
-  const allowedEnvs = parseEnvs(permissions.allowedEnvironments);
-
-  // Filter by allowedAccessDomains
-  const parseAccessDomains = (val) => {
-    if (!val || val === 'ALL' || val === '*') return 'ALL';
-    try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {
-      return val.split(',').map(s => s.trim());
-    }
-    return [];
-  };
-  const allowedAccessDomains = parseAccessDomains(permissions.allowedAccessDomains);
-
-  return roles.filter(role => {
-    if (userApproverRoleIds.has(role.ID)) return true;
-
-    // Environment and Access Domain scope restrictions
-    if (allowedEnvs !== 'ALL') {
-      const roleEnv = (role.environment_ID || '').toUpperCase();
-      if (!allowedEnvs.includes(roleEnv)) return false;
-    }
-    if (allowedAccessDomains !== 'ALL') {
-      const roleAccessDomain = role.accessDomain_ID;
-      if (!allowedAccessDomains.includes(roleAccessDomain)) return false;
-    }
-
-    // DRAGE roles are only visible to superadmins
-    if (role.type === 'DRAGE') return false;
-
-    // Check specific role type permissions
-    if (role.type === 'SINGLE') {
-      if (permissions.canManageSingleRoles) return true;
-      if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
-        return true;
-      }
-      return false;
-    }
-
-    if (role.type === 'ORG_BASED') {
-      if (permissions.canManageOrgRoles) return true;
-      if (permissions.canManageDerivedRoles && isRoleInScope(role.ID, role.name, permissions.managedDerivedRolesScope)) {
-        return true;
-      }
-      return false;
-    }
-
-    if (role.type === 'DERIVED') {
-      if (!permissions.canManageDerivedRoles) return false;
-      const scope = permissions.managedDerivedRolesScope;
-
-      const parentInheritances = inheritancesByRoleMap.get(role.ID) || [];
-      const hasParentInScope = parentInheritances.some(ri => {
-        const parentId = ri.parent_ID;
-        const parentRole = rolesMap.get(parentId);
-        return isRoleInScope(parentId, parentRole?.name, scope);
-      });
-      return hasParentInScope;
-    }
-
-    return false;
-  });
 }
 
 module.exports = {

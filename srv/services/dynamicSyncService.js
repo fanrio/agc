@@ -91,63 +91,72 @@ async function syncDynamicRule(ruleId, cds) {
 
   const userIds = Object.keys(userRecordMapping);
 
-  // Preload all tables needed for HanaReplication cache
-  const [allRoles, allRestrictions, allInheritances] = await Promise.all([
-    db.run(SELECT.from(Roles)),
-    db.run(SELECT.from(Restrictions)),
-    db.run(SELECT.from(RoleInheritance))
-  ]);
-  const preloaded = { allRoles, allRestrictions, allInheritances };
+  // Transactional reconciliation block ensuring atomic rollback on failure
+  const reconcile = async (tx) => {
+    // Preload all tables needed for HanaReplication cache
+    const [allRoles, allRestrictions, allInheritances] = await Promise.all([
+      tx.run(SELECT.from(Roles)),
+      tx.run(SELECT.from(Restrictions)),
+      tx.run(SELECT.from(RoleInheritance))
+    ]);
+    const preloaded = { allRoles, allRestrictions, allInheritances };
 
-  // Fetch existing assignments for the active users in a single query
-  const existingAssignments = userIds.length > 0
-    ? await db.run(SELECT.from(RoleAssignments).where({ userId: { in: userIds } }))
-    : [];
+    // Fetch existing assignments for the active users in a single query
+    const existingAssignments = userIds.length > 0
+      ? await tx.run(SELECT.from(RoleAssignments).where({ userId: { in: userIds } }))
+      : [];
 
-  // Fetch existing dynamic roles for these users
-  const roleNames = userIds.map(userId => `ROLE_DYN_${rule.code}_${userId.replace(/[@.]/g, '_').toUpperCase()}`);
-  if (rule.generationMode === 'TEMPLATE_ASSIGNMENT' && rule.templateRole_ID) {
-    const templateRole = allRoles.find(r => r.ID === rule.templateRole_ID);
-    if (templateRole) {
-      roleNames.push(templateRole.name);
-    }
-  }
-  const existingRoles = roleNames.length > 0
-    ? await db.run(SELECT.from(Roles).where({ name: { in: roleNames } }))
-    : [];
-
-  // 4. Query current Generated Resources for this rule
-  const activeMappings = await db.run(SELECT.from(GeneratedResourceMap).where({ rule_ID: rule.ID }));
-
-  // 5. Process user updates & creations
-  const userEntries = Object.entries(userRecordMapping);
-  const batchSize = 5;
-  for (let i = 0; i < userEntries.length; i += batchSize) {
-    const batch = userEntries.slice(i, i + batchSize);
-    await Promise.all(batch.map(async ([userId, keys]) => {
-      if (rule.generationMode === 'USER_CONSOLIDATED_ROLE') {
-        await _syncConsolidatedUserRole(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments, existingRoles);
-      } else if (rule.generationMode === 'TEMPLATE_ASSIGNMENT') {
-        await _syncTemplateAssignment(db, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments);
+    // Fetch existing dynamic roles for these users
+    const roleNames = userIds.map(userId => `ROLE_DYN_${rule.code}_${userId.replace(/[@.]/g, '_').toUpperCase()}`);
+    if (rule.generationMode === 'TEMPLATE_ASSIGNMENT' && rule.templateRole_ID) {
+      const templateRole = allRoles.find(r => r.ID === rule.templateRole_ID);
+      if (templateRole) {
+        roleNames.push(templateRole.name);
       }
-    }));
-  }
-
-  // 6. Clean up obsolete mappings
-  const obsoleteMappings = [];
-  for (const mapping of activeMappings) {
-    const activeKeys = userRecordMapping[mapping.userId] || [];
-    const isStillActive = activeKeys.some(k => JSON.stringify(k) === mapping.masterRecordKey);
-    if (!isStillActive) {
-      obsoleteMappings.push(mapping);
     }
-  }
-  
-  for (let i = 0; i < obsoleteMappings.length; i += batchSize) {
-    const batch = obsoleteMappings.slice(i, i + batchSize);
-    await Promise.all(batch.map(obsolete =>
-      _removeGeneratedAccess(db, rule, obsolete, AuditLogs, cds, envId, preloaded, existingAssignments)
-    ));
+    const existingRoles = roleNames.length > 0
+      ? await tx.run(SELECT.from(Roles).where({ name: { in: roleNames } }))
+      : [];
+
+    // 4. Query current Generated Resources for this rule
+    const activeMappings = await tx.run(SELECT.from(GeneratedResourceMap).where({ rule_ID: rule.ID }));
+
+    // 5. Process user updates & creations
+    const userEntries = Object.entries(userRecordMapping);
+    const batchSize = 5;
+    for (let i = 0; i < userEntries.length; i += batchSize) {
+      const batch = userEntries.slice(i, i + batchSize);
+      await Promise.all(batch.map(async ([userId, keys]) => {
+        if (rule.generationMode === 'USER_CONSOLIDATED_ROLE') {
+          await _syncConsolidatedUserRole(tx, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments, existingRoles);
+        } else if (rule.generationMode === 'TEMPLATE_ASSIGNMENT') {
+          await _syncTemplateAssignment(tx, rule, mappings, userId, keys, activeMappings, AuditLogs, cds, envId, preloaded, existingAssignments);
+        }
+      }));
+    }
+
+    // 6. Clean up obsolete mappings
+    const obsoleteMappings = [];
+    for (const mapping of activeMappings) {
+      const activeKeys = userRecordMapping[mapping.userId] || [];
+      const isStillActive = activeKeys.some(k => JSON.stringify(k) === mapping.masterRecordKey);
+      if (!isStillActive) {
+        obsoleteMappings.push(mapping);
+      }
+    }
+    
+    for (let i = 0; i < obsoleteMappings.length; i += batchSize) {
+      const batch = obsoleteMappings.slice(i, i + batchSize);
+      await Promise.all(batch.map(obsolete =>
+        _removeGeneratedAccess(tx, rule, obsolete, AuditLogs, cds, envId, preloaded, existingAssignments)
+      ));
+    }
+  };
+
+  if (!cds.context && typeof cds.tx === 'function') {
+    await cds.tx(reconcile);
+  } else {
+    await reconcile(db);
   }
 }
 
