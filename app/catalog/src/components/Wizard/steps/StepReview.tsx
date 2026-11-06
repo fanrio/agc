@@ -7,7 +7,6 @@ export default function StepReview({
   roleName, roleType, selectedParentIds,
   environmentId, environments, approvers, description,
   inherited, restrictions,
-  targetPlatform = 'DATASPHERE',
   assignUserId, setAssignUserId, assignUserName, setAssignUserName,
   isEditMode, loading, permissions,
   canManageThisDerivedWizard, handleSaveClick, isReadOnly
@@ -34,19 +33,6 @@ export default function StepReview({
                 label={environments.find(e => e.ID === environmentId)?.name || environmentId}
                 size="small"
                 color={ENV_COLOR[environmentId] || 'default'}
-              />
-              <Chip
-                label={
-                  targetPlatform === 'BOTH' ? 'Both Platforms' :
-                  targetPlatform === 'DATABRICKS' ? 'Databricks' : 'SAP Datasphere'
-                }
-                size="small"
-                color={
-                  targetPlatform === 'BOTH' ? 'secondary' :
-                  targetPlatform === 'DATABRICKS' ? 'warning' : 'info'
-                }
-                variant="outlined"
-                sx={{ fontWeight: 600 }}
               />
             </Box>
           </Box>

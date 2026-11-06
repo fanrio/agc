@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { validateSafeExternalUrl } = require('../srv/lib/urlUtils');
 const { cartesianProduct } = require('../srv/services/hanaReplicationService');
-const { escapeSqlString, translateRestrictionToSql } = require('../srv/services/databricksSyncService');
 
 test('Security Hardening Test Suite', async (t) => {
 
@@ -60,23 +59,6 @@ test('Security Hardening Test Suite', async (t) => {
     assert.throws(() => {
       cartesianProduct(oversizedInput);
     }, /Cartesian product size \(100000\) exceeds maximum safety limit/);
-  });
-
-  await t.test('SQL Injection Prevention in Databricks Filters', () => {
-    // Malicious payload with backslash quote escape attempt
-    const malicious = "test\\' OR 1=1 --";
-    const escaped = escapeSqlString(malicious);
-    // Backslash must be doubled and single quote doubled
-    assert.ok(escaped.includes('\\\\'), 'Backslash must be escaped as \\\\');
-    assert.ok(escaped.includes("''"), "Single quote must be escaped as ''");
-    assert.strictEqual(escaped, "test\\\\'' OR 1=1 --");
-
-    const sql = translateRestrictionToSql({
-      field: 'Country',
-      filterType: 'SINGLE_VALUE',
-      value: malicious
-    });
-    assert.strictEqual(sql, "Country = 'test\\\\'' OR 1=1 --'");
   });
 
 });

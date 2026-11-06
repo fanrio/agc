@@ -33,8 +33,6 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
   entity DynamicRuleFieldMappings as projection on db.DynamicRuleFieldMappings;
   entity GeneratedResourceMap   as projection on db.GeneratedResourceMap;
   entity BdcSettings            as projection on db.BdcSettings;
-  entity DatabricksSettings     as projection on db.DatabricksSettings;
-
 
   action searchScimUsers(query: String)                                         returns array of {
     username    : String;
@@ -101,12 +99,6 @@ service AuthorizationService @(path: '/odata/v4/auth', requires: 'authenticated-
   action testBdcConnection(settingId: UUID)                                     returns {
     success : Boolean;
     message : String;
-  };
-
-  action testDatabricksConnection(settingId: UUID)                              returns {
-    success    : Boolean;
-    message    : String;
-    httpStatus : Integer;
   };
 
   // fetchBdcSpaces: dual signature — connectionId (saved connection) OR direct credentials (during creation)

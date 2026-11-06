@@ -26,7 +26,6 @@ const mockRoles = [
     ID: 'role-1',
     name: 'Role One',
     type: 'SINGLE',
-    targetPlatform: 'DATASPHERE',
     environment_ID: 'D',
     description: 'First test role',
     accessDomain_ID: 'dom-sales',
@@ -36,7 +35,6 @@ const mockRoles = [
     ID: 'role-2',
     name: 'Role Two',
     type: 'DERIVED',
-    targetPlatform: 'DATABRICKS',
     environment_ID: 'P',
     description: 'Second test role',
     accessDomain_ID: 'dom-finance',
@@ -46,7 +44,6 @@ const mockRoles = [
     ID: 'role-3',
     name: 'Role Three',
     type: 'ORG_BASED',
-    targetPlatform: 'BOTH',
     environment_ID: 'Q',
     description: 'Third test role',
     accessDomain_ID: 'dom-sales',
@@ -56,7 +53,6 @@ const mockRoles = [
     ID: 'role-no-restrictions',
     name: 'Empty Role',
     type: 'SINGLE',
-    targetPlatform: 'DATASPHERE',
     environment_ID: 'D',
     description: 'Has no restrictions',
     accessDomain_ID: 'dom-finance',
@@ -92,27 +88,6 @@ describe('UserRoleAssignment Component', () => {
     expect(screen.getByText('Role One')).toBeInTheDocument();
     expect(screen.getByText('Role Two')).toBeInTheDocument();
     expect(screen.getByText('Role Three')).toBeInTheDocument();
-  });
-
-  it('filters roles by Platform dropdown', () => {
-    render(
-      <UserRoleAssignment
-        open={true}
-        roles={mockRoles}
-        allRoles={mockRoles}
-        onClose={vi.fn()}
-      />
-    );
-
-    // Open Platform dropdown
-    fireEvent.mouseDown(screen.getByLabelText('Platform'));
-    const databricksOption = screen.getByRole('option', { name: /^Databricks$/i });
-    fireEvent.click(databricksOption);
-
-    // Role Two (DATABRICKS) and Role Three (BOTH) should be visible, Role One (DATASPHERE) should not
-    expect(screen.getByText('Role Two')).toBeInTheDocument();
-    expect(screen.getByText('Role Three')).toBeInTheDocument();
-    expect(screen.queryByText('Role One')).not.toBeInTheDocument();
   });
 
   it('filters roles by Type dropdown', () => {

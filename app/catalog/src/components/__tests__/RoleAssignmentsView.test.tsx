@@ -24,7 +24,7 @@ const mockAssignments = [
     userId: 'alice@fanrio.com',
     userName: 'Alice Smith',
     role_ID: 'role-1',
-    role: { ID: 'role-1', name: 'Sales Manager', type: 'SINGLE', targetPlatform: 'DATASPHERE' },
+    role: { ID: 'role-1', name: 'Sales Manager', type: 'SINGLE' },
     createdAt: '2026-11-01T10:00:00Z',
     createdBy: 'admin'
   },
@@ -33,7 +33,7 @@ const mockAssignments = [
     userId: 'alice@fanrio.com',
     userName: 'Alice Smith',
     role_ID: 'role-2',
-    role: { ID: 'role-2', name: 'Finance Viewer', type: 'DERIVED', targetPlatform: 'DATABRICKS' },
+    role: { ID: 'role-2', name: 'Finance Viewer', type: 'DERIVED' },
     createdAt: '2026-11-02T11:00:00Z',
     createdBy: 'admin'
   },
@@ -42,7 +42,7 @@ const mockAssignments = [
     userId: 'bob@fanrio.com',
     userName: 'Bob Martin',
     role_ID: 'role-1',
-    role: { ID: 'role-1', name: 'Sales Manager', type: 'SINGLE', targetPlatform: 'DATASPHERE' },
+    role: { ID: 'role-1', name: 'Sales Manager', type: 'SINGLE' },
     createdAt: '2026-11-03T12:00:00Z',
     createdBy: 'manager'
   }

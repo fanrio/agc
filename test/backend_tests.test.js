@@ -653,151 +653,6 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/BdcSettings(ID=${badHanaSetting.data.ID})`);
   });
 
-  // 5.1 DatabricksSettings CRUD & testDatabricksConnection action
-  await t.test('DatabricksSettings CRUD & testDatabricksConnection action', async () => {
-    const DatabricksClient = require('../srv/lib/databricksClient');
-    const mockAdapter = DatabricksClient.getMockAdapter();
-
-    // 1. Create DatabricksSettings - TOKEN auth
-    const tokenSetting = await POST('/odata/v4/auth/DatabricksSettings', {
-      systemName: 'TEST_DBX_TOKEN_CONN',
-      workspaceUrl: 'https://mock-workspace.cloud.databricks.com',
-      authType: 'TOKEN',
-      apiToken: 'dapi_mock_token_12345',
-      targetCatalog: 'main',
-      targetSchema: 'default',
-      sqlWarehouseId: 'warehouse-abc-123'
-    });
-    assert.strictEqual(tokenSetting.status, 201);
-    assert.ok(tokenSetting.data.ID);
-    assert.strictEqual(tokenSetting.data.systemName, 'TEST_DBX_TOKEN_CONN');
-    assert.strictEqual(tokenSetting.data.isActive, true);
-
-    // 2. Read DatabricksSettings - verify sensitive credentials stripped
-    const readRes = await GET(`/odata/v4/auth/DatabricksSettings(ID=${tokenSetting.data.ID})`);
-    assert.strictEqual(readRes.status, 200);
-    assert.strictEqual(readRes.data.apiToken, undefined);
-    assert.strictEqual(readRes.data.clientSecret, undefined);
-
-    // 3. Update DatabricksSettings
-    const updateRes = await PATCH(`/odata/v4/auth/DatabricksSettings(ID=${tokenSetting.data.ID})`, {
-      systemName: 'TEST_DBX_TOKEN_CONN_UPDATED'
-    });
-    assert.strictEqual(updateRes.status, 200);
-
-    // 4. Test connection - TOKEN auth (Happy Path)
-    const testTokenRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: tokenSetting.data.ID
-    });
-    assert.strictEqual(testTokenRes.status, 200);
-    assert.strictEqual(testTokenRes.data.success, true);
-    assert.strictEqual(testTokenRes.data.httpStatus, 200);
-    assert.ok(testTokenRes.data.message.includes('TEST_DBX_TOKEN_CONN_UPDATED') || testTokenRes.data.message.includes('verified successfully'));
-
-    // 5. Create DatabricksSettings - SERVICE_PRINCIPAL auth
-    const spSetting = await POST('/odata/v4/auth/DatabricksSettings', {
-      systemName: 'TEST_DBX_SP_CONN',
-      workspaceUrl: 'https://mock-workspace.cloud.databricks.com',
-      authType: 'SERVICE_PRINCIPAL',
-      clientId: 'sp-client-id-001',
-      clientSecret: 'sp-client-secret-xyz'
-    });
-    assert.strictEqual(spSetting.status, 201);
-
-    const testSpRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: spSetting.data.ID
-    });
-    assert.strictEqual(testSpRes.status, 200);
-    assert.strictEqual(testSpRes.data.success, true);
-    assert.strictEqual(testSpRes.data.httpStatus, 200);
-
-    // 6. Validation failure: Missing or invalid workspace URL
-    const badUrlSetting = await POST('/odata/v4/auth/DatabricksSettings', {
-      systemName: 'TEST_DBX_BAD_URL',
-      workspaceUrl: 'ftp://invalid-url.com',
-      authType: 'TOKEN',
-      apiToken: 'dapi123'
-    });
-    const testBadUrlRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: badUrlSetting.data.ID
-    });
-    assert.strictEqual(testBadUrlRes.status, 200);
-    assert.strictEqual(testBadUrlRes.data.success, false);
-    assert.strictEqual(testBadUrlRes.data.httpStatus, 400);
-    assert.ok(testBadUrlRes.data.message.includes('workspace URL'));
-
-    // 7. Validation failure: Missing apiToken for TOKEN auth
-    const missingTokenSetting = await POST('/odata/v4/auth/DatabricksSettings', {
-      systemName: 'TEST_DBX_MISSING_TOKEN',
-      workspaceUrl: 'https://mock-workspace.cloud.databricks.com',
-      authType: 'TOKEN'
-    });
-    const testMissingTokenRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: missingTokenSetting.data.ID
-    });
-    assert.strictEqual(testMissingTokenRes.status, 200);
-    assert.strictEqual(testMissingTokenRes.data.success, false);
-    assert.strictEqual(testMissingTokenRes.data.httpStatus, 400);
-    assert.ok(testMissingTokenRes.data.message.includes('Missing API Bearer Token'));
-
-    // 8. Validation failure: Missing clientId or clientSecret for SERVICE_PRINCIPAL auth
-    const missingSpSetting = await POST('/odata/v4/auth/DatabricksSettings', {
-      systemName: 'TEST_DBX_MISSING_SP',
-      workspaceUrl: 'https://mock-workspace.cloud.databricks.com',
-      authType: 'SERVICE_PRINCIPAL',
-      clientId: 'only-client-id'
-    });
-    const testMissingSpRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: missingSpSetting.data.ID
-    });
-    assert.strictEqual(testMissingSpRes.status, 200);
-    assert.strictEqual(testMissingSpRes.data.success, false);
-    assert.strictEqual(testMissingSpRes.data.httpStatus, 400);
-    assert.ok(testMissingSpRes.data.message.includes('Missing Client ID or Client Secret'));
-
-    // 9. Non-existent settingId returns 404
-    await assertODataError(
-      POST('/odata/v4/auth/testDatabricksConnection', {
-        settingId: '00000000-0000-0000-0000-000000000000'
-      }),
-      404
-    );
-
-    // 10. Missing settingId parameter returns 400
-    await assertODataError(
-      POST('/odata/v4/auth/testDatabricksConnection', {}),
-      400
-    );
-
-    // 11. Simulated remote failure mode: 401 Unauthorized
-    mockAdapter.setFailureMode('AUTH_FAILED');
-    const testAuthFailRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: tokenSetting.data.ID
-    });
-    assert.strictEqual(testAuthFailRes.status, 200);
-    assert.strictEqual(testAuthFailRes.data.success, false);
-    assert.strictEqual(testAuthFailRes.data.httpStatus, 401);
-
-    // 12. Simulated remote failure mode: Network Error / Timeout (502)
-    mockAdapter.setFailureMode('NETWORK_ERROR');
-    const testNetFailRes = await POST('/odata/v4/auth/testDatabricksConnection', {
-      settingId: tokenSetting.data.ID
-    });
-    assert.strictEqual(testNetFailRes.status, 200);
-    assert.strictEqual(testNetFailRes.data.success, false);
-    assert.strictEqual(testNetFailRes.data.httpStatus, 502);
-
-    // Reset mock failure mode
-    mockAdapter.setFailureMode(null);
-
-    // Clean up created test settings
-    await DELETE(`/odata/v4/auth/DatabricksSettings(ID=${tokenSetting.data.ID})`);
-    await DELETE(`/odata/v4/auth/DatabricksSettings(ID=${spSetting.data.ID})`);
-    await DELETE(`/odata/v4/auth/DatabricksSettings(ID=${badUrlSetting.data.ID})`);
-    await DELETE(`/odata/v4/auth/DatabricksSettings(ID=${missingTokenSetting.data.ID})`);
-    await DELETE(`/odata/v4/auth/DatabricksSettings(ID=${missingSpSetting.data.ID})`);
-  });
-
   // 6. OData Mock BDC API connectors (fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns)
   await t.test('fetchBdcSpaces, fetchBdcAssets, fetchBdcRelationalValues, fetchBdcAssetColumns OData actions', async () => {
     // Create a mock BDC connection for these tests
@@ -1075,21 +930,16 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
     await DELETE(`/odata/v4/auth/BdcSettings(ID=${connId})`);
   });
 
-  // 10. Direct Multi-Target Real-Time Synchronization & Queue Decommissioning
-  await t.test('Direct Multi-Target Real-Time Synchronization (replacing batch replication queue)', async (t2) => {
-    const DatabricksClient = require('../srv/lib/databricksClient');
-    const mockAdapter = DatabricksClient.getMockAdapter();
-    mockAdapter.reset();
-
+  // 10. Real-Time Synchronization & Queue Decommissioning
+  await t.test('Real-Time HANA Synchronization (replacing batch replication queue)', async (t2) => {
     let syncRoleId;
     let syncAssignId;
     const testUser = `direct_sync_${uniqueSuffix}@example.com`;
 
-    await t2.test('Create role with targetPlatform BOTH and assign restrictions', async () => {
+    await t2.test('Create role and assign restrictions', async () => {
       const roleRes = await POST('/odata/v4/auth/Roles', {
         name: `ROLE_DIRECT_SYNC_${uniqueSuffix}`,
         type: 'SINGLE',
-        targetPlatform: 'BOTH',
         environment_ID: 'D'
       });
       assert.strictEqual(roleRes.status, 201);
@@ -1105,8 +955,7 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
       assert.strictEqual(restRes.status, 201);
     });
 
-    await t2.test('Assignment CREATE triggers immediate real-time sync to Databricks and HANA', async () => {
-      mockAdapter.reset();
+    await t2.test('Assignment CREATE triggers immediate real-time sync', async () => {
       const assignRes = await POST('/odata/v4/auth/RoleAssignments', {
         userId: testUser,
         userName: 'Direct Sync User',
@@ -1117,25 +966,14 @@ test('Comprehensive Backend Integration & Action Test Suite', async (t) => {
 
       // Allow microtask tick for cds.spawn
       await new Promise(r => setTimeout(r, 100));
-
-      // Verify Databricks mock adapter recorded real-time SQL execution
-      assert.ok(mockAdapter.executedStatements.length > 0, 'Databricks mock adapter must receive real-time SQL statements');
-      const hasFilterSql = mockAdapter.executedStatements.some(s =>
-        s.statement && (s.statement.includes('FUNCTION') || s.statement.includes('ROW FILTER') || s.statement.includes('UDF'))
-      );
-      assert.ok(hasFilterSql, 'Executed SQL statements must include Unity Catalog row filter definition');
     });
 
-    await t2.test('Assignment DELETE triggers immediate real-time policy removal', async () => {
-      mockAdapter.reset();
+    await t2.test('Assignment DELETE triggers immediate real-time removal', async () => {
       const delRes = await DELETE(`/odata/v4/auth/RoleAssignments(ID=${syncAssignId})`);
       assert.strictEqual(delRes.status, 204);
 
       // Allow microtask tick for cds.spawn
       await new Promise(r => setTimeout(r, 100));
-
-      // Verify Databricks adapter was invoked for policy cleanup
-      assert.ok(mockAdapter.executedStatements.length >= 0);
     });
 
     await t2.test('Verify decommissioned replication actions and entity return 404', async () => {

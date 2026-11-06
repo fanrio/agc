@@ -109,7 +109,6 @@ export default function UserRoleAssignment({
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
-  const [filterPlatform, setFilterPlatform] = useState<'ALL' | 'DATASPHERE' | 'DATABRICKS' | 'BOTH'>('ALL');
   const [filterType, setFilterType] = useState<'ALL' | 'SINGLE' | 'DERIVED' | 'ORG_BASED'>('ALL');
   const [filterAccessDomain, setFilterAccessDomain] = useState<string>('ALL');
   const [accessDomains, setAccessDomains] = useState<any[]>(propAccessDomains || []);
@@ -140,7 +139,6 @@ export default function UserRoleAssignment({
       setSelectedUsers([]);
       setSelectedRoleIds(role ? [role.ID] : []);
       setRoleSearchQuery('');
-      setFilterPlatform('ALL');
       setFilterType('ALL');
       setFilterAccessDomain('ALL');
       setAllExistingAssignments([]);
@@ -211,21 +209,9 @@ export default function UserRoleAssignment({
     return Array.from(accessDomainMap.entries()).map(([id, label]) => ({ id, label }));
   }, [accessDomainMap]);
 
-  // Filtered roles list based on search, platform, type, and access domain filters
+  // Filtered roles list based on search, type, and access domain filters
   const filteredRoles = useMemo(() => {
     return roles.filter(r => {
-      // Platform filter
-      if (filterPlatform !== 'ALL') {
-        const plat = r.targetPlatform || 'DATASPHERE';
-        if (filterPlatform === 'BOTH') {
-          if (plat !== 'BOTH') return false;
-        } else if (filterPlatform === 'DATASPHERE') {
-          if (plat !== 'DATASPHERE' && plat !== 'BOTH') return false;
-        } else if (filterPlatform === 'DATABRICKS') {
-          if (plat !== 'DATABRICKS' && plat !== 'BOTH') return false;
-        }
-      }
-
       // Type filter
       if (filterType !== 'ALL') {
         const isOrg = r.type === 'ORG_BASED';
@@ -250,7 +236,7 @@ export default function UserRoleAssignment({
 
       return true;
     });
-  }, [roles, filterPlatform, filterType, filterAccessDomain, roleSearchQuery]);
+  }, [roles, filterType, filterAccessDomain, roleSearchQuery]);
 
   // Selected roles objects
   const rolesToAssign = useMemo(() => {
@@ -282,14 +268,7 @@ export default function UserRoleAssignment({
 
   // Target platforms impact
   const targetImpact = useMemo(() => {
-    let hasDatasphere = false;
-    let hasDatabricks = false;
-    for (const r of rolesToAssign) {
-      const plat = r.targetPlatform || 'DATASPHERE';
-      if (plat === 'DATASPHERE' || plat === 'BOTH') hasDatasphere = true;
-      if (plat === 'DATABRICKS' || plat === 'BOTH') hasDatabricks = true;
-    }
-    return { hasDatasphere, hasDatabricks, count: rolesToAssign.length };
+    return { hasDatasphere: true, count: rolesToAssign.length };
   }, [rolesToAssign]);
 
   const handleToggleRole = (roleId: string) => {
@@ -333,7 +312,7 @@ export default function UserRoleAssignment({
 
     setLoading(true);
     try {
-      // Process in batches to avoid concurrent database lock contention during background HANA/Databricks sync
+      // Process in batches to avoid concurrent database lock contention during background HANA sync
       const BATCH_SIZE = 4;
       for (let i = 0; i < pairsToCreate.length; i += BATCH_SIZE) {
         const batch = pairsToCreate.slice(i, i + BATCH_SIZE);
@@ -581,16 +560,6 @@ export default function UserRoleAssignment({
                   sx={{ fontSize: '0.75rem', height: 24 }}
                 />
               )}
-              {targetImpact.hasDatabricks && (
-                <Chip
-                  size="small"
-                  icon={<Flame size={12} />}
-                  label="Databricks (Unity Catalog)"
-                  color="warning"
-                  variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
-                />
-              )}
             </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
@@ -678,25 +647,8 @@ export default function UserRoleAssignment({
                 }}
               />
 
-              {/* Filter Dropdowns Bar: Platform, Type, Access Domain */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 1 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel id="filter-platform-label">Platform</InputLabel>
-                  <Select
-                    labelId="filter-platform-label"
-                    id="filter-platform-select"
-                    value={filterPlatform}
-                    label="Platform"
-                    onChange={e => setFilterPlatform(e.target.value as any)}
-                    sx={{ fontSize: '0.8125rem' }}
-                  >
-                    <MenuItem value="ALL">All Platforms</MenuItem>
-                    <MenuItem value="DATASPHERE">Datasphere</MenuItem>
-                    <MenuItem value="DATABRICKS">Databricks</MenuItem>
-                    <MenuItem value="BOTH">Both</MenuItem>
-                  </Select>
-                </FormControl>
-
+              {/* Filter Dropdowns Bar: Type, Access Domain */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
                 <FormControl size="small" fullWidth>
                   <InputLabel id="filter-type-label">Type</InputLabel>
                   <Select

@@ -653,15 +653,6 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
                                     sx={{ height: 20, fontSize: '0.6875rem', fontWeight: 600 }}
                                   />
                                 )}
-                                {a.role?.targetPlatform && (
-                                  <Chip
-                                    size="small"
-                                    label={a.role.targetPlatform}
-                                    variant="outlined"
-                                    color="primary"
-                                    sx={{ height: 20, fontSize: '0.6875rem', fontWeight: 600 }}
-                                  />
-                                )}
                               </Box>
                             </TableCell>
                             <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
@@ -741,15 +732,7 @@ export default function RoleAssignmentsView({ onInspectUser, onOpenAssign }: Rol
                                   sx={{ height: 20, fontSize: '0.6875rem', fontWeight: 600 }}
                                 />
                               )}
-                              {group.role?.targetPlatform && (
-                                <Chip
-                                  size="small"
-                                  label={group.role.targetPlatform}
-                                  variant="outlined"
-                                  color="primary"
-                                  sx={{ height: 20, fontSize: '0.6875rem', fontWeight: 600 }}
-                                />
-                              )}
+                              
                               <Chip
                                 size="small"
                                 label={`${group.items.length} user${group.items.length !== 1 ? 's' : ''}`}

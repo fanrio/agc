@@ -6,7 +6,6 @@ import { usePermissions } from '../context/PermissionsContext';
 const RestrictionFieldsView = lazy(() => import('./RestrictionFieldsView'));
 const AccessDomainsView = lazy(() => import('./AccessDomainsView'));
 const BdcSettingsView = lazy(() => import('./BdcSettingsView'));
-const DatabricksSettingsView = lazy(() => import('./DatabricksSettingsView'));
 const BdcApiTesterView = lazy(() => import('./BdcApiTesterView'));
 const DynamicRulesView = lazy(() => import('./DynamicRulesView'));
 const MasterDataEditorView = lazy(() => import('./MasterDataEditorView'));
@@ -20,12 +19,6 @@ export default function SystemView() {
       label: 'BDC Connections',
       icon: <Cloud size={16} />,
       component: <BdcSettingsView />,
-      visible: permissions?.isSuperAdmin || permissions?.canManageSettings
-    },
-    {
-      label: 'Databricks Settings',
-      icon: <Server size={16} />,
-      component: <DatabricksSettingsView />,
       visible: permissions?.isSuperAdmin || permissions?.canManageSettings
     },
     {
